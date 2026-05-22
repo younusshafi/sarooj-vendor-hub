@@ -65,33 +65,34 @@ export interface Vendor {
 }
 
 export interface VendorDocument {
-  id: string;
+  document_id: string;
   vendor_id: string;
   document_type: string;
-  is_mandatory: boolean;
+  mandatory: boolean;
   submitted: boolean;
   verified: boolean;
   filename: string | null;
-  uploaded_at: string | null;
+  drive_file_url: string | null;
+  submitted_at: string | null;
 }
 
 export interface VendorValidation {
-  id: string;
+  validation_id: string;
   vendor_id: string;
   check_type: string;
   result: "pass" | "fail" | "unknown" | string;
-  detail: string | null;
+  result_detail: string | null;
   performed_by: string | null;
   performed_at: string;
 }
 
 export interface VendorOutreach {
-  id: string;
+  outreach_id: string;
   vendor_id: string;
   email_to: string;
   sent_at: string;
   delivery_status: string | null;
   response_received: boolean | null;
   response_type: string | null;
-  followup_sent: boolean | null;
+  follow_up_sent_at: string | null;
 }

@@ -187,18 +187,18 @@ function DocumentsTab({ vendorId }: { vendorId: string }) {
           {docs.isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Loading…</td></tr>}
           {!docs.isLoading && (docs.data?.length ?? 0) === 0 && <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">No documents on file.</td></tr>}
           {docs.data?.map((d) => {
-            const missingMandatory = d.is_mandatory && !d.submitted;
+            const missingMandatory = d.mandatory && !d.submitted;
             return (
-              <tr key={d.id} className="border-t border-border" style={missingMandatory ? { color: "var(--toast-error-fg)" } : undefined}>
+              <tr key={d.document_id} className="border-t border-border" style={missingMandatory ? { color: "var(--toast-error-fg)" } : undefined}>
                 <td className="px-4 py-3 font-medium">{titleCase(d.document_type)}</td>
                 <td className="px-4 py-3">
-                  <span className="rounded-full border border-border bg-secondary px-2 py-0.5 text-xs">{d.is_mandatory ? "Mandatory" : "Optional"}</span>
+                  <span className="rounded-full border border-border bg-secondary px-2 py-0.5 text-xs">{d.mandatory ? "Mandatory" : "Optional"}</span>
                 </td>
                 <td className="px-4 py-3">
                   {d.submitted ? (d.filename ? <span className="underline">{d.filename}</span> : "Yes") : <span className="text-muted-foreground">Not submitted</span>}
                 </td>
                 <td className="px-4 py-3">{d.verified ? "Yes" : "No"}</td>
-                <td className="px-4 py-3 text-muted-foreground">{formatDate(d.uploaded_at)}</td>
+                <td className="px-4 py-3 text-muted-foreground">{formatDate(d.submitted_at)}</td>
               </tr>
             );
           })}
@@ -230,11 +230,11 @@ function ValidationHistory({ vendorId }: { vendorId: string }) {
           <tbody>
             {(q.data?.length ?? 0) === 0 && <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">No validation runs.</td></tr>}
             {q.data?.map((r) => (
-              <tr key={r.id} className="border-t border-border">
+              <tr key={r.validation_id} className="border-t border-border">
                 <td className="px-4 py-3 text-muted-foreground">{formatDateTime(r.performed_at)}</td>
                 <td className="px-4 py-3">{titleCase(r.check_type)}</td>
                 <td className="px-4 py-3"><StatusBadge status={r.result} /></td>
-                <td className="px-4 py-3 text-muted-foreground">{r.detail ?? "—"}</td>
+                <td className="px-4 py-3 text-muted-foreground">{r.result_detail ?? "—"}</td>
                 <td className="px-4 py-3 text-muted-foreground">{r.performed_by ?? "—"}</td>
               </tr>
             ))}
@@ -267,13 +267,13 @@ function OutreachHistory({ vendorId }: { vendorId: string }) {
           <tbody>
             {(q.data?.length ?? 0) === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">No outreach yet.</td></tr>}
             {q.data?.map((r) => (
-              <tr key={r.id} className="border-t border-border">
+              <tr key={r.outreach_id} className="border-t border-border">
                 <td className="px-4 py-3 text-muted-foreground">{formatDateTime(r.sent_at)}</td>
                 <td className="px-4 py-3">{r.email_to}</td>
                 <td className="px-4 py-3">{r.delivery_status ?? "—"}</td>
                 <td className="px-4 py-3">{r.response_received ? "Yes" : "No"}</td>
                 <td className="px-4 py-3">{r.response_type ?? "—"}</td>
-                <td className="px-4 py-3">{r.followup_sent ? "Yes" : "No"}</td>
+                <td className="px-4 py-3">{r.follow_up_sent_at ? "Yes" : "No"}</td>
               </tr>
             ))}
           </tbody>
