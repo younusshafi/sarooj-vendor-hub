@@ -14,6 +14,9 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppVendorsRouteImport } from './routes/_app/vendors'
+import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppPendingRouteImport } from './routes/_app/pending'
+import { Route as AppOutreachRouteImport } from './routes/_app/outreach'
 import { Route as AppVendorsVendorIdRouteImport } from './routes/_app/vendors.$vendorId'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -40,6 +43,21 @@ const AppVendorsRoute = AppVendorsRouteImport.update({
   path: '/vendors',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPendingRoute = AppPendingRouteImport.update({
+  id: '/pending',
+  path: '/pending',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOutreachRoute = AppOutreachRouteImport.update({
+  id: '/outreach',
+  path: '/outreach',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppVendorsVendorIdRoute = AppVendorsVendorIdRouteImport.update({
   id: '/$vendorId',
   path: '/$vendorId',
@@ -50,12 +68,18 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/outreach': typeof AppOutreachRoute
+  '/pending': typeof AppPendingRoute
+  '/settings': typeof AppSettingsRoute
   '/vendors': typeof AppVendorsRouteWithChildren
   '/vendors/$vendorId': typeof AppVendorsVendorIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/outreach': typeof AppOutreachRoute
+  '/pending': typeof AppPendingRoute
+  '/settings': typeof AppSettingsRoute
   '/vendors': typeof AppVendorsRouteWithChildren
   '/': typeof AppIndexRoute
   '/vendors/$vendorId': typeof AppVendorsVendorIdRoute
@@ -65,6 +89,9 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_app/outreach': typeof AppOutreachRoute
+  '/_app/pending': typeof AppPendingRoute
+  '/_app/settings': typeof AppSettingsRoute
   '/_app/vendors': typeof AppVendorsRouteWithChildren
   '/_app/': typeof AppIndexRoute
   '/_app/vendors/$vendorId': typeof AppVendorsVendorIdRoute
@@ -75,15 +102,29 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/reset-password'
+    | '/outreach'
+    | '/pending'
+    | '/settings'
     | '/vendors'
     | '/vendors/$vendorId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/reset-password' | '/vendors' | '/' | '/vendors/$vendorId'
+  to:
+    | '/login'
+    | '/reset-password'
+    | '/outreach'
+    | '/pending'
+    | '/settings'
+    | '/vendors'
+    | '/'
+    | '/vendors/$vendorId'
   id:
     | '__root__'
     | '/_app'
     | '/login'
     | '/reset-password'
+    | '/_app/outreach'
+    | '/_app/pending'
+    | '/_app/settings'
     | '/_app/vendors'
     | '/_app/'
     | '/_app/vendors/$vendorId'
@@ -132,6 +173,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppVendorsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/settings': {
+      id: '/_app/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/pending': {
+      id: '/_app/pending'
+      path: '/pending'
+      fullPath: '/pending'
+      preLoaderRoute: typeof AppPendingRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/outreach': {
+      id: '/_app/outreach'
+      path: '/outreach'
+      fullPath: '/outreach'
+      preLoaderRoute: typeof AppOutreachRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/vendors/$vendorId': {
       id: '/_app/vendors/$vendorId'
       path: '/$vendorId'
@@ -155,11 +217,17 @@ const AppVendorsRouteWithChildren = AppVendorsRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppOutreachRoute: typeof AppOutreachRoute
+  AppPendingRoute: typeof AppPendingRoute
+  AppSettingsRoute: typeof AppSettingsRoute
   AppVendorsRoute: typeof AppVendorsRouteWithChildren
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppOutreachRoute: AppOutreachRoute,
+  AppPendingRoute: AppPendingRoute,
+  AppSettingsRoute: AppSettingsRoute,
   AppVendorsRoute: AppVendorsRouteWithChildren,
   AppIndexRoute: AppIndexRoute,
 }
