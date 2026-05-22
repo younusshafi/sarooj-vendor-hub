@@ -9,50 +9,235 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as AppRouteImport } from './routes/_app'
+import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppVendorsRouteImport } from './routes/_app/vendors'
+import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppPendingRouteImport } from './routes/_app/pending'
+import { Route as AppOutreachRouteImport } from './routes/_app/outreach'
+import { Route as AppVendorsVendorIdRouteImport } from './routes/_app/vendors.$vendorId'
 
-const IndexRoute = IndexRouteImport.update({
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AppRoute,
+} as any)
+const AppVendorsRoute = AppVendorsRouteImport.update({
+  id: '/vendors',
+  path: '/vendors',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPendingRoute = AppPendingRouteImport.update({
+  id: '/pending',
+  path: '/pending',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOutreachRoute = AppOutreachRouteImport.update({
+  id: '/outreach',
+  path: '/outreach',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppVendorsVendorIdRoute = AppVendorsVendorIdRouteImport.update({
+  id: '/$vendorId',
+  path: '/$vendorId',
+  getParentRoute: () => AppVendorsRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
+  '/': typeof AppIndexRoute
+  '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/outreach': typeof AppOutreachRoute
+  '/pending': typeof AppPendingRoute
+  '/settings': typeof AppSettingsRoute
+  '/vendors': typeof AppVendorsRouteWithChildren
+  '/vendors/$vendorId': typeof AppVendorsVendorIdRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/outreach': typeof AppOutreachRoute
+  '/pending': typeof AppPendingRoute
+  '/settings': typeof AppSettingsRoute
+  '/vendors': typeof AppVendorsRouteWithChildren
+  '/': typeof AppIndexRoute
+  '/vendors/$vendorId': typeof AppVendorsVendorIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
+  '/_app': typeof AppRouteWithChildren
+  '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/_app/outreach': typeof AppOutreachRoute
+  '/_app/pending': typeof AppPendingRoute
+  '/_app/settings': typeof AppSettingsRoute
+  '/_app/vendors': typeof AppVendorsRouteWithChildren
+  '/_app/': typeof AppIndexRoute
+  '/_app/vendors/$vendorId': typeof AppVendorsVendorIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/reset-password'
+    | '/outreach'
+    | '/pending'
+    | '/settings'
+    | '/vendors'
+    | '/vendors/$vendorId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/login'
+    | '/reset-password'
+    | '/outreach'
+    | '/pending'
+    | '/settings'
+    | '/vendors'
+    | '/'
+    | '/vendors/$vendorId'
+  id:
+    | '__root__'
+    | '/_app'
+    | '/login'
+    | '/reset-password'
+    | '/_app/outreach'
+    | '/_app/pending'
+    | '/_app/settings'
+    | '/_app/vendors'
+    | '/_app/'
+    | '/_app/vendors/$vendorId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
+  LoginRoute: typeof LoginRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app/': {
+      id: '/_app/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/vendors': {
+      id: '/_app/vendors'
+      path: '/vendors'
+      fullPath: '/vendors'
+      preLoaderRoute: typeof AppVendorsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/settings': {
+      id: '/_app/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/pending': {
+      id: '/_app/pending'
+      path: '/pending'
+      fullPath: '/pending'
+      preLoaderRoute: typeof AppPendingRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/outreach': {
+      id: '/_app/outreach'
+      path: '/outreach'
+      fullPath: '/outreach'
+      preLoaderRoute: typeof AppOutreachRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/vendors/$vendorId': {
+      id: '/_app/vendors/$vendorId'
+      path: '/$vendorId'
+      fullPath: '/vendors/$vendorId'
+      preLoaderRoute: typeof AppVendorsVendorIdRouteImport
+      parentRoute: typeof AppVendorsRoute
     }
   }
 }
 
+interface AppVendorsRouteChildren {
+  AppVendorsVendorIdRoute: typeof AppVendorsVendorIdRoute
+}
+
+const AppVendorsRouteChildren: AppVendorsRouteChildren = {
+  AppVendorsVendorIdRoute: AppVendorsVendorIdRoute,
+}
+
+const AppVendorsRouteWithChildren = AppVendorsRoute._addFileChildren(
+  AppVendorsRouteChildren,
+)
+
+interface AppRouteChildren {
+  AppOutreachRoute: typeof AppOutreachRoute
+  AppPendingRoute: typeof AppPendingRoute
+  AppSettingsRoute: typeof AppSettingsRoute
+  AppVendorsRoute: typeof AppVendorsRouteWithChildren
+  AppIndexRoute: typeof AppIndexRoute
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppOutreachRoute: AppOutreachRoute,
+  AppPendingRoute: AppPendingRoute,
+  AppSettingsRoute: AppSettingsRoute,
+  AppVendorsRoute: AppVendorsRouteWithChildren,
+  AppIndexRoute: AppIndexRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
+  LoginRoute: LoginRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
