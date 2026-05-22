@@ -14,6 +14,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppVendorsRouteImport } from './routes/_app/vendors'
+import { Route as AppVendorsVendorIdRouteImport } from './routes/_app/vendors.$vendorId'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
@@ -39,32 +40,45 @@ const AppVendorsRoute = AppVendorsRouteImport.update({
   path: '/vendors',
   getParentRoute: () => AppRoute,
 } as any)
+const AppVendorsVendorIdRoute = AppVendorsVendorIdRouteImport.update({
+  id: '/$vendorId',
+  path: '/$vendorId',
+  getParentRoute: () => AppVendorsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
-  '/vendors': typeof AppVendorsRoute
+  '/vendors': typeof AppVendorsRouteWithChildren
+  '/vendors/$vendorId': typeof AppVendorsVendorIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
-  '/vendors': typeof AppVendorsRoute
+  '/vendors': typeof AppVendorsRouteWithChildren
   '/': typeof AppIndexRoute
+  '/vendors/$vendorId': typeof AppVendorsVendorIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
-  '/_app/vendors': typeof AppVendorsRoute
+  '/_app/vendors': typeof AppVendorsRouteWithChildren
   '/_app/': typeof AppIndexRoute
+  '/_app/vendors/$vendorId': typeof AppVendorsVendorIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/reset-password' | '/vendors'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/reset-password'
+    | '/vendors'
+    | '/vendors/$vendorId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/reset-password' | '/vendors' | '/'
+  to: '/login' | '/reset-password' | '/vendors' | '/' | '/vendors/$vendorId'
   id:
     | '__root__'
     | '/_app'
@@ -72,6 +86,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/_app/vendors'
     | '/_app/'
+    | '/_app/vendors/$vendorId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -117,16 +132,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppVendorsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/vendors/$vendorId': {
+      id: '/_app/vendors/$vendorId'
+      path: '/$vendorId'
+      fullPath: '/vendors/$vendorId'
+      preLoaderRoute: typeof AppVendorsVendorIdRouteImport
+      parentRoute: typeof AppVendorsRoute
+    }
   }
 }
 
+interface AppVendorsRouteChildren {
+  AppVendorsVendorIdRoute: typeof AppVendorsVendorIdRoute
+}
+
+const AppVendorsRouteChildren: AppVendorsRouteChildren = {
+  AppVendorsVendorIdRoute: AppVendorsVendorIdRoute,
+}
+
+const AppVendorsRouteWithChildren = AppVendorsRoute._addFileChildren(
+  AppVendorsRouteChildren,
+)
+
 interface AppRouteChildren {
-  AppVendorsRoute: typeof AppVendorsRoute
+  AppVendorsRoute: typeof AppVendorsRouteWithChildren
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
-  AppVendorsRoute: AppVendorsRoute,
+  AppVendorsRoute: AppVendorsRouteWithChildren,
   AppIndexRoute: AppIndexRoute,
 }
 
