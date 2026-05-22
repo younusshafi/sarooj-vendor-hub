@@ -78,7 +78,7 @@ export function AppSidebar() {
       <nav className="flex-1 px-2">
         {NAV.map((item) => {
           const Icon = item.icon;
-          const active = isActive(item.to, "exact" in item ? item.exact : false);
+          const active = isActive(item.to, item.exact);
           return (
             <Link
               key={item.to}
