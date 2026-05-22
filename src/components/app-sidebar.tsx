@@ -14,13 +14,21 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase-external/client";
 import { useAuth } from "@/integrations/supabase-external/auth";
 
-const NAV = [
+type NavItem = {
+  to: string;
+  label: string;
+  icon: typeof Home;
+  exact?: boolean;
+  badge?: boolean;
+};
+
+const NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: Home, exact: true },
   { to: "/vendors", label: "Vendors", icon: Building2 },
   { to: "/pending", label: "Pending Registrations", icon: Inbox, badge: true },
   { to: "/outreach", label: "Outreach", icon: Mail },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
-] as const;
+];
 
 function usePendingCount() {
   return useQuery({
@@ -74,7 +82,7 @@ export function AppSidebar() {
           return (
             <Link
               key={item.to}
-              to={item.to}
+              to={item.to as string}
               onClick={() => setMobileOpen(false)}
               className="group mb-1 flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors"
               style={{
