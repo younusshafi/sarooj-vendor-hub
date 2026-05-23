@@ -85,7 +85,7 @@ function OutreachPage() {
                 <tr><td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">No outreach activity yet.</td></tr>
               )}
               {history.data?.map((r) => (
-                <tr key={r.id} className="border-t border-border">
+                <tr key={r.outreach_id} className="border-t border-border">
                   <td className="px-4 py-3 text-muted-foreground">{formatDateTime(r.sent_at)}</td>
                   <td className="px-4 py-3">{r.email_to}</td>
                   <td className="px-4 py-3">{r.delivery_status ?? "—"}</td>
