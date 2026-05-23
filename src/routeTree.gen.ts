@@ -17,6 +17,7 @@ import { Route as AppVendorsRouteImport } from './routes/_app/vendors'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppPendingRouteImport } from './routes/_app/pending'
 import { Route as AppOutreachRouteImport } from './routes/_app/outreach'
+import { Route as AppVendorsIndexRouteImport } from './routes/_app/vendors.index'
 import { Route as AppVendorsVendorIdRouteImport } from './routes/_app/vendors.$vendorId'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -58,6 +59,11 @@ const AppOutreachRoute = AppOutreachRouteImport.update({
   path: '/outreach',
   getParentRoute: () => AppRoute,
 } as any)
+const AppVendorsIndexRoute = AppVendorsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppVendorsRoute,
+} as any)
 const AppVendorsVendorIdRoute = AppVendorsVendorIdRouteImport.update({
   id: '/$vendorId',
   path: '/$vendorId',
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AppSettingsRoute
   '/vendors': typeof AppVendorsRouteWithChildren
   '/vendors/$vendorId': typeof AppVendorsVendorIdRoute
+  '/vendors/': typeof AppVendorsIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -80,9 +87,9 @@ export interface FileRoutesByTo {
   '/outreach': typeof AppOutreachRoute
   '/pending': typeof AppPendingRoute
   '/settings': typeof AppSettingsRoute
-  '/vendors': typeof AppVendorsRouteWithChildren
   '/': typeof AppIndexRoute
   '/vendors/$vendorId': typeof AppVendorsVendorIdRoute
+  '/vendors': typeof AppVendorsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -95,6 +102,7 @@ export interface FileRoutesById {
   '/_app/vendors': typeof AppVendorsRouteWithChildren
   '/_app/': typeof AppIndexRoute
   '/_app/vendors/$vendorId': typeof AppVendorsVendorIdRoute
+  '/_app/vendors/': typeof AppVendorsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -107,6 +115,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/vendors'
     | '/vendors/$vendorId'
+    | '/vendors/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -114,9 +123,9 @@ export interface FileRouteTypes {
     | '/outreach'
     | '/pending'
     | '/settings'
-    | '/vendors'
     | '/'
     | '/vendors/$vendorId'
+    | '/vendors'
   id:
     | '__root__'
     | '/_app'
@@ -128,6 +137,7 @@ export interface FileRouteTypes {
     | '/_app/vendors'
     | '/_app/'
     | '/_app/vendors/$vendorId'
+    | '/_app/vendors/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -194,6 +204,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOutreachRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/vendors/': {
+      id: '/_app/vendors/'
+      path: '/'
+      fullPath: '/vendors/'
+      preLoaderRoute: typeof AppVendorsIndexRouteImport
+      parentRoute: typeof AppVendorsRoute
+    }
     '/_app/vendors/$vendorId': {
       id: '/_app/vendors/$vendorId'
       path: '/$vendorId'
@@ -206,10 +223,12 @@ declare module '@tanstack/react-router' {
 
 interface AppVendorsRouteChildren {
   AppVendorsVendorIdRoute: typeof AppVendorsVendorIdRoute
+  AppVendorsIndexRoute: typeof AppVendorsIndexRoute
 }
 
 const AppVendorsRouteChildren: AppVendorsRouteChildren = {
   AppVendorsVendorIdRoute: AppVendorsVendorIdRoute,
+  AppVendorsIndexRoute: AppVendorsIndexRoute,
 }
 
 const AppVendorsRouteWithChildren = AppVendorsRoute._addFileChildren(
@@ -242,13 +261,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
