@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, AlertTriangle } from "lucide-react";
-import { supabase, type Vendor, type VendorDocument, type VendorValidation, type VendorOutreach } from "@/integrations/supabase-external/client";
+import { supabase, type Vendor, type VendorValidation, type VendorOutreach } from "@/integrations/supabase-external/client";
 import { StatusBadge, ConfidenceDot } from "@/components/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDate, formatDateTime, formatVendorType, formatSupplierType, titleCase } from "@/lib/format";
@@ -89,7 +89,7 @@ function VendorProfilePage() {
           <ProfileTab v={v} />
         </TabsContent>
         <TabsContent value="documents" className="mt-4">
-          <DocumentsTab vendorId={vendorId} />
+          <DocumentsTab vendor={v} />
         </TabsContent>
         <TabsContent value="history" className="mt-4 space-y-6">
           <ValidationHistory vendorId={vendorId} />
@@ -161,47 +161,140 @@ function ProfileTab({ v }: { v: Vendor }) {
   );
 }
 
-function DocumentsTab({ vendorId }: { vendorId: string }) {
+const BUCKET = "vendor-documents";
+const ROOT_PREFIX = "vendor-docs-pending";
+
+function slugify(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function formatBytes(n: number | null | undefined): string {
+  if (!n && n !== 0) return "—";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+interface StorageDoc {
+  documentType: string;
+  filename: string;
+  path: string;
+  sizeBytes: number | null;
+  uploadedAt: string | null;
+}
+
+function DocumentsTab({ vendor }: { vendor: Vendor }) {
   const docs = useQuery({
-    queryKey: ["vendor-documents", vendorId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("vendor_documents").select("*").eq("vendor_id", vendorId);
-      if (error) throw error;
-      return data as VendorDocument[];
+    queryKey: ["vendor-storage-docs", vendor.vendor_id],
+    queryFn: async (): Promise<StorageDoc[]> => {
+      const slug = slugify(vendor.company_name);
+      const { data: topLevel, error: listErr } = await supabase.storage
+        .from(BUCKET)
+        .list(ROOT_PREFIX, { limit: 1000, sortBy: { column: "created_at", order: "desc" } });
+      if (listErr) throw listErr;
+
+      const folders = (topLevel ?? []).filter((e) => !e.metadata); // folders have no metadata
+      // Match folders ending with _{slug} (n8n pattern: {timestamp}_{slug})
+      let matched = folders.filter((f) => f.name.toLowerCase().endsWith(`_${slug}`));
+      if (matched.length === 0 && slug) {
+        matched = folders.filter((f) => f.name.toLowerCase().includes(slug));
+      }
+      if (matched.length === 0) return [];
+
+      // Prefer folder whose timestamp prefix is closest to (but not after) vendor.created_at
+      const vendorTs = new Date(vendor.created_at).getTime();
+      matched.sort((a, b) => {
+        const ta = parseInt(a.name.split("_")[0], 10) || 0;
+        const tb = parseInt(b.name.split("_")[0], 10) || 0;
+        return Math.abs(ta - vendorTs) - Math.abs(tb - vendorTs);
+      });
+      const folder = matched[0].name;
+
+      // List document_type subfolders
+      const { data: subdirs, error: subErr } = await supabase.storage
+        .from(BUCKET)
+        .list(`${ROOT_PREFIX}/${folder}`, { limit: 1000 });
+      if (subErr) throw subErr;
+
+      const results: StorageDoc[] = [];
+      for (const sd of subdirs ?? []) {
+        if (sd.metadata) {
+          // File directly in the vendor folder
+          results.push({
+            documentType: "Other",
+            filename: sd.name,
+            path: `${ROOT_PREFIX}/${folder}/${sd.name}`,
+            sizeBytes: (sd.metadata as { size?: number }).size ?? null,
+            uploadedAt: sd.created_at ?? null,
+          });
+          continue;
+        }
+        const { data: files, error: fErr } = await supabase.storage
+          .from(BUCKET)
+          .list(`${ROOT_PREFIX}/${folder}/${sd.name}`, { limit: 1000 });
+        if (fErr) throw fErr;
+        for (const f of files ?? []) {
+          if (!f.metadata) continue;
+          results.push({
+            documentType: sd.name,
+            filename: f.name,
+            path: `${ROOT_PREFIX}/${folder}/${sd.name}/${f.name}`,
+            sizeBytes: (f.metadata as { size?: number }).size ?? null,
+            uploadedAt: f.created_at ?? null,
+          });
+        }
+      }
+      return results;
     },
   });
 
+  const openFile = async (path: string) => {
+    const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60);
+    if (error || !data) {
+      const pub = supabase.storage.from(BUCKET).getPublicUrl(path);
+      if (pub.data?.publicUrl) {
+        window.open(pub.data.publicUrl, "_blank", "noopener,noreferrer");
+        return;
+      }
+      toast.error(error?.message ?? "Could not open file.");
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
+      {docs.isError && (
+        <div className="px-4 py-3 text-sm" style={{ color: "var(--toast-error-fg)" }}>
+          Storage error: {(docs.error as Error)?.message ?? "Unknown error"}
+        </div>
+      )}
       <table className="w-full text-sm">
         <thead style={{ backgroundColor: "var(--table-header)" }}>
           <tr className="text-left text-[13px] font-semibold uppercase tracking-wider" style={{ color: "var(--table-header-text)" }}>
-            <th className="px-4 py-3">Document</th>
-            <th className="px-4 py-3">Requirement</th>
-            <th className="px-4 py-3">Submitted</th>
-            <th className="px-4 py-3">Verified</th>
+            <th className="px-4 py-3">Document Type</th>
+            <th className="px-4 py-3">Filename</th>
+            <th className="px-4 py-3">Size</th>
             <th className="px-4 py-3">Uploaded</th>
           </tr>
         </thead>
         <tbody>
-          {docs.isLoading && <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Loading…</td></tr>}
-          {!docs.isLoading && (docs.data?.length ?? 0) === 0 && <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">No documents on file.</td></tr>}
-          {docs.data?.map((d) => {
-            const missingMandatory = d.mandatory && !d.submitted;
-            return (
-              <tr key={d.document_id} className="border-t border-border" style={missingMandatory ? { color: "var(--toast-error-fg)" } : undefined}>
-                <td className="px-4 py-3 font-medium">{titleCase(d.document_type)}</td>
-                <td className="px-4 py-3">
-                  <span className="rounded-full border border-border bg-secondary px-2 py-0.5 text-xs">{d.mandatory ? "Mandatory" : "Optional"}</span>
-                </td>
-                <td className="px-4 py-3">
-                  {d.submitted ? (d.filename ? <span className="underline">{d.filename}</span> : "Yes") : <span className="text-muted-foreground">Not submitted</span>}
-                </td>
-                <td className="px-4 py-3">{d.verified ? "Yes" : "No"}</td>
-                <td className="px-4 py-3 text-muted-foreground">{formatDate(d.submitted_at)}</td>
-              </tr>
-            );
-          })}
+          {docs.isLoading && <tr><td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">Loading…</td></tr>}
+          {!docs.isLoading && !docs.isError && (docs.data?.length ?? 0) === 0 && (
+            <tr><td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">No documents found in storage for this vendor.</td></tr>
+          )}
+          {docs.data?.map((d) => (
+            <tr key={d.path} className="border-t border-border">
+              <td className="px-4 py-3 font-medium">{titleCase(d.documentType.replace(/_/g, " "))}</td>
+              <td className="px-4 py-3">
+                <button onClick={() => openFile(d.path)} className="underline hover:text-foreground" style={{ color: "var(--accent)" }}>
+                  {d.filename}
+                </button>
+              </td>
+              <td className="px-4 py-3 text-muted-foreground">{formatBytes(d.sizeBytes)}</td>
+              <td className="px-4 py-3 text-muted-foreground">{formatDate(d.uploadedAt)}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
