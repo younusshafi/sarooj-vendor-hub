@@ -9,6 +9,7 @@ import {
   LogOut,
   Menu,
   X,
+  UserPlus,
 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase-external/client";
@@ -26,6 +27,7 @@ const NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: Home, exact: true },
   { to: "/vendors", label: "Vendors", icon: Building2 },
   { to: "/pending", label: "Pending Registrations", icon: Inbox, badge: true },
+  { to: "/invite", label: "Invite Vendor", icon: UserPlus },
   { to: "/outreach", label: "Outreach", icon: Mail },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];

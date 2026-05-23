@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as RegisterRouteImport } from './routes/register'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
@@ -18,11 +19,17 @@ import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppPendingRouteImport } from './routes/_app/pending'
 import { Route as AppOutreachRouteImport } from './routes/_app/outreach'
 import { Route as AppVendorsIndexRouteImport } from './routes/_app/vendors.index'
+import { Route as AppInviteRouteImport } from './routes/_app/invite'
 import { Route as AppVendorsVendorIdRouteImport } from './routes/_app/vendors.$vendorId'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -64,6 +71,11 @@ const AppVendorsIndexRoute = AppVendorsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppVendorsRoute,
 } as any)
+const AppInviteRoute = AppInviteRouteImport.update({
+  id: '/invite',
+  path: '/invite',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppVendorsVendorIdRoute = AppVendorsVendorIdRouteImport.update({
   id: '/$vendorId',
   path: '/$vendorId',
@@ -73,7 +85,9 @@ const AppVendorsVendorIdRoute = AppVendorsVendorIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
+  '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/invite': typeof AppInviteRoute
   '/outreach': typeof AppOutreachRoute
   '/pending': typeof AppPendingRoute
   '/settings': typeof AppSettingsRoute
@@ -83,7 +97,9 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/invite': typeof AppInviteRoute
   '/outreach': typeof AppOutreachRoute
   '/pending': typeof AppPendingRoute
   '/settings': typeof AppSettingsRoute
@@ -95,7 +111,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_app/invite': typeof AppInviteRoute
   '/_app/outreach': typeof AppOutreachRoute
   '/_app/pending': typeof AppPendingRoute
   '/_app/settings': typeof AppSettingsRoute
@@ -109,7 +127,9 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/register'
     | '/reset-password'
+    | '/invite'
     | '/outreach'
     | '/pending'
     | '/settings'
@@ -119,7 +139,9 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/register'
     | '/reset-password'
+    | '/invite'
     | '/outreach'
     | '/pending'
     | '/settings'
@@ -130,7 +152,9 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_app'
     | '/login'
+    | '/register'
     | '/reset-password'
+    | '/_app/invite'
     | '/_app/outreach'
     | '/_app/pending'
     | '/_app/settings'
@@ -143,6 +167,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
+  RegisterRoute: typeof RegisterRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
 }
 
@@ -153,6 +178,13 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -211,6 +243,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppVendorsIndexRouteImport
       parentRoute: typeof AppVendorsRoute
     }
+    '/_app/invite': {
+      id: '/_app/invite'
+      path: '/invite'
+      fullPath: '/invite'
+      preLoaderRoute: typeof AppInviteRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/vendors/$vendorId': {
       id: '/_app/vendors/$vendorId'
       path: '/$vendorId'
@@ -236,6 +275,7 @@ const AppVendorsRouteWithChildren = AppVendorsRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppInviteRoute: typeof AppInviteRoute
   AppOutreachRoute: typeof AppOutreachRoute
   AppPendingRoute: typeof AppPendingRoute
   AppSettingsRoute: typeof AppSettingsRoute
@@ -244,6 +284,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppInviteRoute: AppInviteRoute,
   AppOutreachRoute: AppOutreachRoute,
   AppPendingRoute: AppPendingRoute,
   AppSettingsRoute: AppSettingsRoute,
@@ -256,8 +297,19 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
+  RegisterRoute: RegisterRoute,
   ResetPasswordRoute: ResetPasswordRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
