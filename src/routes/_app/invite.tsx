@@ -73,12 +73,16 @@ function InviteVendorPage() {
           registration_url: REGISTRATION_URL,
         }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setSuccessData({
-        contact_person: values.contact_person,
-        vendor_name: values.vendor_name,
-      });
-      setStatus("success");
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setSuccessData({
+          contact_person: values.contact_person,
+          vendor_name: values.vendor_name,
+        });
+        setStatus("success");
+      } else {
+        setStatus("error");
+      }
     } catch {
       setStatus("error");
     }
