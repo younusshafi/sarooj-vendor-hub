@@ -111,7 +111,7 @@ function PendingCard({ v, onApprove, onReject }: { v: Vendor; onApprove: () => v
       return (data ?? []) as VendorDocument[];
     },
   });
-  const mandatory = (docs.data ?? []).filter((d) => d.is_mandatory);
+  const mandatory = (docs.data ?? []).filter((d) => d.mandatory);
   const crBad = v.cr_status === "expired" || v.cr_status === "suspended";
 
   return (
@@ -155,7 +155,7 @@ function PendingCard({ v, onApprove, onReject }: { v: Vendor; onApprove: () => v
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mandatory documents</div>
           <div className="mt-2 flex flex-wrap gap-2 text-xs">
             {mandatory.map((d) => (
-              <span key={d.id} className="inline-flex items-center gap-1 rounded-md border border-border bg-secondary px-2 py-1">
+              <span key={d.document_id} className="inline-flex items-center gap-1 rounded-md border border-border bg-secondary px-2 py-1">
                 {d.submitted ? <Check className="h-3 w-3" style={{ color: "var(--confidence-high)" }} /> : <X className="h-3 w-3" style={{ color: "var(--confidence-low)" }} />}
                 {d.document_type}
               </span>
