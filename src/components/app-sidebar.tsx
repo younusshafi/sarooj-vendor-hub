@@ -11,7 +11,6 @@ import {
   X,
   UserPlus,
   FileText,
-  ClipboardList,
 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase-external/client";
@@ -33,7 +32,6 @@ const NAV: NavItem[] = [
   { to: "/invite", label: "Invite Vendor", icon: UserPlus },
   { to: "/outreach", label: "Outreach", icon: Mail },
   { to: "/rfq", label: "RFQ", icon: FileText, dot: "blue" },
-  { to: "/rfq/bids", label: "Bids", icon: ClipboardList, dot: "amber" },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
