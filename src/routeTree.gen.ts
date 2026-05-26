@@ -27,6 +27,9 @@ import { Route as AppRfqPreviewRouteImport } from './routes/_app/rfq.preview'
 import { Route as AppRfqNewRouteImport } from './routes/_app/rfq.new'
 import { Route as AppRfqBidsRouteImport } from './routes/_app/rfq.bids'
 import { Route as AppRfqRfqIdRouteImport } from './routes/_app/rfq.$rfqId'
+import { Route as AppRfqRfqIdIndexRouteImport } from './routes/_app/rfq.$rfqId.index'
+import { Route as AppRfqRfqIdComparisonRouteImport } from './routes/_app/rfq.$rfqId.comparison'
+import { Route as AppRfqRfqIdBidsBidIdReviewRouteImport } from './routes/_app/rfq.$rfqId.bids.$bidId.review'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
@@ -117,6 +120,22 @@ const AppRfqRfqIdRoute = AppRfqRfqIdRouteImport.update({
   path: '/$rfqId',
   getParentRoute: () => AppRfqRoute,
 } as any)
+const AppRfqRfqIdIndexRoute = AppRfqRfqIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRfqRfqIdRoute,
+} as any)
+const AppRfqRfqIdComparisonRoute = AppRfqRfqIdComparisonRouteImport.update({
+  id: '/comparison',
+  path: '/comparison',
+  getParentRoute: () => AppRfqRfqIdRoute,
+} as any)
+const AppRfqRfqIdBidsBidIdReviewRoute =
+  AppRfqRfqIdBidsBidIdReviewRouteImport.update({
+    id: '/bids/$bidId/review',
+    path: '/bids/$bidId/review',
+    getParentRoute: () => AppRfqRfqIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -129,13 +148,16 @@ export interface FileRoutesByFullPath {
   '/rfq': typeof AppRfqRouteWithChildren
   '/settings': typeof AppSettingsRoute
   '/vendors': typeof AppVendorsRouteWithChildren
-  '/rfq/$rfqId': typeof AppRfqRfqIdRoute
+  '/rfq/$rfqId': typeof AppRfqRfqIdRouteWithChildren
   '/rfq/bids': typeof AppRfqBidsRoute
   '/rfq/new': typeof AppRfqNewRoute
   '/rfq/preview': typeof AppRfqPreviewRoute
   '/vendors/$vendorId': typeof AppVendorsVendorIdRoute
   '/rfq/': typeof AppRfqIndexRoute
   '/vendors/': typeof AppVendorsIndexRoute
+  '/rfq/$rfqId/comparison': typeof AppRfqRfqIdComparisonRoute
+  '/rfq/$rfqId/': typeof AppRfqRfqIdIndexRoute
+  '/rfq/$rfqId/bids/$bidId/review': typeof AppRfqRfqIdBidsBidIdReviewRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -146,13 +168,15 @@ export interface FileRoutesByTo {
   '/pending': typeof AppPendingRoute
   '/settings': typeof AppSettingsRoute
   '/': typeof AppIndexRoute
-  '/rfq/$rfqId': typeof AppRfqRfqIdRoute
   '/rfq/bids': typeof AppRfqBidsRoute
   '/rfq/new': typeof AppRfqNewRoute
   '/rfq/preview': typeof AppRfqPreviewRoute
   '/vendors/$vendorId': typeof AppVendorsVendorIdRoute
   '/rfq': typeof AppRfqIndexRoute
   '/vendors': typeof AppVendorsIndexRoute
+  '/rfq/$rfqId/comparison': typeof AppRfqRfqIdComparisonRoute
+  '/rfq/$rfqId': typeof AppRfqRfqIdIndexRoute
+  '/rfq/$rfqId/bids/$bidId/review': typeof AppRfqRfqIdBidsBidIdReviewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -167,13 +191,16 @@ export interface FileRoutesById {
   '/_app/settings': typeof AppSettingsRoute
   '/_app/vendors': typeof AppVendorsRouteWithChildren
   '/_app/': typeof AppIndexRoute
-  '/_app/rfq/$rfqId': typeof AppRfqRfqIdRoute
+  '/_app/rfq/$rfqId': typeof AppRfqRfqIdRouteWithChildren
   '/_app/rfq/bids': typeof AppRfqBidsRoute
   '/_app/rfq/new': typeof AppRfqNewRoute
   '/_app/rfq/preview': typeof AppRfqPreviewRoute
   '/_app/vendors/$vendorId': typeof AppVendorsVendorIdRoute
   '/_app/rfq/': typeof AppRfqIndexRoute
   '/_app/vendors/': typeof AppVendorsIndexRoute
+  '/_app/rfq/$rfqId/comparison': typeof AppRfqRfqIdComparisonRoute
+  '/_app/rfq/$rfqId/': typeof AppRfqRfqIdIndexRoute
+  '/_app/rfq/$rfqId/bids/$bidId/review': typeof AppRfqRfqIdBidsBidIdReviewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -195,6 +222,9 @@ export interface FileRouteTypes {
     | '/vendors/$vendorId'
     | '/rfq/'
     | '/vendors/'
+    | '/rfq/$rfqId/comparison'
+    | '/rfq/$rfqId/'
+    | '/rfq/$rfqId/bids/$bidId/review'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -205,13 +235,15 @@ export interface FileRouteTypes {
     | '/pending'
     | '/settings'
     | '/'
-    | '/rfq/$rfqId'
     | '/rfq/bids'
     | '/rfq/new'
     | '/rfq/preview'
     | '/vendors/$vendorId'
     | '/rfq'
     | '/vendors'
+    | '/rfq/$rfqId/comparison'
+    | '/rfq/$rfqId'
+    | '/rfq/$rfqId/bids/$bidId/review'
   id:
     | '__root__'
     | '/_app'
@@ -232,6 +264,9 @@ export interface FileRouteTypes {
     | '/_app/vendors/$vendorId'
     | '/_app/rfq/'
     | '/_app/vendors/'
+    | '/_app/rfq/$rfqId/comparison'
+    | '/_app/rfq/$rfqId/'
+    | '/_app/rfq/$rfqId/bids/$bidId/review'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -369,11 +404,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRfqRfqIdRouteImport
       parentRoute: typeof AppRfqRoute
     }
+    '/_app/rfq/$rfqId/': {
+      id: '/_app/rfq/$rfqId/'
+      path: '/'
+      fullPath: '/rfq/$rfqId/'
+      preLoaderRoute: typeof AppRfqRfqIdIndexRouteImport
+      parentRoute: typeof AppRfqRfqIdRoute
+    }
+    '/_app/rfq/$rfqId/comparison': {
+      id: '/_app/rfq/$rfqId/comparison'
+      path: '/comparison'
+      fullPath: '/rfq/$rfqId/comparison'
+      preLoaderRoute: typeof AppRfqRfqIdComparisonRouteImport
+      parentRoute: typeof AppRfqRfqIdRoute
+    }
+    '/_app/rfq/$rfqId/bids/$bidId/review': {
+      id: '/_app/rfq/$rfqId/bids/$bidId/review'
+      path: '/bids/$bidId/review'
+      fullPath: '/rfq/$rfqId/bids/$bidId/review'
+      preLoaderRoute: typeof AppRfqRfqIdBidsBidIdReviewRouteImport
+      parentRoute: typeof AppRfqRfqIdRoute
+    }
   }
 }
 
+interface AppRfqRfqIdRouteChildren {
+  AppRfqRfqIdComparisonRoute: typeof AppRfqRfqIdComparisonRoute
+  AppRfqRfqIdIndexRoute: typeof AppRfqRfqIdIndexRoute
+  AppRfqRfqIdBidsBidIdReviewRoute: typeof AppRfqRfqIdBidsBidIdReviewRoute
+}
+
+const AppRfqRfqIdRouteChildren: AppRfqRfqIdRouteChildren = {
+  AppRfqRfqIdComparisonRoute: AppRfqRfqIdComparisonRoute,
+  AppRfqRfqIdIndexRoute: AppRfqRfqIdIndexRoute,
+  AppRfqRfqIdBidsBidIdReviewRoute: AppRfqRfqIdBidsBidIdReviewRoute,
+}
+
+const AppRfqRfqIdRouteWithChildren = AppRfqRfqIdRoute._addFileChildren(
+  AppRfqRfqIdRouteChildren,
+)
+
 interface AppRfqRouteChildren {
-  AppRfqRfqIdRoute: typeof AppRfqRfqIdRoute
+  AppRfqRfqIdRoute: typeof AppRfqRfqIdRouteWithChildren
   AppRfqBidsRoute: typeof AppRfqBidsRoute
   AppRfqNewRoute: typeof AppRfqNewRoute
   AppRfqPreviewRoute: typeof AppRfqPreviewRoute
@@ -381,7 +453,7 @@ interface AppRfqRouteChildren {
 }
 
 const AppRfqRouteChildren: AppRfqRouteChildren = {
-  AppRfqRfqIdRoute: AppRfqRfqIdRoute,
+  AppRfqRfqIdRoute: AppRfqRfqIdRouteWithChildren,
   AppRfqBidsRoute: AppRfqBidsRoute,
   AppRfqNewRoute: AppRfqNewRoute,
   AppRfqPreviewRoute: AppRfqPreviewRoute,
