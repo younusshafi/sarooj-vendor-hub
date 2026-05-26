@@ -175,13 +175,13 @@ function ComparisonViewPage() {
       const { error } = await supabase
         .from("comparisons")
         .update({
-          status: "final",
-          approved_vendor_column: approvedColumn,
+          status: "finalised",
+          approved_vendor_column: approvedColumn ? parseInt(approvedColumn) : null,
           selection_type: selectionType,
           decision_notes: decisionNotes,
           prepared_by: user?.email ?? "",
           approved_by: approvedBy,
-          finalised_at: new Date().toISOString(),
+          approved_at: new Date().toISOString(),
         })
         .eq("comparison_id", comparison.comparison_id);
       if (error) throw error;
@@ -750,11 +750,11 @@ function ComparisonViewPage() {
             style={{ backgroundColor: "var(--accent)" }}
           >
             {savingDecision && <Loader2 className="h-4 w-4 animate-spin" />}
-            {comparison?.status === "final" ? "Update Final Decision" : "Mark as Final"}
+            {comparison?.status === "finalised" ? "Update Final Decision" : "Mark as Final"}
           </button>
         </div>
 
-        {comparison?.status === "final" && (
+        {comparison?.status === "finalised" && (
           <div
             className="mt-3 rounded-md p-3 text-sm font-medium"
             style={{
@@ -763,8 +763,8 @@ function ComparisonViewPage() {
             }}
           >
             ✓ Marked as final on{" "}
-            {comparison.finalised_at
-              ? new Date(comparison.finalised_at).toLocaleDateString("en-GB")
+            {comparison.approved_at
+              ? new Date(comparison.approved_at).toLocaleDateString("en-GB")
               : "—"}
           </div>
         )}

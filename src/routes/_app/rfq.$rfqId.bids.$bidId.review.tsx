@@ -57,7 +57,7 @@ function BidReviewPage() {
     delivery_lead_time_days: "",
     validity_days: "",
     manufacturer_brand: "",
-    general_notes: "",
+    notes: "",
   });
 
   const [editedItems, setEditedItems] = useState<
@@ -114,7 +114,7 @@ function BidReviewPage() {
         delivery_lead_time_days: bid.delivery_lead_time_days ?? "",
         validity_days: bid.validity_days ?? "",
         manufacturer_brand: bid.manufacturer_brand ?? "",
-        general_notes: bid.general_notes ?? "",
+        notes: bid.notes ?? "",
       });
     }
   }, [bid]);
@@ -123,7 +123,7 @@ function BidReviewPage() {
     if (bidItems) {
       setEditedItems(
         bidItems.map((bi: any) => ({
-          bid_item_id: bi.bid_item_id,
+          bid_item_id: bi.item_id,
           rfq_item_id: bi.rfq_item_id,
           description: bi.rfq_items?.description || bi.description || "",
           quantity: bi.rfq_items?.quantity ?? 1,
@@ -192,7 +192,7 @@ function BidReviewPage() {
             unit_price_omr: rate,
             total_price_omr: rate * item.quantity,
           })
-          .eq("bid_item_id", item.bid_item_id);
+          .eq("item_id", item.bid_item_id);
       }
     } catch (err: any) {
       throw err;
@@ -547,8 +547,8 @@ function BidReviewPage() {
               General Notes / Qualifications
             </label>
             <textarea
-              value={fields.general_notes}
-              onChange={(e) => updateField("general_notes", e.target.value)}
+              value={fields.notes}
+              onChange={(e) => updateField("notes", e.target.value)}
               rows={3}
               className="w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm outline-none"
             />

@@ -54,7 +54,7 @@ function RFQDetailPage() {
       const { data } = await supabase
         .from("bids")
         .select(
-          "bid_id,status,total_inc_vat_omr,subtotal_ex_vat_omr,overall_confidence,created_at,vendors(company_name)"
+          "bid_id,status,total_inc_vat_omr,subtotal_ex_vat_omr,ai_extraction_confidence,created_at,vendors(company_name)"
         )
         .eq("rfq_id", rfqId)
         .order("created_at", { ascending: false });
@@ -313,7 +313,7 @@ function RFQDetailPage() {
                       : "—"}
                   </td>
                   <td className="px-4 py-3">
-                    <ConfidenceBadge level={b.overall_confidence} />
+                    <ConfidenceBadge level={b.ai_extraction_confidence} />
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {b.created_at ? formatDate(b.created_at) : "—"}
