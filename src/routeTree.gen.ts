@@ -16,11 +16,17 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppVendorsRouteImport } from './routes/_app/vendors'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppRfqRouteImport } from './routes/_app/rfq'
 import { Route as AppPendingRouteImport } from './routes/_app/pending'
 import { Route as AppOutreachRouteImport } from './routes/_app/outreach'
-import { Route as AppVendorsIndexRouteImport } from './routes/_app/vendors.index'
 import { Route as AppInviteRouteImport } from './routes/_app/invite'
+import { Route as AppVendorsIndexRouteImport } from './routes/_app/vendors.index'
+import { Route as AppRfqIndexRouteImport } from './routes/_app/rfq.index'
 import { Route as AppVendorsVendorIdRouteImport } from './routes/_app/vendors.$vendorId'
+import { Route as AppRfqPreviewRouteImport } from './routes/_app/rfq.preview'
+import { Route as AppRfqNewRouteImport } from './routes/_app/rfq.new'
+import { Route as AppRfqBidsRouteImport } from './routes/_app/rfq.bids'
+import { Route as AppRfqRfqIdRouteImport } from './routes/_app/rfq.$rfqId'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
@@ -56,6 +62,11 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
+const AppRfqRoute = AppRfqRouteImport.update({
+  id: '/rfq',
+  path: '/rfq',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppPendingRoute = AppPendingRouteImport.update({
   id: '/pending',
   path: '/pending',
@@ -66,20 +77,45 @@ const AppOutreachRoute = AppOutreachRouteImport.update({
   path: '/outreach',
   getParentRoute: () => AppRoute,
 } as any)
-const AppVendorsIndexRoute = AppVendorsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppVendorsRoute,
-} as any)
 const AppInviteRoute = AppInviteRouteImport.update({
   id: '/invite',
   path: '/invite',
   getParentRoute: () => AppRoute,
 } as any)
+const AppVendorsIndexRoute = AppVendorsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppVendorsRoute,
+} as any)
+const AppRfqIndexRoute = AppRfqIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRfqRoute,
+} as any)
 const AppVendorsVendorIdRoute = AppVendorsVendorIdRouteImport.update({
   id: '/$vendorId',
   path: '/$vendorId',
   getParentRoute: () => AppVendorsRoute,
+} as any)
+const AppRfqPreviewRoute = AppRfqPreviewRouteImport.update({
+  id: '/preview',
+  path: '/preview',
+  getParentRoute: () => AppRfqRoute,
+} as any)
+const AppRfqNewRoute = AppRfqNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppRfqRoute,
+} as any)
+const AppRfqBidsRoute = AppRfqBidsRouteImport.update({
+  id: '/bids',
+  path: '/bids',
+  getParentRoute: () => AppRfqRoute,
+} as any)
+const AppRfqRfqIdRoute = AppRfqRfqIdRouteImport.update({
+  id: '/$rfqId',
+  path: '/$rfqId',
+  getParentRoute: () => AppRfqRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -90,9 +126,15 @@ export interface FileRoutesByFullPath {
   '/invite': typeof AppInviteRoute
   '/outreach': typeof AppOutreachRoute
   '/pending': typeof AppPendingRoute
+  '/rfq': typeof AppRfqRouteWithChildren
   '/settings': typeof AppSettingsRoute
   '/vendors': typeof AppVendorsRouteWithChildren
+  '/rfq/$rfqId': typeof AppRfqRfqIdRoute
+  '/rfq/bids': typeof AppRfqBidsRoute
+  '/rfq/new': typeof AppRfqNewRoute
+  '/rfq/preview': typeof AppRfqPreviewRoute
   '/vendors/$vendorId': typeof AppVendorsVendorIdRoute
+  '/rfq/': typeof AppRfqIndexRoute
   '/vendors/': typeof AppVendorsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -104,7 +146,12 @@ export interface FileRoutesByTo {
   '/pending': typeof AppPendingRoute
   '/settings': typeof AppSettingsRoute
   '/': typeof AppIndexRoute
+  '/rfq/$rfqId': typeof AppRfqRfqIdRoute
+  '/rfq/bids': typeof AppRfqBidsRoute
+  '/rfq/new': typeof AppRfqNewRoute
+  '/rfq/preview': typeof AppRfqPreviewRoute
   '/vendors/$vendorId': typeof AppVendorsVendorIdRoute
+  '/rfq': typeof AppRfqIndexRoute
   '/vendors': typeof AppVendorsIndexRoute
 }
 export interface FileRoutesById {
@@ -116,10 +163,16 @@ export interface FileRoutesById {
   '/_app/invite': typeof AppInviteRoute
   '/_app/outreach': typeof AppOutreachRoute
   '/_app/pending': typeof AppPendingRoute
+  '/_app/rfq': typeof AppRfqRouteWithChildren
   '/_app/settings': typeof AppSettingsRoute
   '/_app/vendors': typeof AppVendorsRouteWithChildren
   '/_app/': typeof AppIndexRoute
+  '/_app/rfq/$rfqId': typeof AppRfqRfqIdRoute
+  '/_app/rfq/bids': typeof AppRfqBidsRoute
+  '/_app/rfq/new': typeof AppRfqNewRoute
+  '/_app/rfq/preview': typeof AppRfqPreviewRoute
   '/_app/vendors/$vendorId': typeof AppVendorsVendorIdRoute
+  '/_app/rfq/': typeof AppRfqIndexRoute
   '/_app/vendors/': typeof AppVendorsIndexRoute
 }
 export interface FileRouteTypes {
@@ -132,9 +185,15 @@ export interface FileRouteTypes {
     | '/invite'
     | '/outreach'
     | '/pending'
+    | '/rfq'
     | '/settings'
     | '/vendors'
+    | '/rfq/$rfqId'
+    | '/rfq/bids'
+    | '/rfq/new'
+    | '/rfq/preview'
     | '/vendors/$vendorId'
+    | '/rfq/'
     | '/vendors/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -146,7 +205,12 @@ export interface FileRouteTypes {
     | '/pending'
     | '/settings'
     | '/'
+    | '/rfq/$rfqId'
+    | '/rfq/bids'
+    | '/rfq/new'
+    | '/rfq/preview'
     | '/vendors/$vendorId'
+    | '/rfq'
     | '/vendors'
   id:
     | '__root__'
@@ -157,10 +221,16 @@ export interface FileRouteTypes {
     | '/_app/invite'
     | '/_app/outreach'
     | '/_app/pending'
+    | '/_app/rfq'
     | '/_app/settings'
     | '/_app/vendors'
     | '/_app/'
+    | '/_app/rfq/$rfqId'
+    | '/_app/rfq/bids'
+    | '/_app/rfq/new'
+    | '/_app/rfq/preview'
     | '/_app/vendors/$vendorId'
+    | '/_app/rfq/'
     | '/_app/vendors/'
   fileRoutesById: FileRoutesById
 }
@@ -222,6 +292,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/rfq': {
+      id: '/_app/rfq'
+      path: '/rfq'
+      fullPath: '/rfq'
+      preLoaderRoute: typeof AppRfqRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/pending': {
       id: '/_app/pending'
       path: '/pending'
@@ -236,6 +313,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOutreachRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/invite': {
+      id: '/_app/invite'
+      path: '/invite'
+      fullPath: '/invite'
+      preLoaderRoute: typeof AppInviteRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/vendors/': {
       id: '/_app/vendors/'
       path: '/'
@@ -243,12 +327,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppVendorsIndexRouteImport
       parentRoute: typeof AppVendorsRoute
     }
-    '/_app/invite': {
-      id: '/_app/invite'
-      path: '/invite'
-      fullPath: '/invite'
-      preLoaderRoute: typeof AppInviteRouteImport
-      parentRoute: typeof AppRoute
+    '/_app/rfq/': {
+      id: '/_app/rfq/'
+      path: '/'
+      fullPath: '/rfq/'
+      preLoaderRoute: typeof AppRfqIndexRouteImport
+      parentRoute: typeof AppRfqRoute
     }
     '/_app/vendors/$vendorId': {
       id: '/_app/vendors/$vendorId'
@@ -257,8 +341,55 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppVendorsVendorIdRouteImport
       parentRoute: typeof AppVendorsRoute
     }
+    '/_app/rfq/preview': {
+      id: '/_app/rfq/preview'
+      path: '/preview'
+      fullPath: '/rfq/preview'
+      preLoaderRoute: typeof AppRfqPreviewRouteImport
+      parentRoute: typeof AppRfqRoute
+    }
+    '/_app/rfq/new': {
+      id: '/_app/rfq/new'
+      path: '/new'
+      fullPath: '/rfq/new'
+      preLoaderRoute: typeof AppRfqNewRouteImport
+      parentRoute: typeof AppRfqRoute
+    }
+    '/_app/rfq/bids': {
+      id: '/_app/rfq/bids'
+      path: '/bids'
+      fullPath: '/rfq/bids'
+      preLoaderRoute: typeof AppRfqBidsRouteImport
+      parentRoute: typeof AppRfqRoute
+    }
+    '/_app/rfq/$rfqId': {
+      id: '/_app/rfq/$rfqId'
+      path: '/$rfqId'
+      fullPath: '/rfq/$rfqId'
+      preLoaderRoute: typeof AppRfqRfqIdRouteImport
+      parentRoute: typeof AppRfqRoute
+    }
   }
 }
+
+interface AppRfqRouteChildren {
+  AppRfqRfqIdRoute: typeof AppRfqRfqIdRoute
+  AppRfqBidsRoute: typeof AppRfqBidsRoute
+  AppRfqNewRoute: typeof AppRfqNewRoute
+  AppRfqPreviewRoute: typeof AppRfqPreviewRoute
+  AppRfqIndexRoute: typeof AppRfqIndexRoute
+}
+
+const AppRfqRouteChildren: AppRfqRouteChildren = {
+  AppRfqRfqIdRoute: AppRfqRfqIdRoute,
+  AppRfqBidsRoute: AppRfqBidsRoute,
+  AppRfqNewRoute: AppRfqNewRoute,
+  AppRfqPreviewRoute: AppRfqPreviewRoute,
+  AppRfqIndexRoute: AppRfqIndexRoute,
+}
+
+const AppRfqRouteWithChildren =
+  AppRfqRoute._addFileChildren(AppRfqRouteChildren)
 
 interface AppVendorsRouteChildren {
   AppVendorsVendorIdRoute: typeof AppVendorsVendorIdRoute
@@ -278,6 +409,7 @@ interface AppRouteChildren {
   AppInviteRoute: typeof AppInviteRoute
   AppOutreachRoute: typeof AppOutreachRoute
   AppPendingRoute: typeof AppPendingRoute
+  AppRfqRoute: typeof AppRfqRouteWithChildren
   AppSettingsRoute: typeof AppSettingsRoute
   AppVendorsRoute: typeof AppVendorsRouteWithChildren
   AppIndexRoute: typeof AppIndexRoute
@@ -287,6 +419,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppInviteRoute: AppInviteRoute,
   AppOutreachRoute: AppOutreachRoute,
   AppPendingRoute: AppPendingRoute,
+  AppRfqRoute: AppRfqRouteWithChildren,
   AppSettingsRoute: AppSettingsRoute,
   AppVendorsRoute: AppVendorsRouteWithChildren,
   AppIndexRoute: AppIndexRoute,
@@ -303,13 +436,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

@@ -10,6 +10,8 @@ import {
   Menu,
   X,
   UserPlus,
+  FileText,
+  ClipboardList,
 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase-external/client";
@@ -21,6 +23,7 @@ type NavItem = {
   icon: typeof Home;
   exact?: boolean;
   badge?: boolean;
+  dot?: "blue" | "amber";
 };
 
 const NAV: NavItem[] = [
@@ -29,6 +32,8 @@ const NAV: NavItem[] = [
   { to: "/pending", label: "Pending Registrations", icon: Inbox, badge: true },
   { to: "/invite", label: "Invite Vendor", icon: UserPlus },
   { to: "/outreach", label: "Outreach", icon: Mail },
+  { to: "/rfq", label: "RFQ", icon: FileText, dot: "blue" },
+  { to: "/rfq/bids", label: "Bids", icon: ClipboardList, dot: "amber" },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
@@ -101,6 +106,12 @@ export function AppSidebar() {
               <span className="flex items-center gap-3">
                 <Icon className="h-4 w-4" />
                 {item.label}
+                {item.dot === "blue" && (
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "#60A5FA" }} />
+                )}
+                {item.dot === "amber" && (
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "#F59E0B" }} />
+                )}
               </span>
               {item.badge && pendingCount > 0 && (
                 <span
