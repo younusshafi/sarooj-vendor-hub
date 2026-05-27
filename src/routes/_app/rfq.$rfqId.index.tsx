@@ -48,12 +48,24 @@ function RFQDetailPage() {
       const { data } = await supabase
         .from("rfq_vendors")
         .select(
-          "id,vendor_id,email_to,contact_person,status,response_received,sent_at,response_at,reminder_sent_at,vendors(company_name,email,categories)"
+          "id,vendor_id,email_to,contact_person,matched_category,status,response_received,sent_at,response_at,reminder_sent_at,vendors(company_name,email,categories)"
         )
         .eq("rfq_id", rfqId);
       return (data ?? []) as any[];
     },
     enabled: tab === "vendors",
+  });
+
+  const { data: rfqItems } = useQuery({
+    queryKey: ['rfq-items-overview', rfqId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('rfq_items')
+        .select('item_id, sap_item_number, description, quantity, unit, delivery_date, budget_unit_rate_omr')
+        .eq('rfq_id', rfqId)
+        .order('sap_item_number');
+      return (data ?? []) as any[];
+    },
   });
 
   const { data: bids, isLoading: bidsLoading } = useQuery({
@@ -213,6 +225,47 @@ function RFQDetailPage() {
               </div>
             </div>
           )}
+          {rfqItems && rfqItems.length > 0 && (
+            <div className="rounded-xl border border-border bg-card sm:col-span-2 lg:col-span-3">
+              <div className="px-4 py-3 border-b border-border">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Items ({rfqItems.length})
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead style={{ backgroundColor: 'var(--table-header)' }}>
+                    <tr className="text-left text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--table-header-text)' }}>
+                      <th className="px-4 py-2">#</th>
+                      <th className="px-4 py-2">Description</th>
+                      <th className="px-4 py-2 text-right">Qty</th>
+                      <th className="px-4 py-2">Unit</th>
+                      <th className="px-4 py-2">Delivery Date</th>
+                      <th className="px-4 py-2 text-right">Budget Rate (OMR)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rfqItems.map((item: any) => (
+                      <tr key={item.item_id} className="border-t border-border">
+                        <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
+                          {item.sap_item_number ?? '—'}
+                        </td>
+                        <td className="px-4 py-2 text-xs">{item.description || '—'}</td>
+                        <td className="px-4 py-2 text-right text-xs">{item.quantity ?? '—'}</td>
+                        <td className="px-4 py-2 text-xs">{item.unit || '—'}</td>
+                        <td className="px-4 py-2 text-xs text-muted-foreground">
+                          {item.delivery_date ? item.delivery_date.split('T')[0] : '—'}
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono text-xs text-muted-foreground">
+                          {item.budget_unit_rate_omr ?? '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -315,10 +368,14 @@ function VendorsTabPanel({
 }) {
   const isDraft = rfq.status === "draft";
 
+  const filteredVendors = vendors.filter(
+    (v: any) => !(v.vendors?.categories ?? []).includes('TEST_BATCH')
+  );
+
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [emailExpanded, setEmailExpanded] = useState(false);
+  const [emailExpanded, setEmailExpanded] = useState(true);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [deadline, setDeadline] = useState<string>(rfq.deadline ?? "");
   const [deadlineSaving, setDeadlineSaving] = useState(false);
@@ -437,10 +494,11 @@ function VendorsTabPanel({
     setSendingRFQ(true);
     setShowConfirmModal(false);
     try {
-      const vendorPayload = vendors.map((v) => ({
+      const vendorPayload = filteredVendors.map((v) => ({
         vendor_id: v.vendor_id,
         email_to: v.email_to,
         contact_person: v.contact_person,
+        matched_category: v.matched_category,
         rfq_vendor_id: v.id,
       }));
       const res = await fetch("https://n8n.zavia-ai.com/webhook/scc-rfq-dispatch", {
@@ -471,9 +529,9 @@ function VendorsTabPanel({
     } finally {
       setSendingRFQ(false);
     }
-  }, [rfqId, rfq, vendors, deadline, queryClient, showToast]);
+  }, [rfqId, rfq, filteredVendors, deadline, queryClient, showToast]);
 
-  const vendorCount = vendors.length;
+  const vendorCount = filteredVendors.length;
   const canSend = isDraft && vendorCount >= 1 && !sendingRFQ;
 
   return (
@@ -564,89 +622,163 @@ function VendorsTabPanel({
         )}
       </div>
 
-      {/* Vendor list */}
-      <div className="overflow-hidden rounded-xl border border-border bg-card">
-        <table className="w-full text-sm">
-          <thead style={{ backgroundColor: "var(--table-header)" }}>
-            <tr
-              className="text-left text-[13px] font-semibold uppercase tracking-wider"
-              style={{ color: "var(--table-header-text)" }}
+      {/* Vendor list — grouped by category */}
+      {vendorsLoading && (
+        <div className="flex items-center justify-center py-8 text-muted-foreground">
+          <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+        </div>
+      )}
+      {!vendorsLoading && filteredVendors.length === 0 && (
+        <div className="rounded-xl border border-border bg-card px-4 py-8 text-center text-muted-foreground">
+          No vendors assigned
+        </div>
+      )}
+      {!vendorsLoading && (() => {
+        const grouped = filteredVendors.reduce((acc: Record<string, any[]>, v: any) => {
+          const cat = v.matched_category || 'Uncategorised';
+          if (!acc[cat]) acc[cat] = [];
+          acc[cat].push(v);
+          return acc;
+        }, {});
+        const categoryNames = Object.keys(grouped).sort();
+        return categoryNames.map((categoryName) => (
+          <div key={categoryName} className="mb-4">
+            <div
+              className="flex items-center justify-between px-4 py-2 rounded-t-xl"
+              style={{ backgroundColor: '#E8EFF7' }}
             >
-              <th className="px-4 py-3">Company</th>
-              <th className="px-4 py-3">Email</th>
-              <th className="px-4 py-3">Category</th>
-              <th className="px-4 py-3">Status</th>
-              {isDraft && <th className="px-4 py-3 w-10"></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {vendorsLoading && (
-              <tr>
-                <td colSpan={isDraft ? 5 : 4} className="px-4 py-8 text-center text-muted-foreground">
-                  <Loader2 className="mx-auto h-5 w-5 animate-spin" />
-                </td>
-              </tr>
-            )}
-            {!vendorsLoading && vendors.length === 0 && (
-              <tr>
-                <td colSpan={isDraft ? 5 : 4} className="px-4 py-8 text-center text-muted-foreground">
-                  No vendors assigned
-                </td>
-              </tr>
-            )}
-            {vendors.map((v: any) => (
-              <tr key={v.id} className="border-t border-border">
-                <td className="px-4 py-3 font-medium" style={{ color: "#0D3D2E" }}>
-                  {v.vendors?.company_name || "—"}
-                </td>
-                <td className="px-4 py-3 text-xs text-muted-foreground">
-                  {v.email_to || "—"}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-1">
-                    {(v.vendors?.categories ?? []).slice(0, 2).map((cat: string) => (
-                      <span
-                        key={cat}
-                        className="rounded-full px-2 py-0.5 text-[11px] font-medium"
-                        style={{ backgroundColor: "#E8EFF7", color: "#1A3A5C" }}
-                      >
-                        {cat}
-                      </span>
-                    ))}
-                    {(!v.vendors?.categories || v.vendors.categories.length === 0) && (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <VendorStatusBadge
-                    status={v.status}
-                    responseReceived={v.response_received}
-                  />
-                </td>
-                {isDraft && (
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() =>
-                        handleRemoveVendor(v.id, v.vendors?.company_name || "Vendor")
-                      }
-                      disabled={removingId === v.id}
-                      className="flex items-center justify-center rounded-md p-1 transition-colors hover:bg-red-50 disabled:opacity-50"
-                      title="Remove vendor"
-                    >
-                      {removingId === v.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      ) : (
-                        <X className="h-4 w-4 text-red-500" />
+              <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#1A3A5C' }}>
+                {categoryName} ({grouped[categoryName].length})
+              </span>
+              {isDraft && (
+                <button
+                  onClick={() => grouped[categoryName].forEach(v => handleRemoveVendor(v.id, v.vendors?.company_name || 'Vendor'))}
+                  className="text-xs font-medium"
+                  style={{ color: '#DC2626' }}
+                >
+                  Remove all
+                </button>
+              )}
+            </div>
+            <div className="overflow-hidden rounded-b-xl border border-border bg-card">
+              <table className="w-full text-sm">
+                <thead style={{ backgroundColor: "var(--table-header)" }}>
+                  <tr
+                    className="text-left text-[13px] font-semibold uppercase tracking-wider"
+                    style={{ color: "var(--table-header-text)" }}
+                  >
+                    <th className="px-4 py-3">Company</th>
+                    <th className="px-4 py-3">Contact Person</th>
+                    <th className="px-4 py-3">Email</th>
+                    <th className="px-4 py-3">Category</th>
+                    <th className="px-4 py-3">Status</th>
+                    {isDraft && <th className="px-4 py-3 w-10"></th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {grouped[categoryName].map((v: any) => (
+                    <tr key={v.id} className="border-t border-border">
+                      <td className="px-4 py-3 font-medium" style={{ color: "#0D3D2E" }}>
+                        {v.vendors?.company_name || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {v.contact_person || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {v.email_to || "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {(v.vendors?.categories ?? []).slice(0, 2).map((cat: string) => (
+                            <span
+                              key={cat}
+                              className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                              style={{ backgroundColor: "#E8EFF7", color: "#1A3A5C" }}
+                            >
+                              {cat}
+                            </span>
+                          ))}
+                          {(!v.vendors?.categories || v.vendors.categories.length === 0) && (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <VendorStatusBadge
+                          status={v.status}
+                          responseReceived={v.response_received}
+                        />
+                      </td>
+                      {isDraft && (
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() =>
+                              handleRemoveVendor(v.id, v.vendors?.company_name || "Vendor")
+                            }
+                            disabled={removingId === v.id}
+                            className="flex items-center justify-center rounded-md p-1 transition-colors hover:bg-red-50 disabled:opacity-50"
+                            title="Remove vendor"
+                          >
+                            {removingId === v.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            ) : (
+                              <X className="h-4 w-4 text-red-500" />
+                            )}
+                          </button>
+                        </td>
                       )}
-                    </button>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ));
+      })()}
+
+      {/* Covering email preview (collapsible) */}
+      {(rfq.covering_email_subject || rfq.covering_email_body) && (
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          <button
+            onClick={() => setEmailExpanded((v) => !v)}
+            className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/20"
+            style={{ color: "#1A3A5C" }}
+          >
+            <span>Email that will be sent to each vendor</span>
+            {emailExpanded ? (
+              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            )}
+          </button>
+          {emailExpanded && (
+            <div className="border-t border-border p-4 space-y-4">
+              {rfq.covering_email_subject && (
+                <div>
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Subject
+                  </div>
+                  <div className="text-sm font-medium" style={{ color: "#0D3D2E" }}>
+                    {rfq.covering_email_subject}
+                  </div>
+                </div>
+              )}
+              {rfq.covering_email_body && (
+                <div>
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Body
+                  </div>
+                  <div
+                    className="prose prose-sm max-w-none text-sm"
+                    style={{ color: "#0D3D2E" }}
+                    dangerouslySetInnerHTML={{ __html: rfq.covering_email_body }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Add vendor panel — draft only */}
       {isDraft && (
@@ -718,50 +850,6 @@ function VendorsTabPanel({
             <p className="text-sm text-center text-muted-foreground py-1">
               No vendors found matching "{searchQuery}"
             </p>
-          )}
-        </div>
-      )}
-
-      {/* Covering email preview (collapsible) */}
-      {(rfq.covering_email_subject || rfq.covering_email_body) && (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          <button
-            onClick={() => setEmailExpanded((v) => !v)}
-            className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/20"
-            style={{ color: "#1A3A5C" }}
-          >
-            <span>Email that will be sent to each vendor</span>
-            {emailExpanded ? (
-              <ChevronUp className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            )}
-          </button>
-          {emailExpanded && (
-            <div className="border-t border-border p-4 space-y-4">
-              {rfq.covering_email_subject && (
-                <div>
-                  <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Subject
-                  </div>
-                  <div className="text-sm font-medium" style={{ color: "#0D3D2E" }}>
-                    {rfq.covering_email_subject}
-                  </div>
-                </div>
-              )}
-              {rfq.covering_email_body && (
-                <div>
-                  <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Body
-                  </div>
-                  <div
-                    className="prose prose-sm max-w-none text-sm"
-                    style={{ color: "#0D3D2E" }}
-                    dangerouslySetInnerHTML={{ __html: rfq.covering_email_body }}
-                  />
-                </div>
-              )}
-            </div>
           )}
         </div>
       )}

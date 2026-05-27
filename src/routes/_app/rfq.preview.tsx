@@ -81,7 +81,7 @@ function RFQPreviewPage() {
       const { data } = await supabase
         .from("rfq_vendors")
         .select(
-          "id,vendor_id,email_to,contact_person,status,vendors(company_name,status)"
+          "id,vendor_id,email_to,contact_person,matched_category,status,vendors(company_name,status,categories)"
         )
         .eq("rfq_id", rfqId);
       return (data ?? []) as any[];
@@ -139,7 +139,13 @@ function RFQPreviewPage() {
   }, [tcs]);
 
   useEffect(() => {
-    if (rfqVendors) setVendorList(rfqVendors);
+    if (rfqVendors) {
+      setVendorList(
+        rfqVendors.filter(
+          (v: any) => !(v.vendors?.categories ?? []).includes('TEST_BATCH')
+        )
+      );
+    }
   }, [rfqVendors]);
 
   // Default deadline
@@ -437,48 +443,80 @@ function RFQPreviewPage() {
               </label>
             </div>
 
-            {/* Vendor cards */}
+            {/* Vendor cards — grouped by category */}
             <div className="rounded-xl border border-border bg-card p-6">
               <h3
                 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
               >
                 Vendors ({vendorList.length})
               </h3>
-              <div className="space-y-3">
-                {vendorList.map((v) => (
-                  <div
-                    key={v.id}
-                    className="flex items-start justify-between rounded-lg border border-border p-3"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm truncate">
-                          {v.vendors?.company_name || "Unknown Vendor"}
-                        </span>
-                      </div>
-                      <div className="mt-0.5 text-xs text-muted-foreground truncate">
-                        {v.email_to}
-                      </div>
-                      {v.contact_person && (
-                        <div className="mt-0.5 text-xs text-muted-foreground">
-                          {v.contact_person}
+              {vendorList.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-2">
+                  No vendors. Search and add below.
+                </p>
+              )}
+              {vendorList.length > 0 && (() => {
+                const grouped = vendorList.reduce((acc: Record<string, any[]>, v: any) => {
+                  const cat = v.matched_category || 'Uncategorised';
+                  if (!acc[cat]) acc[cat] = [];
+                  acc[cat].push(v);
+                  return acc;
+                }, {});
+                const categoryNames = Object.keys(grouped).sort();
+                return (
+                  <div className="space-y-4">
+                    {categoryNames.map((categoryName) => (
+                      <div key={categoryName}>
+                        <div
+                          className="flex items-center justify-between px-3 py-1.5 rounded-t-lg"
+                          style={{ backgroundColor: '#E8EFF7' }}
+                        >
+                          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#1A3A5C' }}>
+                            {categoryName} ({grouped[categoryName].length})
+                          </span>
+                          <button
+                            onClick={() => grouped[categoryName].forEach(v => removeVendor(v.id))}
+                            className="text-xs font-medium"
+                            style={{ color: '#DC2626' }}
+                          >
+                            Remove all
+                          </button>
                         </div>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => removeVendor(v.id)}
-                      className="ml-2 flex-shrink-0 rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive-soft"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+                        <div className="space-y-2 rounded-b-lg border border-border p-2">
+                          {grouped[categoryName].map((v: any) => (
+                            <div
+                              key={v.id}
+                              className="flex items-start justify-between rounded-lg border border-border p-3"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-sm truncate">
+                                    {v.vendors?.company_name || "Unknown Vendor"}
+                                  </span>
+                                </div>
+                                <div className="mt-0.5 text-xs text-muted-foreground truncate">
+                                  {v.email_to}
+                                </div>
+                                {v.contact_person && (
+                                  <div className="mt-0.5 text-xs text-muted-foreground">
+                                    {v.contact_person}
+                                  </div>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => removeVendor(v.id)}
+                                className="ml-2 flex-shrink-0 rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive-soft"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                {vendorList.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-2">
-                    No vendors. Search and add below.
-                  </p>
-                )}
-              </div>
+                );
+              })()}
 
               {/* Add vendor search */}
               <div className="mt-4 relative">
