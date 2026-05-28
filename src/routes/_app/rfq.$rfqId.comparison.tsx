@@ -75,7 +75,7 @@ function ComparisonViewPage() {
   });
 
   const { data: bids, isLoading: bidsLoading } = useQuery({
-    queryKey: ["confirmed-bids-comparison", rfqId],
+    queryKey: ["all-bids-comparison", rfqId],
     queryFn: async () => {
       const { data } = await supabase
         .from("bids")
@@ -83,7 +83,6 @@ function ComparisonViewPage() {
           "*, vendors(company_name, status, data_confidence, cr_status), bid_items(*, rfq_items(item_number, sap_item_number, sap_material_code, description, quantity, unit, budget_unit_rate_omr, budget_amount_omr))"
         )
         .eq("rfq_id", rfqId)
-        .eq("status", "confirmed")
         .order("total_inc_vat_omr");
       return (data ?? []) as any[];
     },
@@ -203,6 +202,8 @@ function ComparisonViewPage() {
   };
 
   const vendorCount = bids?.length ?? 0;
+  const confirmedBids = (bids ?? []).filter((b) => b.status === "confirmed");
+  const confirmedCount = confirmedBids.length;
 
   if (bidsLoading) {
     return (
@@ -264,16 +265,15 @@ function ComparisonViewPage() {
       {/* No confirmed bids message */}
       {vendorCount === 0 && (
         <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
-          No confirmed bids yet. Review and confirm bids from the{" "}
+          No bids received yet. Vendors haven't responded to this RFQ.{" "}
           <Link
             to="/rfq/$rfqId/"
             params={{ rfqId }}
             className="underline"
             style={{ color: "var(--accent)" }}
           >
-            RFQ detail page
+            Back to RFQ
           </Link>
-          .
         </div>
       )}
 
@@ -304,7 +304,19 @@ function ComparisonViewPage() {
                         color: "#1A3A5C",
                       }}
                     >
-                      {i + 1}. {b.vendors?.company_name || "Vendor"}
+                      <div>{i + 1}. {b.vendors?.company_name || "Vendor"}</div>
+                      <span
+                        className="inline-block mt-1 font-medium"
+                        style={{
+                          fontSize: "11px",
+                          padding: "2px 8px",
+                          borderRadius: "var(--border-radius-md, 6px)",
+                          backgroundColor: b.status === "confirmed" ? "var(--color-background-success, #D1FAE5)" : "var(--color-background-warning, #FDF3E0)",
+                          color: b.status === "confirmed" ? "var(--color-text-success, #065F46)" : "var(--color-text-warning, #7A5200)",
+                        }}
+                      >
+                        {b.status === "confirmed" ? "confirmed" : "pending review"}
+                      </span>
                     </th>
                   ))}
                   <th className="px-4 py-3 text-right">Min Rate</th>
@@ -496,7 +508,19 @@ function ComparisonViewPage() {
                   <th className="px-4 py-2">Criteria</th>
                   {bids!.map((b, i) => (
                     <th key={b.bid_id} className="px-4 py-2">
-                      {i + 1}. {b.vendors?.company_name || "Vendor"}
+                      <div>{i + 1}. {b.vendors?.company_name || "Vendor"}</div>
+                      <span
+                        className="inline-block mt-1 font-medium normal-case tracking-normal"
+                        style={{
+                          fontSize: "11px",
+                          padding: "2px 8px",
+                          borderRadius: "var(--border-radius-md, 6px)",
+                          backgroundColor: b.status === "confirmed" ? "var(--color-background-success, #D1FAE5)" : "var(--color-background-warning, #FDF3E0)",
+                          color: b.status === "confirmed" ? "var(--color-text-success, #065F46)" : "var(--color-text-warning, #7A5200)",
+                        }}
+                      >
+                        {b.status === "confirmed" ? "confirmed" : "pending review"}
+                      </span>
                     </th>
                   ))}
                 </tr>
@@ -565,13 +589,13 @@ function ComparisonViewPage() {
           <div className="text-center">
             <p className="mb-4 text-sm text-muted-foreground">
               No recommendation generated yet.{" "}
-              {vendorCount === 0
-                ? "Confirm at least one bid first."
-                : "Click below to analyse all confirmed bids."}
+              {confirmedCount === 0
+                ? "Confirm at least one bid before generating a recommendation."
+                : `Click below to analyse ${confirmedCount} confirmed bid(s).`}
             </p>
             <button
               onClick={generateAIRecommendation}
-              disabled={generatingAI || vendorCount === 0}
+              disabled={generatingAI || confirmedCount === 0}
               className="flex items-center gap-2 mx-auto rounded-md px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
               style={{ backgroundColor: "#7A5200" }}
             >
@@ -670,7 +694,7 @@ function ComparisonViewPage() {
               className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none"
             >
               <option value="">Select…</option>
-              {bids!.map((b, i) => (
+              {confirmedBids.map((b, i) => (
                 <option key={b.bid_id} value={String(i + 1)}>
                   {i + 1} — {b.vendors?.company_name}
                 </option>
@@ -745,7 +769,7 @@ function ComparisonViewPage() {
         <div className="mt-4 flex justify-end">
           <button
             onClick={handleMarkFinal}
-            disabled={savingDecision || !approvedColumn}
+            disabled={savingDecision || !approvedColumn || confirmedCount === 0}
             className="flex items-center gap-2 rounded-md px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
             style={{ backgroundColor: "var(--accent)" }}
           >

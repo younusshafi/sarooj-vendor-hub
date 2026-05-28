@@ -159,6 +159,7 @@ function BidReviewPage() {
     try {
       const updateData: any = {
         ...fields,
+        quotation_date: fields.quotation_date || null,
         credit_days: fields.credit_days ? parseInt(String(fields.credit_days)) : null,
         pdc_days: fields.pdc_days ? parseInt(String(fields.pdc_days)) : null,
         advance_percentage: fields.advance_percentage
