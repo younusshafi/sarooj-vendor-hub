@@ -48,7 +48,7 @@ function RFQDetailPage() {
       const { data } = await supabase
         .from("rfq_vendors")
         .select(
-          "id,vendor_id,email_to,contact_person,matched_category,status,response_received,sent_at,response_at,reminder_sent_at,vendors(company_name,email,categories)"
+          "id,vendor_id,email_to,contact_person,matched_category,status,response_received,sent_at,response_at,reminder_sent_at,vendors(company_name,contacts,categories)"
         )
         .eq("rfq_id", rfqId);
       return (data ?? []) as any[];
@@ -406,7 +406,7 @@ function VendorsTabPanel({
         try {
           const { data, error } = await supabase
             .from("vendors")
-            .select("vendor_id,company_name,email,contact_person,categories")
+            .select("vendor_id,company_name,contacts,categories")
             .ilike("company_name", `%${value}%`)
             .limit(10);
           if (error) throw error;
@@ -430,8 +430,8 @@ function VendorsTabPanel({
         const { error } = await supabase.from("rfq_vendors").insert({
           rfq_id: rfqId,
           vendor_id: vendor.vendor_id,
-          email_to: vendor.email,
-          contact_person: vendor.contact_person,
+          email_to: vendor.contacts?.[0]?.email || null,
+          contact_person: vendor.contacts?.[0]?.name || null,
           status: "pending",
           response_received: false,
         });
@@ -813,7 +813,7 @@ function VendorsTabPanel({
                     <div className="text-sm font-medium truncate" style={{ color: "#0D3D2E" }}>
                       {vendor.company_name}
                     </div>
-                    <div className="text-xs text-muted-foreground truncate">{vendor.email || "—"}</div>
+                    <div className="text-xs text-muted-foreground truncate">{vendor.contacts?.[0]?.email || "—"}</div>
                     {(vendor.categories ?? []).length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {(vendor.categories ?? []).slice(0, 2).map((cat: string) => (
