@@ -77,7 +77,7 @@ function BidReviewPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("bids")
-        .select("*, vendors(company_name, email)")
+        .select("*, vendors(company_name)")
         .eq("bid_id", bidId)
         .single();
       if (error) throw error;
