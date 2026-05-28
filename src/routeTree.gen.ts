@@ -20,6 +20,7 @@ import { Route as AppRfqRouteImport } from './routes/_app/rfq'
 import { Route as AppPendingRouteImport } from './routes/_app/pending'
 import { Route as AppOutreachRouteImport } from './routes/_app/outreach'
 import { Route as AppInviteRouteImport } from './routes/_app/invite'
+import { Route as AppCategoriesRouteImport } from './routes/_app/categories'
 import { Route as AppVendorsIndexRouteImport } from './routes/_app/vendors.index'
 import { Route as AppRfqIndexRouteImport } from './routes/_app/rfq.index'
 import { Route as AppVendorsVendorIdRouteImport } from './routes/_app/vendors.$vendorId'
@@ -85,6 +86,11 @@ const AppInviteRoute = AppInviteRouteImport.update({
   path: '/invite',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCategoriesRoute = AppCategoriesRouteImport.update({
+  id: '/categories',
+  path: '/categories',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppVendorsIndexRoute = AppVendorsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -142,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/categories': typeof AppCategoriesRoute
   '/invite': typeof AppInviteRoute
   '/outreach': typeof AppOutreachRoute
   '/pending': typeof AppPendingRoute
@@ -163,6 +170,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/categories': typeof AppCategoriesRoute
   '/invite': typeof AppInviteRoute
   '/outreach': typeof AppOutreachRoute
   '/pending': typeof AppPendingRoute
@@ -184,6 +192,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_app/categories': typeof AppCategoriesRoute
   '/_app/invite': typeof AppInviteRoute
   '/_app/outreach': typeof AppOutreachRoute
   '/_app/pending': typeof AppPendingRoute
@@ -209,6 +218,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/categories'
     | '/invite'
     | '/outreach'
     | '/pending'
@@ -230,6 +240,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/categories'
     | '/invite'
     | '/outreach'
     | '/pending'
@@ -250,6 +261,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/_app/categories'
     | '/_app/invite'
     | '/_app/outreach'
     | '/_app/pending'
@@ -353,6 +365,13 @@ declare module '@tanstack/react-router' {
       path: '/invite'
       fullPath: '/invite'
       preLoaderRoute: typeof AppInviteRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/categories': {
+      id: '/_app/categories'
+      path: '/categories'
+      fullPath: '/categories'
+      preLoaderRoute: typeof AppCategoriesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/vendors/': {
@@ -478,6 +497,7 @@ const AppVendorsRouteWithChildren = AppVendorsRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppCategoriesRoute: typeof AppCategoriesRoute
   AppInviteRoute: typeof AppInviteRoute
   AppOutreachRoute: typeof AppOutreachRoute
   AppPendingRoute: typeof AppPendingRoute
@@ -488,6 +508,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppCategoriesRoute: AppCategoriesRoute,
   AppInviteRoute: AppInviteRoute,
   AppOutreachRoute: AppOutreachRoute,
   AppPendingRoute: AppPendingRoute,

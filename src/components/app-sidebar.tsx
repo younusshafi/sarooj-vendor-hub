@@ -11,6 +11,7 @@ import {
   X,
   UserPlus,
   FileText,
+  Tags,
 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase-external/client";
@@ -32,6 +33,7 @@ const NAV: NavItem[] = [
   { to: "/invite", label: "Invite Vendor", icon: UserPlus },
   { to: "/outreach", label: "Outreach", icon: Mail },
   { to: "/rfq", label: "RFQ", icon: FileText, dot: "blue" },
+  { to: "/categories", label: "Categories", icon: Tags },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
