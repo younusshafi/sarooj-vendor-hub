@@ -80,7 +80,7 @@ function RFQDetailPage() {
         .order("created_at", { ascending: false });
       return (data ?? []) as any[];
     },
-    enabled: tab === "bids",
+    enabled: true,
   });
 
   if (rfqLoading) {
@@ -137,13 +137,25 @@ function RFQDetailPage() {
               {rfq.title}
             </h1>
           </div>
-          <Link
-            to="/rfq/"
-            className="text-sm font-medium"
-            style={{ color: "var(--accent)" }}
-          >
-            ← Back
-          </Link>
+          <div className="flex items-center gap-3">
+            {(bids?.length ?? 0) > 0 && (
+              <Link
+                to="/rfq/$rfqId/comparison"
+                params={{ rfqId }}
+                className="rounded-md px-4 py-2 text-sm font-semibold text-white"
+                style={{ backgroundColor: "#1A3A5C" }}
+              >
+                Compare bids ({bids?.length})
+              </Link>
+            )}
+            <Link
+              to="/rfq/"
+              className="text-sm font-medium"
+              style={{ color: "var(--accent)" }}
+            >
+              ← Back
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -282,6 +294,19 @@ function RFQDetailPage() {
 
       {/* Bids tab */}
       {tab === "bids" && (
+        <div className="space-y-3">
+        {(bids?.length ?? 0) > 0 && (
+          <div className="flex justify-end">
+            <Link
+              to="/rfq/$rfqId/comparison"
+              params={{ rfqId }}
+              className="text-sm font-medium"
+              style={{ color: "var(--accent)" }}
+            >
+              View comparison →
+            </Link>
+          </div>
+        )}
         <div className="overflow-hidden rounded-xl border border-border bg-card">
           <table className="w-full text-sm">
             <thead style={{ backgroundColor: "var(--table-header)" }}>
@@ -345,6 +370,7 @@ function RFQDetailPage() {
               ))}
             </tbody>
           </table>
+        </div>
         </div>
       )}
     </div>
