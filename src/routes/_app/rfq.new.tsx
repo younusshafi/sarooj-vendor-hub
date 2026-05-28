@@ -32,10 +32,10 @@ function parseSAPExcel(file: File): Promise<SAPRow[]> {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const wb = XLSX.read(e.target?.result, { type: "array" });
-        const ws = wb.Sheets["SAPUI5 Export"];
+        const wb = XLSX.read(e.target?.result, { type: "array", cellDates: true, sheetStubs: true });
+        const ws = wb.Sheets["SAPUI5 Export"] ?? wb.Sheets[wb.SheetNames[0]];
         if (!ws) {
-          reject(new Error('Sheet "SAPUI5 Export" not found in this file.'));
+          reject(new Error('No sheets found in this file.'));
           return;
         }
         const raw = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
@@ -51,7 +51,9 @@ function parseSAPExcel(file: File): Promise<SAPRow[]> {
             unit: "",
             processing_status: String(r[5] || ""),
             delivery_date:
-              r[6] && typeof r[6] === "number"
+              r[6] instanceof Date
+                ? r[6].toISOString().split("T")[0]
+                : r[6] && typeof r[6] === "number"
                 ? decodeExcelDate(Number(r[6]))
                 : typeof r[6] === "string"
                 ? r[6]
@@ -85,15 +87,12 @@ function NewRFQPage() {
   const [client, setClient] = useState("");
   const [consultant, setConsultant] = useState("");
 
+  const isPOCreated = (status: string) => status.toLowerCase().includes("po created") || status.toLowerCase().includes("(b)");
   const activePRs = new Set(
-    rows.filter((r) => !["po", "PO"].includes(r.processing_status)).map((r) => r.pr_number)
+    rows.filter((r) => !isPOCreated(r.processing_status)).map((r) => r.pr_number)
   );
-  const alreadyPO = rows.filter((r) =>
-    ["po", "PO", "BSART"].includes(r.processing_status)
-  ).length;
-  const activeItems = rows.filter(
-    (r) => !["po", "PO", "BSART"].includes(r.processing_status)
-  ).length;
+  const alreadyPO = rows.filter((r) => isPOCreated(r.processing_status)).length;
+  const activeItems = rows.filter((r) => !isPOCreated(r.processing_status)).length;
 
   const processFile = useCallback(async (f: File) => {
     if (!f.name.endsWith(".xlsx") && !f.name.endsWith(".xls")) {
