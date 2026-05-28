@@ -22,9 +22,26 @@ interface SAPRow {
   delivery_date: string | null;
 }
 
-function decodeExcelDate(serial: number): string {
-  const date = new Date((serial - 25569) * 86400 * 1000);
-  return date.toISOString().split("T")[0];
+function parseDeliveryDate(val: any): string | null {
+  if (!val) return null;
+  // JS Date object
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return null;
+    return val.toISOString().split("T")[0];
+  }
+  // Excel numeric serial
+  if (typeof val === "number") {
+    try {
+      const date = new Date((val - 25569) * 86400 * 1000);
+      if (isNaN(date.getTime())) return null;
+      return date.toISOString().split("T")[0];
+    } catch {
+      return null;
+    }
+  }
+  // Already a string
+  if (typeof val === "string" && val.trim()) return val.trim();
+  return null;
 }
 
 function parseSAPExcel(file: File): Promise<SAPRow[]> {
@@ -32,13 +49,13 @@ function parseSAPExcel(file: File): Promise<SAPRow[]> {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const wb = XLSX.read(e.target?.result, { type: "array", cellDates: true, sheetStubs: true });
+        const wb = XLSX.read(e.target?.result, { type: "array" });
         const ws = wb.Sheets["SAPUI5 Export"] ?? wb.Sheets[wb.SheetNames[0]];
         if (!ws) {
-          reject(new Error('No sheets found in this file.'));
+          reject(new Error("No sheets found in this file."));
           return;
         }
-        const raw = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+        const raw = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true }) as any[][];
         const rows = raw
           .slice(1)
           .filter((r) => r[0])
@@ -46,18 +63,11 @@ function parseSAPExcel(file: File): Promise<SAPRow[]> {
             pr_number: String(r[0] || ""),
             item_number: Number(r[1] || 0),
             material_id: String(r[2] || ""),
-            item_details: String(r[3] || ""),
+            item_details: r[3] ? String(r[3]) : "",
             quantity: Number(r[4] || 0),
             unit: "",
             processing_status: String(r[5] || ""),
-            delivery_date:
-              r[6] instanceof Date
-                ? r[6].toISOString().split("T")[0]
-                : r[6] && typeof r[6] === "number"
-                ? decodeExcelDate(Number(r[6]))
-                : typeof r[6] === "string"
-                ? r[6]
-                : null,
+            delivery_date: parseDeliveryDate(r[6]),
           }));
         resolve(rows);
       } catch (err: any) {
