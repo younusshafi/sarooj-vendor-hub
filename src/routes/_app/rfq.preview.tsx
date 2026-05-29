@@ -65,7 +65,7 @@ function RFQPreviewPage() {
       const { data } = await supabase
         .from("rfq_items")
         .select(
-          "item_id,item_number,sap_item_number,description,quantity,unit,already_procured"
+          "item_id,item_number,sap_item_number,description,quantity,unit"
         )
         .eq("rfq_id", rfqId)
         .order("item_number");
@@ -169,7 +169,7 @@ function RFQPreviewPage() {
     setSearching(true);
     const { data } = await supabase
       .from("vendors")
-      .select("vendor_id,company_name,email,contact_person,status")
+      .select("vendor_id,company_name,contacts,status")
       .ilike("company_name", `%${q}%`)
       .neq("status", "blacklisted")
       .limit(10);
@@ -187,8 +187,8 @@ function RFQPreviewPage() {
     const { data, error } = await supabase.from("rfq_vendors").insert({
       rfq_id: rfqId,
       vendor_id: v.vendor_id,
-      email_to: v.email || "",
-      contact_person: v.contact_person || "",
+      email_to: v.contacts?.[0]?.email || "",
+      contact_person: v.contacts?.[0]?.name || "",
       status: "pending",
     }).select("id,vendor_id,email_to,contact_person,status").single();
     if (error) {
@@ -216,7 +216,6 @@ function RFQPreviewPage() {
         .update({
           covering_email_subject: subject,
           covering_email_body: body,
-          terms_and_conditions: termsText,
         })
         .eq("rfq_id", rfqId);
 
@@ -240,7 +239,6 @@ function RFQPreviewPage() {
     }
   };
 
-  const alreadyProcured = (rfqItems ?? []).filter((i: any) => i.already_procured);
   const needsScope = rfq?.needs_scope_documents;
 
   if (!resolvedIds.length) {
@@ -393,22 +391,6 @@ function RFQPreviewPage() {
               </label>
             </div>
 
-            {/* Already procured */}
-            {alreadyProcured.length > 0 && (
-              <div
-                className="rounded-xl border p-4"
-                style={{ borderColor: "#F59E0B", backgroundColor: "#FDF3E0" }}
-              >
-                <div className="flex items-center gap-2 font-semibold text-sm" style={{ color: "#7A5200" }}>
-                  <AlertTriangle className="h-4 w-4" />
-                  {alreadyProcured.length} item(s) already procured
-                </div>
-                <p className="mt-1 text-xs" style={{ color: "#7A5200" }}>
-                  These items have existing POs and will be excluded from the RFQ.
-                </p>
-              </div>
-            )}
-
             {/* Scope warning */}
             {needsScope && (
               <div
@@ -546,7 +528,7 @@ function RFQPreviewPage() {
                       >
                         <div>
                           <div className="font-medium">{v.company_name}</div>
-                          <div className="text-xs text-muted-foreground">{v.email}</div>
+                          <div className="text-xs text-muted-foreground">{v.contacts?.[0]?.email || "—"}</div>
                         </div>
                       </button>
                     ))}
