@@ -9,8 +9,8 @@ export const Route = createFileRoute("/_app/rfq/")({
   component: RFQTrackerPage,
 });
 
-const STATUS_OPTIONS = ["draft", "sent", "closed", "awarded", "cancelled"];
-const TYPE_OPTIONS = ["materials", "subcontract"];
+const STATUS_OPTIONS = ["draft", "issued", "closed"];
+const TYPE_OPTIONS = ["materials", "subcontractor"];
 
 function RFQStatusBadge({ status }: { status: string }) {
   const colors: Record<string, { bg: string; fg: string }> = {
