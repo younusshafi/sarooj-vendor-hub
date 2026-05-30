@@ -12,13 +12,15 @@ import {
   UserPlus,
   FileText,
   Tags,
+  ExternalLink,
 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase-external/client";
 import { useAuth } from "@/integrations/supabase-external/auth";
 
 type NavItem = {
-  to: string;
+  to?: string;
+  href?: string;
   label: string;
   icon: typeof Home;
   exact?: boolean;
@@ -32,7 +34,8 @@ const NAV: NavItem[] = [
   { to: "/pending", label: "Pending Registrations", icon: Inbox, badge: true },
   { to: "/invite", label: "Invite Vendor", icon: UserPlus },
   { to: "/outreach", label: "Outreach", icon: Mail },
-  { to: "/rfq", label: "RFQ", icon: FileText, dot: "blue" },
+  { to: "/rfq", label: "RFQ - Supplies", icon: FileText, dot: "blue" },
+  { href: "https://sarooj-procurement-subcontractors.vercel.app/", label: "RFQ Subcontractors", icon: FileText },
   { to: "/categories", label: "Categories", icon: Tags },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];
@@ -85,7 +88,35 @@ export function AppSidebar() {
       <nav className="flex-1 px-2">
         {NAV.map((item) => {
           const Icon = item.icon;
-          const active = isActive(item.to, item.exact);
+
+          if (item.href) {
+            return (
+              <a
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+                className="group mb-1 flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors"
+                style={{
+                  backgroundColor: "transparent",
+                  color: "var(--sidebar-foreground)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                }}
+              >
+                <span className="flex items-center gap-3">
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </span>
+                <ExternalLink className="h-3 w-3 opacity-50" />
+              </a>
+            );
+          }
+
+          const active = isActive(item.to!, item.exact);
           return (
             <Link
               key={item.to}
