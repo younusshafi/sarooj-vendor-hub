@@ -1,13 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Loader2,
-  Download,
-  ChevronDown,
-  ChevronUp,
-  TrendingUp,
-} from "lucide-react";
+import { Loader2, Download, ChevronDown, ChevronUp, TrendingUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase-external/client";
 import { useAuth } from "@/integrations/supabase-external/auth";
 import { toast } from "sonner";
@@ -53,11 +47,7 @@ function ComparisonViewPage() {
   const { data: rfq } = useQuery({
     queryKey: ["rfq-comparison-header", rfqId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("rfqs")
-        .select("*")
-        .eq("rfq_id", rfqId)
-        .single();
+      const { data } = await supabase.from("rfqs").select("*").eq("rfq_id", rfqId).single();
       return data as any;
     },
   });
@@ -80,7 +70,7 @@ function ComparisonViewPage() {
       const { data } = await supabase
         .from("bids")
         .select(
-          "*, vendors(company_name, status, data_confidence, cr_status), bid_items(*, rfq_items(item_number, sap_item_number, sap_material_code, description, quantity, unit, budget_unit_rate_omr, budget_amount_omr))"
+          "*, vendors(company_name, status, data_confidence, cr_status), bid_items(*, rfq_items(item_number, sap_item_number, sap_material_code, description, quantity, unit, budget_unit_rate_omr, budget_amount_omr))",
         )
         .eq("rfq_id", rfqId)
         .order("total_inc_vat_omr");
@@ -219,10 +209,7 @@ function ComparisonViewPage() {
       <div className="rounded-xl p-6" style={{ backgroundColor: "#FDF3E0" }}>
         <div className="flex items-center justify-between">
           <div>
-            <h1
-              className="font-display text-[26px]"
-              style={{ color: "#7A5200" }}
-            >
+            <h1 className="font-display text-[26px]" style={{ color: "#7A5200" }}>
               {rfq?.rfq_reference} — Bid Comparison
             </h1>
             <p className="mt-1 text-sm" style={{ color: "#7A5200", opacity: 0.7 }}>
@@ -299,20 +286,27 @@ function ComparisonViewPage() {
                       colSpan={2}
                       className="px-4 py-3 text-center"
                       style={{
-                        backgroundColor:
-                          i % 2 === 0 ? "#E8EFF7" : "#EDF2FB",
+                        backgroundColor: i % 2 === 0 ? "#E8EFF7" : "#EDF2FB",
                         color: "#1A3A5C",
                       }}
                     >
-                      <div>{i + 1}. {b.vendors?.company_name || "Vendor"}</div>
+                      <div>
+                        {i + 1}. {b.vendors?.company_name || "Vendor"}
+                      </div>
                       <span
                         className="inline-block mt-1 font-medium"
                         style={{
                           fontSize: "11px",
                           padding: "2px 8px",
                           borderRadius: "var(--border-radius-md, 6px)",
-                          backgroundColor: b.status === "confirmed" ? "var(--color-background-success, #D1FAE5)" : "var(--color-background-warning, #FDF3E0)",
-                          color: b.status === "confirmed" ? "var(--color-text-success, #065F46)" : "var(--color-text-warning, #7A5200)",
+                          backgroundColor:
+                            b.status === "confirmed"
+                              ? "var(--color-background-success, #D1FAE5)"
+                              : "var(--color-background-warning, #FDF3E0)",
+                          color:
+                            b.status === "confirmed"
+                              ? "var(--color-text-success, #065F46)"
+                              : "var(--color-text-warning, #7A5200)",
                         }}
                       >
                         {b.status === "confirmed" ? "confirmed" : "pending review"}
@@ -345,26 +339,19 @@ function ComparisonViewPage() {
                   // Find min rate across vendors for this item
                   const rates = bids!
                     .map((b) => {
-                      const bi = b.bid_items?.find(
-                        (x: any) => x.rfq_item_id === item.item_id
-                      );
+                      const bi = b.bid_items?.find((x: any) => x.rfq_item_id === item.item_id);
                       return bi?.unit_price_omr ?? null;
                     })
                     .filter((r): r is number => r != null);
                   const minRate = rates.length ? Math.min(...rates) : null;
 
                   return (
-                    <tr
-                      key={item.item_id}
-                      className="border-t border-border"
-                    >
+                    <tr key={item.item_id} className="border-t border-border">
                       <td className="sticky left-0 bg-white px-4 py-3 text-xs text-muted-foreground z-10">
                         {item.sap_item_number || rowIdx + 1}
                       </td>
                       <td className="px-4 py-3 text-xs">{item.description}</td>
-                      <td className="px-4 py-3 text-right text-xs">
-                        {item.quantity}
-                      </td>
+                      <td className="px-4 py-3 text-right text-xs">{item.quantity}</td>
                       <td className="px-4 py-3 text-xs">{item.unit || "—"}</td>
                       <td className="px-4 py-3 text-right font-mono text-xs text-muted-foreground">
                         {item.budget_unit_rate_omr ?? "—"}
@@ -373,16 +360,10 @@ function ComparisonViewPage() {
                         {item.budget_amount_omr ?? "—"}
                       </td>
                       {bids!.map((b, i) => {
-                        const bi = b.bid_items?.find(
-                          (x: any) => x.rfq_item_id === item.item_id
-                        );
+                        const bi = b.bid_items?.find((x: any) => x.rfq_item_id === item.item_id);
                         const rate = bi?.unit_price_omr ?? null;
-                        const amt =
-                          rate != null ? rate * item.quantity : null;
-                        const isMin =
-                          rate != null &&
-                          minRate != null &&
-                          rate === minRate;
+                        const amt = rate != null ? rate * item.quantity : null;
+                        const isMin = rate != null && minRate != null && rate === minRate;
                         return (
                           <>
                             <td
@@ -392,19 +373,17 @@ function ComparisonViewPage() {
                                 backgroundColor: isMin
                                   ? "#D1FAE5"
                                   : i % 2 === 0
-                                  ? "#F0F7FF"
-                                  : undefined,
+                                    ? "#F0F7FF"
+                                    : undefined,
                               }}
                             >
-                              {rate != null
-                                ? rate.toLocaleString("en", {
-                                    minimumFractionDigits: 3,
-                                  })
-                                : (
-                                  <span className="italic text-muted-foreground">
-                                    NQ
-                                  </span>
-                                )}
+                              {rate != null ? (
+                                rate.toLocaleString("en", {
+                                  minimumFractionDigits: 3,
+                                })
+                              ) : (
+                                <span className="italic text-muted-foreground">NQ</span>
+                              )}
                             </td>
                             <td
                               key={`${b.bid_id}-amt`}
@@ -413,19 +392,17 @@ function ComparisonViewPage() {
                                 backgroundColor: isMin
                                   ? "#D1FAE5"
                                   : i % 2 === 0
-                                  ? "#F0F7FF"
-                                  : undefined,
+                                    ? "#F0F7FF"
+                                    : undefined,
                               }}
                             >
-                              {amt != null
-                                ? amt.toLocaleString("en", {
-                                    minimumFractionDigits: 3,
-                                  })
-                                : (
-                                  <span className="italic text-muted-foreground">
-                                    NQ
-                                  </span>
-                                )}
+                              {amt != null ? (
+                                amt.toLocaleString("en", {
+                                  minimumFractionDigits: 3,
+                                })
+                              ) : (
+                                <span className="italic text-muted-foreground">NQ</span>
+                              )}
                             </td>
                           </>
                         );
@@ -473,8 +450,7 @@ function ComparisonViewPage() {
                           colSpan={2}
                           className="px-4 py-2 text-center font-mono text-xs"
                           style={{
-                            backgroundColor:
-                              i % 2 === 0 ? "#F0F7FF" : undefined,
+                            backgroundColor: i % 2 === 0 ? "#F0F7FF" : undefined,
                             fontWeight: bold ? 700 : undefined,
                             color: bold ? "#1A3A5C" : undefined,
                           }}
@@ -504,19 +480,30 @@ function ComparisonViewPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead style={{ backgroundColor: "var(--table-header)" }}>
-                <tr className="text-left text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--table-header-text)" }}>
+                <tr
+                  className="text-left text-xs font-semibold uppercase tracking-wider"
+                  style={{ color: "var(--table-header-text)" }}
+                >
                   <th className="px-4 py-2">Criteria</th>
                   {bids!.map((b, i) => (
                     <th key={b.bid_id} className="px-4 py-2">
-                      <div>{i + 1}. {b.vendors?.company_name || "Vendor"}</div>
+                      <div>
+                        {i + 1}. {b.vendors?.company_name || "Vendor"}
+                      </div>
                       <span
                         className="inline-block mt-1 font-medium normal-case tracking-normal"
                         style={{
                           fontSize: "11px",
                           padding: "2px 8px",
                           borderRadius: "var(--border-radius-md, 6px)",
-                          backgroundColor: b.status === "confirmed" ? "var(--color-background-success, #D1FAE5)" : "var(--color-background-warning, #FDF3E0)",
-                          color: b.status === "confirmed" ? "var(--color-text-success, #065F46)" : "var(--color-text-warning, #7A5200)",
+                          backgroundColor:
+                            b.status === "confirmed"
+                              ? "var(--color-background-success, #D1FAE5)"
+                              : "var(--color-background-warning, #FDF3E0)",
+                          color:
+                            b.status === "confirmed"
+                              ? "var(--color-text-success, #065F46)"
+                              : "var(--color-text-warning, #7A5200)",
                         }}
                       >
                         {b.status === "confirmed" ? "confirmed" : "pending review"}
@@ -534,14 +521,11 @@ function ComparisonViewPage() {
                   {
                     label: "Lead Time",
                     render: (b: any) =>
-                      b.delivery_lead_time_days
-                        ? `${b.delivery_lead_time_days} days`
-                        : "—",
+                      b.delivery_lead_time_days ? `${b.delivery_lead_time_days} days` : "—",
                   },
                   {
                     label: "Validity",
-                    render: (b: any) =>
-                      b.validity_days ? `${b.validity_days} days` : "—",
+                    render: (b: any) => (b.validity_days ? `${b.validity_days} days` : "—"),
                   },
                   {
                     label: "Brand",
@@ -557,9 +541,7 @@ function ComparisonViewPage() {
                   },
                 ].map(({ label, render }) => (
                   <tr key={label} className="border-t border-border">
-                    <td className="px-4 py-2 text-xs font-medium text-muted-foreground">
-                      {label}
-                    </td>
+                    <td className="px-4 py-2 text-xs font-medium text-muted-foreground">{label}</td>
                     {bids!.map((b) => (
                       <td key={b.bid_id} className="px-4 py-2 text-xs">
                         {render(b)}
@@ -625,9 +607,7 @@ function ComparisonViewPage() {
               )}
             </div>
             {comparison.recommendation_summary && (
-              <p className="text-sm text-muted-foreground">
-                {comparison.recommendation_summary}
-              </p>
+              <p className="text-sm text-muted-foreground">{comparison.recommendation_summary}</p>
             )}
             <button
               onClick={() => setShowReasoning((v) => !v)}
@@ -643,13 +623,10 @@ function ComparisonViewPage() {
             </button>
             {showReasoning && (
               <div className="space-y-2 rounded-lg bg-white p-4 text-sm text-muted-foreground">
-                {comparison.reasoning && (
-                  <p>{comparison.reasoning}</p>
-                )}
+                {comparison.reasoning && <p>{comparison.reasoning}</p>}
                 {comparison.payment_terms_note && (
                   <p>
-                    <strong>Payment terms:</strong>{" "}
-                    {comparison.payment_terms_note}
+                    <strong>Payment terms:</strong> {comparison.payment_terms_note}
                   </p>
                 )}
                 {comparison.caveats && (
@@ -659,8 +636,7 @@ function ComparisonViewPage() {
                 )}
                 {comparison.alternative_vendor && (
                   <p>
-                    <strong>Alternative:</strong>{" "}
-                    {comparison.alternative_vendor} —{" "}
+                    <strong>Alternative:</strong> {comparison.alternative_vendor} —{" "}
                     {comparison.alternative_reasoning}
                   </p>
                 )}
@@ -703,9 +679,7 @@ function ComparisonViewPage() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">
-              Selection Type
-            </label>
+            <label className="text-xs font-medium text-muted-foreground">Selection Type</label>
             <div className="flex gap-2">
               {(
                 [
@@ -745,18 +719,14 @@ function ComparisonViewPage() {
           )}
 
           <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">
-              Prepared By
-            </label>
+            <label className="text-xs font-medium text-muted-foreground">Prepared By</label>
             <div className="rounded-md border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground">
               {user?.email || "—"}
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">
-              Approved By
-            </label>
+            <label className="text-xs font-medium text-muted-foreground">Approved By</label>
             <input
               type="text"
               value={approvedBy}

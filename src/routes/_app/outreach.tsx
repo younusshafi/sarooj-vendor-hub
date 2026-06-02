@@ -13,9 +13,18 @@ function OutreachPage() {
     queryFn: async () => {
       const [sent, responses, confirmed, unresponsive] = await Promise.all([
         supabase.from("vendor_outreach").select("*", { count: "exact", head: true }),
-        supabase.from("vendor_outreach").select("*", { count: "exact", head: true }).eq("response_received", true),
-        supabase.from("vendor_outreach").select("*", { count: "exact", head: true }).eq("response_type", "confirmed"),
-        supabase.from("vendors").select("*", { count: "exact", head: true }).eq("status", "unresponsive"),
+        supabase
+          .from("vendor_outreach")
+          .select("*", { count: "exact", head: true })
+          .eq("response_received", true),
+        supabase
+          .from("vendor_outreach")
+          .select("*", { count: "exact", head: true })
+          .eq("response_type", "confirmed"),
+        supabase
+          .from("vendors")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "unresponsive"),
       ]);
       return {
         sent: sent.count ?? 0,
@@ -29,7 +38,11 @@ function OutreachPage() {
   const history = useQuery({
     queryKey: ["outreach-history"],
     queryFn: async () => {
-      const { data } = await supabase.from("vendor_outreach").select("*").order("sent_at", { ascending: false }).limit(50);
+      const { data } = await supabase
+        .from("vendor_outreach")
+        .select("*")
+        .order("sent_at", { ascending: false })
+        .limit(50);
       return (data ?? []) as VendorOutreach[];
     },
   });
@@ -46,7 +59,9 @@ function OutreachPage() {
           ["Unresponsive", stats.data?.unresponsive ?? 0],
         ].map(([label, val]) => (
           <div key={label as string} className="rounded-xl border border-border bg-card p-5">
-            <div className="font-display text-2xl text-foreground">{stats.isLoading ? "—" : (val as number)}</div>
+            <div className="font-display text-2xl text-foreground">
+              {stats.isLoading ? "—" : (val as number)}
+            </div>
             <div className="mt-1 text-xs text-muted-foreground">{label}</div>
           </div>
         ))}
@@ -54,7 +69,8 @@ function OutreachPage() {
 
       <div className="rounded-xl border border-border bg-card p-6">
         <p className="text-sm text-foreground">
-          The outreach campaign sends re-confirmation emails to all vendors in the database. Start the campaign once you have confirmed the email content with your Zavia-ai administrator.
+          The outreach campaign sends re-confirmation emails to all vendors in the database. Start
+          the campaign once you have confirmed the email content with your Zavia-ai administrator.
         </p>
         <div className="mt-4">
           <button
@@ -73,7 +89,10 @@ function OutreachPage() {
         <div className="overflow-hidden rounded-xl border border-border bg-card">
           <table className="w-full text-sm">
             <thead style={{ backgroundColor: "var(--table-header)" }}>
-              <tr className="text-left text-[13px] font-semibold uppercase tracking-wider" style={{ color: "var(--table-header-text)" }}>
+              <tr
+                className="text-left text-[13px] font-semibold uppercase tracking-wider"
+                style={{ color: "var(--table-header-text)" }}
+              >
                 <th className="px-4 py-3">Sent</th>
                 <th className="px-4 py-3">To</th>
                 <th className="px-4 py-3">Delivery</th>
@@ -82,14 +101,20 @@ function OutreachPage() {
             </thead>
             <tbody>
               {(history.data?.length ?? 0) === 0 && (
-                <tr><td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">No outreach activity yet.</td></tr>
+                <tr>
+                  <td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">
+                    No outreach activity yet.
+                  </td>
+                </tr>
               )}
               {history.data?.map((r) => (
                 <tr key={r.outreach_id} className="border-t border-border">
                   <td className="px-4 py-3 text-muted-foreground">{formatDateTime(r.sent_at)}</td>
                   <td className="px-4 py-3">{r.email_to}</td>
                   <td className="px-4 py-3">{r.delivery_status ?? "—"}</td>
-                  <td className="px-4 py-3">{r.response_received ? r.response_type ?? "Yes" : "No"}</td>
+                  <td className="px-4 py-3">
+                    {r.response_received ? (r.response_type ?? "Yes") : "No"}
+                  </td>
                 </tr>
               ))}
             </tbody>

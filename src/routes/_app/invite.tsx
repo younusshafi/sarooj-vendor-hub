@@ -119,12 +119,8 @@ function InviteVendorPage() {
             }}
             className="mt-6 inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-[14px] font-semibold text-white transition-colors"
             style={{ backgroundColor: "#0D5C3A" }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = "#0D3D2E")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = "#0D5C3A")
-            }
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#0D3D2E")}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#0D5C3A")}
           >
             Send Another Invitation
           </button>
@@ -220,7 +216,9 @@ function InviteVendorPage() {
               >
                 <option value="">Select a category</option>
                 {SUPPLY_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
                 ))}
               </select>
               {errors.category && (

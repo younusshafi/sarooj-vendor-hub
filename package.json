@@ -9,7 +9,8 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "verify:contracts": "node scripts/verify_pr_contracts.mjs"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

@@ -6,9 +6,7 @@ import { supabase } from "@/integrations/supabase-external/client";
 import { useAuth } from "@/integrations/supabase-external/auth";
 import { toast } from "sonner";
 
-export const Route = createFileRoute(
-  "/_app/rfq/$rfqId/bids/$bidId/review"
-)({
+export const Route = createFileRoute("/_app/rfq/$rfqId/bids/$bidId/review")({
   component: BidReviewPage,
 });
 
@@ -22,13 +20,7 @@ const PAYMENT_OPTIONS = [
   "pdc",
   "tbd",
 ];
-const PAYMENT_METHOD_OPTIONS = [
-  "bank_transfer",
-  "cheque",
-  "pdc",
-  "cash",
-  "tbd",
-];
+const PAYMENT_METHOD_OPTIONS = ["bank_transfer", "cheque", "pdc", "cash", "tbd"];
 
 function confidenceStyle(confidence: string | null) {
   if (confidence === "high") return "border-green-400 bg-green-50";
@@ -91,7 +83,7 @@ function BidReviewPage() {
       const { data } = await supabase
         .from("bid_items")
         .select(
-          "*, rfq_items(item_number, sap_item_number, sap_material_code, description, quantity, unit)"
+          "*, rfq_items(item_number, sap_item_number, sap_material_code, description, quantity, unit)",
         )
         .eq("bid_id", bidId);
       return (data ?? []) as any[];
@@ -130,7 +122,7 @@ function BidReviewPage() {
           unit: bi.rfq_items?.unit || bi.unit || "",
           rate: bi.unit_price_omr ?? "",
           ai_confidence: bi.ai_confidence ?? null,
-        }))
+        })),
       );
     }
   }, [bidItems]);
@@ -140,8 +132,7 @@ function BidReviewPage() {
     const rate = typeof item.rate === "number" ? item.rate : 0;
     return sum + rate * item.quantity;
   }, 0);
-  const vat =
-    fields.vat_treatment === "exclusive" ? subtotal * 0.05 : 0;
+  const vat = fields.vat_treatment === "exclusive" ? subtotal * 0.05 : 0;
   const total = subtotal + vat;
 
   const updateField = (key: string, value: string) =>
@@ -149,9 +140,7 @@ function BidReviewPage() {
 
   const updateItemRate = (idx: number, value: string) => {
     const num = value === "" ? "" : parseFloat(value) || 0;
-    setEditedItems((prev) =>
-      prev.map((item, i) => (i === idx ? { ...item, rate: num } : item))
-    );
+    setEditedItems((prev) => prev.map((item, i) => (i === idx ? { ...item, rate: num } : item)));
   };
 
   const saveBid = async (newStatus?: string) => {
@@ -168,9 +157,7 @@ function BidReviewPage() {
         delivery_lead_time_days: fields.delivery_lead_time_days
           ? parseInt(String(fields.delivery_lead_time_days))
           : null,
-        validity_days: fields.validity_days
-          ? parseInt(String(fields.validity_days))
-          : null,
+        validity_days: fields.validity_days ? parseInt(String(fields.validity_days)) : null,
         subtotal_ex_vat_omr: subtotal,
         vat_amount_omr: vat,
         total_inc_vat_omr: total,
@@ -178,10 +165,7 @@ function BidReviewPage() {
       };
       if (newStatus) updateData.status = newStatus;
 
-      const { error } = await supabase
-        .from("bids")
-        .update(updateData)
-        .eq("bid_id", bidId);
+      const { error } = await supabase.from("bids").update(updateData).eq("bid_id", bidId);
       if (error) throw error;
 
       // Update bid items
@@ -243,7 +227,12 @@ function BidReviewPage() {
     return (
       <div className="py-12 text-center text-muted-foreground">
         Bid not found.{" "}
-        <Link to="/rfq/$rfqId/" params={{ rfqId }} className="underline" style={{ color: "var(--accent)" }}>
+        <Link
+          to="/rfq/$rfqId/"
+          params={{ rfqId }}
+          className="underline"
+          style={{ color: "var(--accent)" }}
+        >
           Back
         </Link>
       </div>
@@ -256,14 +245,12 @@ function BidReviewPage() {
       <div className="rounded-xl p-5" style={{ backgroundColor: "#FDF3E0" }}>
         <div className="flex items-center justify-between">
           <div>
-            <h1
-              className="font-display text-[24px]"
-              style={{ color: "#7A5200" }}
-            >
+            <h1 className="font-display text-[24px]" style={{ color: "#7A5200" }}>
               Bid Review
             </h1>
             <p className="mt-0.5 text-sm" style={{ color: "#7A5200", opacity: 0.7 }}>
-              {bid.vendors?.company_name} — {bid.original_email_id ? `Email ID: ${bid.original_email_id}` : ""}
+              {bid.vendors?.company_name} —{" "}
+              {bid.original_email_id ? `Email ID: ${bid.original_email_id}` : ""}
             </p>
           </div>
           <Link
@@ -307,8 +294,7 @@ function BidReviewPage() {
           {bid.original_email_id && (
             <div className="mb-3 space-y-1 text-xs text-muted-foreground">
               <div>
-                <span className="font-medium">Email ID:</span>{" "}
-                {bid.original_email_id}
+                <span className="font-medium">Email ID:</span> {bid.original_email_id}
               </div>
             </div>
           )}
@@ -328,10 +314,7 @@ function BidReviewPage() {
         </div>
 
         {/* RIGHT — AI Extracted Data */}
-        <div
-          className="rounded-xl p-5 space-y-5"
-          style={{ backgroundColor: "#FDF3E0" }}
-        >
+        <div className="rounded-xl p-5 space-y-5" style={{ backgroundColor: "#FDF3E0" }}>
           <h2
             className="text-sm font-semibold uppercase tracking-wider"
             style={{ color: "#7A5200" }}
@@ -342,9 +325,7 @@ function BidReviewPage() {
           {/* Vendor */}
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">Vendor</label>
-            <div className="text-sm font-semibold">
-              {bid.vendors?.company_name || "—"}
-            </div>
+            <div className="text-sm font-semibold">{bid.vendors?.company_name || "—"}</div>
           </div>
 
           {/* Fields grid */}
@@ -384,14 +365,9 @@ function BidReviewPage() {
               onChange={(v) => updateField("payment_method", v)}
               options={PAYMENT_METHOD_OPTIONS}
             />
-            {(fields.payment_structure === "credit_days" ||
-              fields.payment_structure === "pdc") && (
+            {(fields.payment_structure === "credit_days" || fields.payment_structure === "pdc") && (
               <FormField
-                label={
-                  fields.payment_structure === "pdc"
-                    ? "PDC Days"
-                    : "Credit Days"
-                }
+                label={fields.payment_structure === "pdc" ? "PDC Days" : "Credit Days"}
                 type="number"
                 value={
                   fields.payment_structure === "pdc"
@@ -399,12 +375,7 @@ function BidReviewPage() {
                     : String(fields.credit_days)
                 }
                 onChange={(v) =>
-                  updateField(
-                    fields.payment_structure === "pdc"
-                      ? "pdc_days"
-                      : "credit_days",
-                    v
-                  )
+                  updateField(fields.payment_structure === "pdc" ? "pdc_days" : "credit_days", v)
                 }
               />
             )}
@@ -460,31 +431,22 @@ function BidReviewPage() {
                 </thead>
                 <tbody>
                   {editedItems.map((item, idx) => {
-                    const rate =
-                      typeof item.rate === "number" ? item.rate : 0;
+                    const rate = typeof item.rate === "number" ? item.rate : 0;
                     const lineTotal = rate * item.quantity;
                     return (
                       <tr key={item.bid_item_id} className="border-t border-amber-100">
-                        <td className="px-3 py-2 text-xs text-muted-foreground">
-                          {idx + 1}
-                        </td>
-                        <td className="px-3 py-2 text-xs max-w-[180px]">
-                          {item.description}
-                        </td>
-                        <td className="px-3 py-2 text-right text-xs">
-                          {item.quantity}
-                        </td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground">{idx + 1}</td>
+                        <td className="px-3 py-2 text-xs max-w-[180px]">{item.description}</td>
+                        <td className="px-3 py-2 text-right text-xs">{item.quantity}</td>
                         <td className="px-3 py-2 text-xs">{item.unit}</td>
                         <td className="px-3 py-2">
                           <input
                             type="number"
                             step="0.001"
                             value={item.rate === "" ? "" : item.rate}
-                            onChange={(e) =>
-                              updateItemRate(idx, e.target.value)
-                            }
+                            onChange={(e) => updateItemRate(idx, e.target.value)}
                             className={`w-24 rounded border-2 px-2 py-1 text-right text-xs outline-none ${confidenceStyle(
-                              item.ai_confidence
+                              item.ai_confidence,
                             )}`}
                           />
                         </td>
@@ -527,16 +489,14 @@ function BidReviewPage() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">VAT (5%)</span>
                   <span className="font-mono">
-                    OMR{" "}
-                    {vat.toLocaleString("en", { minimumFractionDigits: 3 })}
+                    OMR {vat.toLocaleString("en", { minimumFractionDigits: 3 })}
                   </span>
                 </div>
               )}
               <div className="flex justify-between border-t border-amber-200 pt-1 font-semibold">
                 <span style={{ color: "#7A5200" }}>Total (inc-VAT)</span>
                 <span className="font-mono" style={{ color: "#7A5200" }}>
-                  OMR{" "}
-                  {total.toLocaleString("en", { minimumFractionDigits: 3 })}
+                  OMR {total.toLocaleString("en", { minimumFractionDigits: 3 })}
                 </span>
               </div>
             </div>
@@ -589,15 +549,11 @@ function BidReviewPage() {
       {showRejectConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
-            <h3
-              className="font-display text-xl"
-              style={{ color: "#DC2626" }}
-            >
+            <h3 className="font-display text-xl" style={{ color: "#DC2626" }}>
               Reject Bid
             </h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              This bid will be marked as rejected and excluded from the
-              comparison. Continue?
+              This bid will be marked as rejected and excluded from the comparison. Continue?
             </p>
             <div className="mt-4 flex gap-3">
               <button
@@ -634,9 +590,7 @@ function FormField({
 }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs font-medium text-muted-foreground">
-        {label}
-      </label>
+      <label className="text-xs font-medium text-muted-foreground">{label}</label>
       <input
         type={type}
         value={value}
@@ -660,9 +614,7 @@ function FormSelect({
 }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs font-medium text-muted-foreground">
-        {label}
-      </label>
+      <label className="text-xs font-medium text-muted-foreground">{label}</label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}

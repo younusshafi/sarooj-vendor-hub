@@ -18,12 +18,7 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-export function DocumentUpload({
-  label,
-  required,
-  file,
-  onChange,
-}: DocumentUploadProps) {
+export function DocumentUpload({ label, required, file, onChange }: DocumentUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,9 +40,7 @@ export function DocumentUpload({
         <span
           className={cn(
             "rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
-            required
-              ? "bg-destructive-soft text-destructive"
-              : "bg-muted text-muted-foreground",
+            required ? "bg-destructive-soft text-destructive" : "bg-muted text-muted-foreground",
           )}
         >
           {required ? "Required" : "Optional"}
@@ -83,12 +76,8 @@ export function DocumentUpload({
           <div className="flex min-w-0 items-center gap-3">
             <FileText className="h-5 w-5 shrink-0 text-primary" />
             <div className="min-w-0">
-              <p className="truncate text-[14px] font-medium text-foreground">
-                {file.name}
-              </p>
-              <p className="text-[12px] text-muted-foreground">
-                {formatBytes(file.size)}
-              </p>
+              <p className="truncate text-[14px] font-medium text-foreground">{file.name}</p>
+              <p className="text-[12px] text-muted-foreground">{formatBytes(file.size)}</p>
             </div>
           </div>
           <button

@@ -17,10 +17,7 @@ const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q";
 const WEBHOOK_URL = "https://n8n.zavia-ai.com/webhook/vendor-onboarding";
 
-async function uploadDocumentToSupabase(
-  file: File,
-  storagePath: string,
-): Promise<void> {
+async function uploadDocumentToSupabase(file: File, storagePath: string): Promise<void> {
   const url = `${SUPABASE_URL}/storage/v1/object/vendor-documents/${storagePath}`;
   const res = await fetch(url, {
     method: "POST",
@@ -43,8 +40,7 @@ export const Route = createFileRoute("/register")({
       { title: "Vendor Registration — Sarooj Construction Company" },
       {
         name: "description",
-        content:
-          "Register your company to join Sarooj Construction's approved vendor network.",
+        content: "Register your company to join Sarooj Construction's approved vendor network.",
       },
     ],
   }),
@@ -93,11 +89,7 @@ const schema = z
     company_name: z.string().trim().min(1, "Company name is required").max(200),
     cr_number: z.string().trim().max(100).optional().or(z.literal("")),
     location: z.string().trim().min(1, "Address is required").max(300),
-    telephone: z
-      .string()
-      .trim()
-      .min(8, "Phone must be at least 8 digits")
-      .max(30),
+    telephone: z.string().trim().min(8, "Phone must be at least 8 digits").max(30),
     mobile_alt: z.string().trim().max(30).optional().or(z.literal("")),
     legal_structure: z.enum(LEGAL_STRUCTURES, {
       message: "Select a legal structure",
@@ -116,40 +108,18 @@ const schema = z
     main_customers: z.string().trim().max(2000).optional().or(z.literal("")),
     num_employees: z.string().trim().max(10).optional().or(z.literal("")),
     vat_number: z.string().trim().max(100).optional().or(z.literal("")),
-    contact_person: z
-      .string()
-      .trim()
-      .min(1, "Contact name is required")
-      .max(150),
-    designation: z
-      .string()
-      .trim()
-      .min(1, "Designation is required")
-      .max(150),
-    contact_mobile: z
-      .string()
-      .trim()
-      .min(8, "Mobile must be at least 8 digits")
-      .max(30),
+    contact_person: z.string().trim().min(1, "Contact name is required").max(150),
+    designation: z.string().trim().min(1, "Designation is required").max(150),
+    contact_mobile: z.string().trim().min(8, "Mobile must be at least 8 digits").max(30),
     email: z.string().trim().email("Enter a valid email").max(200),
-    signatory_name: z
-      .string()
-      .trim()
-      .min(1, "Signatory name is required")
-      .max(150),
-    signatory_position: z
-      .string()
-      .trim()
-      .min(1, "Position is required")
-      .max(150),
+    signatory_name: z.string().trim().min(1, "Signatory name is required").max(150),
+    signatory_position: z.string().trim().min(1, "Position is required").max(150),
     declaration: z.literal(true, {
       message: "You must confirm the declaration",
     }),
   })
   .refine(
-    (v) =>
-      v.supplier_type !== "International" ||
-      (v.country && v.country.trim().length > 0),
+    (v) => v.supplier_type !== "International" || (v.country && v.country.trim().length > 0),
     {
       message: "Country of origin is required",
       path: ["country"],
@@ -164,12 +134,10 @@ function SuccessCard() {
       <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-accent-soft">
         <CheckCircle2 className="h-12 w-12 text-primary" />
       </div>
-      <h1 className="mt-6 font-serif text-[32px] text-foreground">
-        Registration Received
-      </h1>
+      <h1 className="mt-6 font-serif text-[32px] text-foreground">Registration Received</h1>
       <p className="mt-4 text-[16px]" style={{ color: "#4A6560" }}>
-        Thank you. Your registration has been received. Sarooj's procurement
-        team will review and contact you.
+        Thank you. Your registration has been received. Sarooj's procurement team will review and
+        contact you.
       </p>
     </div>
   );
@@ -238,9 +206,7 @@ function VendorRegistrationPage() {
       return;
     }
 
-    const allUploaded = [...REQUIRED_DOCS, ...OPTIONAL_DOCS].filter(
-      (d) => documents[d],
-    );
+    const allUploaded = [...REQUIRED_DOCS, ...OPTIONAL_DOCS].filter((d) => documents[d]);
 
     const timestamp = Date.now();
     const companySlug = values.company_name
@@ -320,9 +286,7 @@ function VendorRegistrationPage() {
 
   const onInvalid = () => {
     setTimeout(() => {
-      const el = document.querySelector(
-        "[aria-invalid='true'], .text-destructive",
-      );
+      const el = document.querySelector("[aria-invalid='true'], .text-destructive");
       el?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 50);
   };
@@ -376,11 +340,7 @@ function VendorRegistrationPage() {
                 helper="Required for Omani companies"
                 error={errors.cr_number?.message}
               >
-                <input
-                  id="cr_number"
-                  className={inputClass}
-                  {...register("cr_number")}
-                />
+                <input id="cr_number" className={inputClass} {...register("cr_number")} />
               </Field>
               <div className="hidden md:block" />
             </div>
@@ -435,11 +395,7 @@ function VendorRegistrationPage() {
               control={control}
               name="legal_structure"
               render={({ field }) => (
-                <Field
-                  label="Legal Structure"
-                  required
-                  error={errors.legal_structure?.message}
-                >
+                <Field label="Legal Structure" required error={errors.legal_structure?.message}>
                   <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                     {LEGAL_STRUCTURES.map((opt) => (
                       <OptionCard
@@ -461,11 +417,7 @@ function VendorRegistrationPage() {
               control={control}
               name="vendor_type"
               render={({ field }) => (
-                <Field
-                  label="Vendor Type"
-                  required
-                  error={errors.vendor_type?.message}
-                >
+                <Field label="Vendor Type" required error={errors.vendor_type?.message}>
                   <div className="flex flex-wrap gap-3">
                     {VENDOR_TYPES.map((opt) => (
                       <OptionCard
@@ -487,11 +439,7 @@ function VendorRegistrationPage() {
               control={control}
               name="supplier_type"
               render={({ field }) => (
-                <Field
-                  label="Supplier Type"
-                  required
-                  error={errors.supplier_type?.message}
-                >
+                <Field label="Supplier Type" required error={errors.supplier_type?.message}>
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <OptionCard
                       label="Local (Oman-based)"
@@ -593,11 +541,7 @@ function VendorRegistrationPage() {
                 helper="If applicable"
                 error={errors.vat_number?.message}
               >
-                <input
-                  id="vat_number"
-                  className={inputClass}
-                  {...register("vat_number")}
-                />
+                <input id="vat_number" className={inputClass} {...register("vat_number")} />
               </Field>
             </div>
           </SectionCard>
@@ -645,12 +589,7 @@ function VendorRegistrationPage() {
                   {...register("contact_mobile")}
                 />
               </Field>
-              <Field
-                label="Email Address"
-                required
-                htmlFor="email"
-                error={errors.email?.message}
-              >
+              <Field label="Email Address" required htmlFor="email" error={errors.email?.message}>
                 <input
                   id="email"
                   type="email"
@@ -665,8 +604,7 @@ function VendorRegistrationPage() {
           {/* SECTION 7 */}
           <SectionCard number={7} title="Required Documents">
             <p className="-mt-2 text-[14px] text-muted-foreground">
-              Upload the following documents. Accepted formats: PDF, JPG, PNG.
-              Max 10MB per file.
+              Upload the following documents. Accepted formats: PDF, JPG, PNG. Max 10MB per file.
             </p>
             <div className="flex flex-col gap-4">
               {REQUIRED_DOCS.map((d) => (
@@ -692,9 +630,8 @@ function VendorRegistrationPage() {
           {/* SECTION 8 */}
           <SectionCard number={8} title="Declaration">
             <div className="rounded-lg border border-border bg-accent-soft p-5 text-[14px] text-foreground">
-              I confirm that the information provided in this registration form
-              is accurate and complete. I authorise Sarooj Construction Company
-              to verify the details provided.
+              I confirm that the information provided in this registration form is accurate and
+              complete. I authorise Sarooj Construction Company to verify the details provided.
             </div>
 
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
@@ -753,9 +690,7 @@ function VendorRegistrationPage() {
               )}
             />
             {errors.declaration && (
-              <p className="text-[13px] text-destructive">
-                {errors.declaration.message as string}
-              </p>
+              <p className="text-[13px] text-destructive">{errors.declaration.message as string}</p>
             )}
           </SectionCard>
 

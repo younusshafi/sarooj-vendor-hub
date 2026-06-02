@@ -17,17 +17,21 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppVendorsRouteImport } from './routes/_app/vendors'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppRfqRouteImport } from './routes/_app/rfq'
+import { Route as AppPrsRouteImport } from './routes/_app/prs'
 import { Route as AppPendingRouteImport } from './routes/_app/pending'
 import { Route as AppOutreachRouteImport } from './routes/_app/outreach'
 import { Route as AppInviteRouteImport } from './routes/_app/invite'
 import { Route as AppCategoriesRouteImport } from './routes/_app/categories'
 import { Route as AppVendorsIndexRouteImport } from './routes/_app/vendors.index'
 import { Route as AppRfqIndexRouteImport } from './routes/_app/rfq.index'
+import { Route as AppPrsIndexRouteImport } from './routes/_app/prs.index'
 import { Route as AppVendorsVendorIdRouteImport } from './routes/_app/vendors.$vendorId'
+import { Route as AppRfqSummaryRouteImport } from './routes/_app/rfq.summary'
 import { Route as AppRfqPreviewRouteImport } from './routes/_app/rfq.preview'
 import { Route as AppRfqNewRouteImport } from './routes/_app/rfq.new'
 import { Route as AppRfqBidsRouteImport } from './routes/_app/rfq.bids'
 import { Route as AppRfqRfqIdRouteImport } from './routes/_app/rfq.$rfqId'
+import { Route as AppPrsPrNumberRouteImport } from './routes/_app/prs.$prNumber'
 import { Route as AppRfqRfqIdIndexRouteImport } from './routes/_app/rfq.$rfqId.index'
 import { Route as AppRfqRfqIdComparisonRouteImport } from './routes/_app/rfq.$rfqId.comparison'
 import { Route as AppRfqRfqIdBidsBidIdReviewRouteImport } from './routes/_app/rfq.$rfqId.bids.$bidId.review'
@@ -71,6 +75,11 @@ const AppRfqRoute = AppRfqRouteImport.update({
   path: '/rfq',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPrsRoute = AppPrsRouteImport.update({
+  id: '/prs',
+  path: '/prs',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppPendingRoute = AppPendingRouteImport.update({
   id: '/pending',
   path: '/pending',
@@ -101,10 +110,20 @@ const AppRfqIndexRoute = AppRfqIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRfqRoute,
 } as any)
+const AppPrsIndexRoute = AppPrsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppPrsRoute,
+} as any)
 const AppVendorsVendorIdRoute = AppVendorsVendorIdRouteImport.update({
   id: '/$vendorId',
   path: '/$vendorId',
   getParentRoute: () => AppVendorsRoute,
+} as any)
+const AppRfqSummaryRoute = AppRfqSummaryRouteImport.update({
+  id: '/summary',
+  path: '/summary',
+  getParentRoute: () => AppRfqRoute,
 } as any)
 const AppRfqPreviewRoute = AppRfqPreviewRouteImport.update({
   id: '/preview',
@@ -125,6 +144,11 @@ const AppRfqRfqIdRoute = AppRfqRfqIdRouteImport.update({
   id: '/$rfqId',
   path: '/$rfqId',
   getParentRoute: () => AppRfqRoute,
+} as any)
+const AppPrsPrNumberRoute = AppPrsPrNumberRouteImport.update({
+  id: '/$prNumber',
+  path: '/$prNumber',
+  getParentRoute: () => AppPrsRoute,
 } as any)
 const AppRfqRfqIdIndexRoute = AppRfqRfqIdIndexRouteImport.update({
   id: '/',
@@ -152,14 +176,18 @@ export interface FileRoutesByFullPath {
   '/invite': typeof AppInviteRoute
   '/outreach': typeof AppOutreachRoute
   '/pending': typeof AppPendingRoute
+  '/prs': typeof AppPrsRouteWithChildren
   '/rfq': typeof AppRfqRouteWithChildren
   '/settings': typeof AppSettingsRoute
   '/vendors': typeof AppVendorsRouteWithChildren
+  '/prs/$prNumber': typeof AppPrsPrNumberRoute
   '/rfq/$rfqId': typeof AppRfqRfqIdRouteWithChildren
   '/rfq/bids': typeof AppRfqBidsRoute
   '/rfq/new': typeof AppRfqNewRoute
   '/rfq/preview': typeof AppRfqPreviewRoute
+  '/rfq/summary': typeof AppRfqSummaryRoute
   '/vendors/$vendorId': typeof AppVendorsVendorIdRoute
+  '/prs/': typeof AppPrsIndexRoute
   '/rfq/': typeof AppRfqIndexRoute
   '/vendors/': typeof AppVendorsIndexRoute
   '/rfq/$rfqId/comparison': typeof AppRfqRfqIdComparisonRoute
@@ -176,10 +204,13 @@ export interface FileRoutesByTo {
   '/pending': typeof AppPendingRoute
   '/settings': typeof AppSettingsRoute
   '/': typeof AppIndexRoute
+  '/prs/$prNumber': typeof AppPrsPrNumberRoute
   '/rfq/bids': typeof AppRfqBidsRoute
   '/rfq/new': typeof AppRfqNewRoute
   '/rfq/preview': typeof AppRfqPreviewRoute
+  '/rfq/summary': typeof AppRfqSummaryRoute
   '/vendors/$vendorId': typeof AppVendorsVendorIdRoute
+  '/prs': typeof AppPrsIndexRoute
   '/rfq': typeof AppRfqIndexRoute
   '/vendors': typeof AppVendorsIndexRoute
   '/rfq/$rfqId/comparison': typeof AppRfqRfqIdComparisonRoute
@@ -196,15 +227,19 @@ export interface FileRoutesById {
   '/_app/invite': typeof AppInviteRoute
   '/_app/outreach': typeof AppOutreachRoute
   '/_app/pending': typeof AppPendingRoute
+  '/_app/prs': typeof AppPrsRouteWithChildren
   '/_app/rfq': typeof AppRfqRouteWithChildren
   '/_app/settings': typeof AppSettingsRoute
   '/_app/vendors': typeof AppVendorsRouteWithChildren
   '/_app/': typeof AppIndexRoute
+  '/_app/prs/$prNumber': typeof AppPrsPrNumberRoute
   '/_app/rfq/$rfqId': typeof AppRfqRfqIdRouteWithChildren
   '/_app/rfq/bids': typeof AppRfqBidsRoute
   '/_app/rfq/new': typeof AppRfqNewRoute
   '/_app/rfq/preview': typeof AppRfqPreviewRoute
+  '/_app/rfq/summary': typeof AppRfqSummaryRoute
   '/_app/vendors/$vendorId': typeof AppVendorsVendorIdRoute
+  '/_app/prs/': typeof AppPrsIndexRoute
   '/_app/rfq/': typeof AppRfqIndexRoute
   '/_app/vendors/': typeof AppVendorsIndexRoute
   '/_app/rfq/$rfqId/comparison': typeof AppRfqRfqIdComparisonRoute
@@ -222,14 +257,18 @@ export interface FileRouteTypes {
     | '/invite'
     | '/outreach'
     | '/pending'
+    | '/prs'
     | '/rfq'
     | '/settings'
     | '/vendors'
+    | '/prs/$prNumber'
     | '/rfq/$rfqId'
     | '/rfq/bids'
     | '/rfq/new'
     | '/rfq/preview'
+    | '/rfq/summary'
     | '/vendors/$vendorId'
+    | '/prs/'
     | '/rfq/'
     | '/vendors/'
     | '/rfq/$rfqId/comparison'
@@ -246,10 +285,13 @@ export interface FileRouteTypes {
     | '/pending'
     | '/settings'
     | '/'
+    | '/prs/$prNumber'
     | '/rfq/bids'
     | '/rfq/new'
     | '/rfq/preview'
+    | '/rfq/summary'
     | '/vendors/$vendorId'
+    | '/prs'
     | '/rfq'
     | '/vendors'
     | '/rfq/$rfqId/comparison'
@@ -265,15 +307,19 @@ export interface FileRouteTypes {
     | '/_app/invite'
     | '/_app/outreach'
     | '/_app/pending'
+    | '/_app/prs'
     | '/_app/rfq'
     | '/_app/settings'
     | '/_app/vendors'
     | '/_app/'
+    | '/_app/prs/$prNumber'
     | '/_app/rfq/$rfqId'
     | '/_app/rfq/bids'
     | '/_app/rfq/new'
     | '/_app/rfq/preview'
+    | '/_app/rfq/summary'
     | '/_app/vendors/$vendorId'
+    | '/_app/prs/'
     | '/_app/rfq/'
     | '/_app/vendors/'
     | '/_app/rfq/$rfqId/comparison'
@@ -346,6 +392,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRfqRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/prs': {
+      id: '/_app/prs'
+      path: '/prs'
+      fullPath: '/prs'
+      preLoaderRoute: typeof AppPrsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/pending': {
       id: '/_app/pending'
       path: '/pending'
@@ -388,12 +441,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRfqIndexRouteImport
       parentRoute: typeof AppRfqRoute
     }
+    '/_app/prs/': {
+      id: '/_app/prs/'
+      path: '/'
+      fullPath: '/prs/'
+      preLoaderRoute: typeof AppPrsIndexRouteImport
+      parentRoute: typeof AppPrsRoute
+    }
     '/_app/vendors/$vendorId': {
       id: '/_app/vendors/$vendorId'
       path: '/$vendorId'
       fullPath: '/vendors/$vendorId'
       preLoaderRoute: typeof AppVendorsVendorIdRouteImport
       parentRoute: typeof AppVendorsRoute
+    }
+    '/_app/rfq/summary': {
+      id: '/_app/rfq/summary'
+      path: '/summary'
+      fullPath: '/rfq/summary'
+      preLoaderRoute: typeof AppRfqSummaryRouteImport
+      parentRoute: typeof AppRfqRoute
     }
     '/_app/rfq/preview': {
       id: '/_app/rfq/preview'
@@ -423,6 +490,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRfqRfqIdRouteImport
       parentRoute: typeof AppRfqRoute
     }
+    '/_app/prs/$prNumber': {
+      id: '/_app/prs/$prNumber'
+      path: '/$prNumber'
+      fullPath: '/prs/$prNumber'
+      preLoaderRoute: typeof AppPrsPrNumberRouteImport
+      parentRoute: typeof AppPrsRoute
+    }
     '/_app/rfq/$rfqId/': {
       id: '/_app/rfq/$rfqId/'
       path: '/'
@@ -447,6 +521,19 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppPrsRouteChildren {
+  AppPrsPrNumberRoute: typeof AppPrsPrNumberRoute
+  AppPrsIndexRoute: typeof AppPrsIndexRoute
+}
+
+const AppPrsRouteChildren: AppPrsRouteChildren = {
+  AppPrsPrNumberRoute: AppPrsPrNumberRoute,
+  AppPrsIndexRoute: AppPrsIndexRoute,
+}
+
+const AppPrsRouteWithChildren =
+  AppPrsRoute._addFileChildren(AppPrsRouteChildren)
+
 interface AppRfqRfqIdRouteChildren {
   AppRfqRfqIdComparisonRoute: typeof AppRfqRfqIdComparisonRoute
   AppRfqRfqIdIndexRoute: typeof AppRfqRfqIdIndexRoute
@@ -468,6 +555,7 @@ interface AppRfqRouteChildren {
   AppRfqBidsRoute: typeof AppRfqBidsRoute
   AppRfqNewRoute: typeof AppRfqNewRoute
   AppRfqPreviewRoute: typeof AppRfqPreviewRoute
+  AppRfqSummaryRoute: typeof AppRfqSummaryRoute
   AppRfqIndexRoute: typeof AppRfqIndexRoute
 }
 
@@ -476,6 +564,7 @@ const AppRfqRouteChildren: AppRfqRouteChildren = {
   AppRfqBidsRoute: AppRfqBidsRoute,
   AppRfqNewRoute: AppRfqNewRoute,
   AppRfqPreviewRoute: AppRfqPreviewRoute,
+  AppRfqSummaryRoute: AppRfqSummaryRoute,
   AppRfqIndexRoute: AppRfqIndexRoute,
 }
 
@@ -501,6 +590,7 @@ interface AppRouteChildren {
   AppInviteRoute: typeof AppInviteRoute
   AppOutreachRoute: typeof AppOutreachRoute
   AppPendingRoute: typeof AppPendingRoute
+  AppPrsRoute: typeof AppPrsRouteWithChildren
   AppRfqRoute: typeof AppRfqRouteWithChildren
   AppSettingsRoute: typeof AppSettingsRoute
   AppVendorsRoute: typeof AppVendorsRouteWithChildren
@@ -512,6 +602,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppInviteRoute: AppInviteRoute,
   AppOutreachRoute: AppOutreachRoute,
   AppPendingRoute: AppPendingRoute,
+  AppPrsRoute: AppPrsRouteWithChildren,
   AppRfqRoute: AppRfqRouteWithChildren,
   AppSettingsRoute: AppSettingsRoute,
   AppVendorsRoute: AppVendorsRouteWithChildren,

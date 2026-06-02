@@ -1,11 +1,6 @@
 import * as XLSX from "xlsx";
 
-export function exportComparisonSheet(
-  rfq: any,
-  rfqItems: any[],
-  bids: any[],
-  comparison: any
-) {
+export function exportComparisonSheet(rfq: any, rfqItems: any[], bids: any[], comparison: any) {
   const wb = XLSX.utils.book_new();
   const rows: any[][] = [];
 
@@ -13,10 +8,7 @@ export function exportComparisonSheet(
   rows.push(["SAROOJ CONSTRUCTION COMPANY"]);
   rows.push(["MATERIALS COMPARISON SHEET"]);
   rows.push(["CS Prepared Date", new Date().toLocaleDateString("en-GB")]);
-  rows.push([
-    "Material Requisition No.",
-    (rfq.pr_numbers || []).join(", "),
-  ]);
+  rows.push(["Material Requisition No.", (rfq.pr_numbers || []).join(", ")]);
   rows.push(["Project Name / Code", rfq.project_name || ""]);
   rows.push(["Project Location", rfq.project_location || ""]);
   rows.push(["Client", rfq.client || ""]);
@@ -24,14 +16,7 @@ export function exportComparisonSheet(
   rows.push([]);
 
   // Vendor name header row
-  const vendorRow: any[] = [
-    "",
-    "",
-    "",
-    "",
-    "BUDGET RATE (RO)",
-    "BUDGET AMOUNT (RO)",
-  ];
+  const vendorRow: any[] = ["", "", "", "", "BUDGET RATE (RO)", "BUDGET AMOUNT (RO)"];
   bids.forEach((b) => vendorRow.push(b.vendors?.company_name || "", ""));
   vendorRow.push("MIN UNIT RATE (RO)", "MIN AMOUNT (RO)");
   rows.push(vendorRow);
@@ -61,17 +46,12 @@ export function exportComparisonSheet(
     ];
     let min = Infinity;
     bids.forEach((bid) => {
-      const bi = bid.bid_items?.find(
-        (x: any) => x.rfq_item_id === item.item_id
-      );
+      const bi = bid.bid_items?.find((x: any) => x.rfq_item_id === item.item_id);
       const rate = bi?.unit_price_omr ?? null;
       row.push(rate ?? "NQ", rate != null ? rate * item.quantity : "NQ");
       if (rate != null && rate < min) min = rate;
     });
-    row.push(
-      min !== Infinity ? min : "NQ",
-      min !== Infinity ? min * item.quantity : "NQ"
-    );
+    row.push(min !== Infinity ? min : "NQ", min !== Infinity ? min * item.quantity : "NQ");
     rows.push(row);
   });
 
@@ -108,14 +88,8 @@ export function exportComparisonSheet(
   rows.push([]);
 
   // Recommendation
-  rows.push([
-    "PROCUREMENT RECOMMENDATION",
-    comparison?.ai_recommendation || "",
-  ]);
-  rows.push([
-    "APPROVED SUPPLIER COLUMN NO.",
-    comparison?.approved_vendor_column || "",
-  ]);
+  rows.push(["PROCUREMENT RECOMMENDATION", comparison?.ai_recommendation || ""]);
+  rows.push(["APPROVED SUPPLIER COLUMN NO.", comparison?.approved_vendor_column || ""]);
   rows.push(["SELECTION TYPE", comparison?.selection_type || ""]);
   rows.push(["COMMENTS", comparison?.decision_notes || ""]);
 
@@ -123,16 +97,8 @@ export function exportComparisonSheet(
 
   // Approval block
   rows.push(["PREPARED BY", "", "APPROVED BY"]);
-  rows.push([
-    comparison?.prepared_by || "",
-    "",
-    comparison?.approved_by || "Rabia Vahabudeen",
-  ]);
-  rows.push([
-    "Procurement Officer / Engineer",
-    "",
-    "Procurement Manager",
-  ]);
+  rows.push([comparison?.prepared_by || "", "", comparison?.approved_by || "Rabia Vahabudeen"]);
+  rows.push(["Procurement Officer / Engineer", "", "Procurement Manager"]);
   rows.push(["Sign and Date", "", "Sign and Date"]);
 
   const ws = XLSX.utils.aoa_to_sheet(rows);

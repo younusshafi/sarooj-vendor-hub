@@ -13,6 +13,7 @@ import {
   FileText,
   Tags,
   ExternalLink,
+  ClipboardList,
 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase-external/client";
@@ -34,8 +35,13 @@ const NAV: NavItem[] = [
   { to: "/pending", label: "Pending Registrations", icon: Inbox, badge: true },
   { to: "/invite", label: "Invite Vendor", icon: UserPlus },
   { to: "/outreach", label: "Outreach", icon: Mail },
+  { to: "/prs", label: "PR Tracker", icon: ClipboardList, dot: "amber" },
   { to: "/rfq", label: "RFQ - Supplies", icon: FileText, dot: "blue" },
-  { href: "https://sarooj-procurement-subcontractors.vercel.app/", label: "RFQ Subcontractors", icon: FileText },
+  {
+    href: "https://sarooj-procurement-subcontractors.vercel.app/",
+    label: "RFQ Subcontractors",
+    icon: FileText,
+  },
   { to: "/categories", label: "Categories", icon: Tags },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];
@@ -138,10 +144,16 @@ export function AppSidebar() {
                 <Icon className="h-4 w-4" />
                 {item.label}
                 {item.dot === "blue" && (
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "#60A5FA" }} />
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: "#60A5FA" }}
+                  />
                 )}
                 {item.dot === "amber" && (
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "#F59E0B" }} />
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: "#F59E0B" }}
+                  />
                 )}
               </span>
               {item.badge && pendingCount > 0 && (
@@ -182,7 +194,10 @@ export function AppSidebar() {
         style={{ backgroundColor: "var(--sidebar)" }}
       >
         <div className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "var(--sidebar-primary)" }} />
+          <span
+            className="h-2 w-2 rounded-full"
+            style={{ backgroundColor: "var(--sidebar-primary)" }}
+          />
           <span className="font-display text-base text-white">Sarooj Procurement</span>
         </div>
         <button onClick={() => setMobileOpen((o) => !o)} className="text-white">

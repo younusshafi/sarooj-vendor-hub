@@ -1,7 +1,7 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { X, AlertTriangle, Loader2, Search } from "lucide-react";
+import { ArrowLeft, X, AlertTriangle, Loader2, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase-external/client";
 import { useAuth } from "@/integrations/supabase-external/auth";
 import { toast } from "sonner";
@@ -11,13 +11,59 @@ export const Route = createFileRoute("/_app/rfq/preview")({
     rfq_ids: Array.isArray(s.rfq_ids)
       ? (s.rfq_ids as string[])
       : typeof s.rfq_ids === "string"
-      ? [s.rfq_ids]
-      : [],
+        ? [s.rfq_ids]
+        : [],
   }),
   component: RFQPreviewPage,
 });
 
 const N8N_WF8 = "https://n8n.zavia-ai.com/webhook/scc-rfq-dispatch";
+
+// ── Row types for Supabase queries used on this page ──
+
+interface RfqPreview {
+  rfq_id: string;
+  rfq_reference: string;
+  title: string;
+  rfq_type: string;
+  status: string;
+  covering_email_subject: string | null;
+  covering_email_body: string | null;
+  terms_and_conditions: string | null;
+  needs_scope_documents: boolean | null;
+}
+
+interface RfqItemRow {
+  item_id: string;
+  item_number: number;
+  sap_item_number: string | null;
+  description: string;
+  quantity: number;
+  unit: string | null;
+  already_procured: boolean | null;
+}
+
+interface RfqVendorRow {
+  id: string;
+  vendor_id: string;
+  email_to: string;
+  contact_person: string | null;
+  matched_category: string | null;
+  status: string;
+  vendors: {
+    company_name: string;
+    status: string;
+    categories: string[] | null;
+  } | null;
+}
+
+interface VendorSearchResult {
+  vendor_id: string;
+  company_name: string;
+  email: string | null;
+  contact_person: string | null;
+  status: string;
+}
 
 function RFQPreviewPage() {
   const { rfq_ids } = Route.useSearch();
@@ -32,8 +78,10 @@ function RFQPreviewPage() {
     } else {
       try {
         const stored = sessionStorage.getItem("rfq_preview_ids");
-        if (stored) setResolvedIds(JSON.parse(stored));
-      } catch {}
+        if (stored) setResolvedIds(JSON.parse(stored) as string[]);
+      } catch {
+        /* ignored — sessionStorage unavailable */
+      }
     }
   }, [rfq_ids]);
 
@@ -47,13 +95,9 @@ function RFQPreviewPage() {
     queryKey: ["rfq-preview", rfqId],
     queryFn: async () => {
       if (!rfqId) return null;
-      const { data, error } = await supabase
-        .from("rfqs")
-        .select("*")
-        .eq("rfq_id", rfqId)
-        .single();
+      const { data, error } = await supabase.from("rfqs").select("*").eq("rfq_id", rfqId).single();
       if (error) throw error;
-      return data as any;
+      return data as RfqPreview;
     },
     enabled: !!rfqId,
   });
@@ -64,27 +108,27 @@ function RFQPreviewPage() {
       if (!rfqId) return [];
       const { data } = await supabase
         .from("rfq_items")
-        .select(
-          "item_id,item_number,sap_item_number,description,quantity,unit,already_procured"
-        )
+        .select("item_id,item_number,sap_item_number,description,quantity,unit,already_procured")
         .eq("rfq_id", rfqId)
         .order("item_number");
-      return data ?? [];
+      return (data ?? []) as RfqItemRow[];
     },
     enabled: !!rfqId,
   });
 
-  const { data: rfqVendors, refetch: refetchVendors } = useQuery({
+  const { data: rfqVendors } = useQuery({
     queryKey: ["rfq-vendors-preview", rfqId],
     queryFn: async () => {
       if (!rfqId) return [];
       const { data } = await supabase
         .from("rfq_vendors")
         .select(
-          "id,vendor_id,email_to,contact_person,matched_category,status,vendors(company_name,status,categories)"
+          "id,vendor_id,email_to,contact_person,matched_category,status,vendors(company_name,status,categories)",
         )
         .eq("rfq_id", rfqId);
-      return (data ?? []) as any[];
+      // PostgREST returns vendors as object for many-to-one FK;
+      // Supabase TS generics infer an array — cast via unknown.
+      return (data ?? []) as unknown as RfqVendorRow[];
     },
     enabled: !!rfqId,
   });
@@ -97,7 +141,7 @@ function RFQPreviewPage() {
         .select("setting_value")
         .eq("setting_key", "rfq_terms_and_conditions")
         .single();
-      return (data as any)?.setting_value ?? "";
+      return (data as { setting_value: string } | null)?.setting_value ?? "";
     },
   });
 
@@ -109,7 +153,7 @@ function RFQPreviewPage() {
         .select("setting_value")
         .eq("setting_key", "rfq_default_deadline_days")
         .single();
-      return parseInt((data as any)?.setting_value ?? "14");
+      return parseInt((data as { setting_value: string } | null)?.setting_value ?? "14");
     },
   });
 
@@ -119,11 +163,31 @@ function RFQPreviewPage() {
   const [termsText, setTermsText] = useState("");
   const [deadline, setDeadline] = useState("");
   const [previewHtml, setPreviewHtml] = useState(false);
-  const [vendorList, setVendorList] = useState<any[]>([]);
+  const [vendorList, setVendorList] = useState<RfqVendorRow[]>([]);
+
+  // Selection state — restore from sessionStorage if available, otherwise empty
+  const [selectedVendorIds, setSelectedVendorIds] = useState<Set<string>>(() => {
+    if (!rfqId) return new Set<string>();
+    try {
+      const stored = sessionStorage.getItem(`rfq_selection_${rfqId}`);
+      if (stored) return new Set(JSON.parse(stored) as string[]);
+    } catch {
+      /* ignored */
+    }
+    return new Set<string>();
+  });
+  const prevVendorIdsRef = useRef<Set<string>>(new Set());
+
+  // Persist selection to sessionStorage on every change
+  useEffect(() => {
+    if (rfqId) {
+      sessionStorage.setItem(`rfq_selection_${rfqId}`, JSON.stringify([...selectedVendorIds]));
+    }
+  }, [rfqId, selectedVendorIds]);
 
   // Vendor search state
   const [vendorSearch, setVendorSearch] = useState("");
-  const [vendorResults, setVendorResults] = useState<any[]>([]);
+  const [vendorResults, setVendorResults] = useState<VendorSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
 
   // Populate editable fields when rfq loads
@@ -141,12 +205,70 @@ function RFQPreviewPage() {
   useEffect(() => {
     if (rfqVendors) {
       setVendorList(
-        rfqVendors.filter(
-          (v: any) => !(v.vendors?.categories ?? []).includes('TEST_BATCH')
-        )
+        rfqVendors.filter((v) => !(v.vendors?.categories ?? []).includes("TEST_BATCH")),
       );
     }
   }, [rfqVendors]);
+
+  // Prune selection when vendorList changes (remove IDs no longer present)
+  useEffect(() => {
+    const currentIds = new Set(vendorList.map((v) => v.vendor_id));
+
+    setSelectedVendorIds((prev) => {
+      const next = new Set(prev);
+      for (const id of next) {
+        if (!currentIds.has(id)) next.delete(id);
+      }
+      return next;
+    });
+
+    prevVendorIdsRef.current = currentIds;
+  }, [vendorList]);
+
+  // Helpers for checkbox selection
+  const isTestVendor = useCallback(
+    (v: RfqVendorRow) =>
+      v.matched_category === "TEST_ALWAYS" ||
+      (v.vendors?.company_name ?? "").startsWith("SCC TEST \u2014"),
+    [],
+  );
+
+  const toggleVendor = useCallback((vendorId: string) => {
+    setSelectedVendorIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(vendorId)) next.delete(vendorId);
+      else next.add(vendorId);
+      return next;
+    });
+  }, []);
+
+  const toggleCategory = useCallback(
+    (categoryVendors: RfqVendorRow[]) => {
+      const ids = categoryVendors.map((v) => v.vendor_id);
+      const allSelected = ids.every((id) => selectedVendorIds.has(id));
+      setSelectedVendorIds((prev) => {
+        const next = new Set(prev);
+        if (allSelected) {
+          ids.forEach((id) => next.delete(id));
+        } else {
+          ids.forEach((id) => next.add(id));
+        }
+        return next;
+      });
+    },
+    [selectedVendorIds],
+  );
+
+  const selectAll = useCallback(() => {
+    setSelectedVendorIds(new Set(vendorList.map((v) => v.vendor_id)));
+  }, [vendorList]);
+
+  const deselectAll = useCallback(() => {
+    setSelectedVendorIds(new Set());
+  }, []);
+
+  const selectedCount = selectedVendorIds.size;
+  const allSelected = vendorList.length > 0 && selectedCount === vendorList.length;
 
   // Default deadline
   useEffect(() => {
@@ -155,7 +277,7 @@ function RFQPreviewPage() {
       d.setDate(d.getDate() + defaultDeadlineDays);
       setDeadline(d.toISOString().split("T")[0]);
     }
-  }, [defaultDeadlineDays]);
+  }, [defaultDeadlineDays]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const removeVendor = (id: string) => {
     setVendorList((prev) => prev.filter((v) => v.id !== id));
@@ -173,36 +295,53 @@ function RFQPreviewPage() {
       .ilike("company_name", `%${q}%`)
       .neq("status", "blacklisted")
       .limit(10);
-    setVendorResults(data ?? []);
+    setVendorResults((data ?? []) as VendorSearchResult[]);
     setSearching(false);
   };
 
-  const addVendor = async (v: any) => {
+  const addVendor = async (v: VendorSearchResult) => {
     // Check not already in list
     if (vendorList.some((vl) => vl.vendor_id === v.vendor_id)) {
       toast.info("Vendor already in list");
       return;
     }
     // Add to rfq_vendors in Supabase
-    const { data, error } = await supabase.from("rfq_vendors").insert({
-      rfq_id: rfqId,
-      vendor_id: v.vendor_id,
-      email_to: v.email || "",
-      contact_person: v.contact_person || "",
-      status: "pending",
-    }).select("id,vendor_id,email_to,contact_person,status").single();
+    const { data, error } = await supabase
+      .from("rfq_vendors")
+      .insert({
+        rfq_id: rfqId,
+        vendor_id: v.vendor_id,
+        email_to: v.email || "",
+        contact_person: v.contact_person || "",
+        status: "pending",
+      })
+      .select("id,vendor_id,email_to,contact_person,status")
+      .single();
     if (error) {
       toast.error("Failed to add vendor: " + error.message);
       return;
     }
-    setVendorList((prev) => [...prev, { ...data, vendors: { company_name: v.company_name, status: v.status } }]);
+    const newRow: RfqVendorRow = {
+      ...(data as {
+        id: string;
+        vendor_id: string;
+        email_to: string;
+        contact_person: string | null;
+        status: string;
+      }),
+      matched_category: null,
+      vendors: { company_name: v.company_name, status: v.status, categories: null },
+    };
+    setVendorList((prev) => [...prev, newRow]);
+    // Auto-select newly added vendor
+    setSelectedVendorIds((prev) => new Set([...prev, v.vendor_id]));
     setVendorSearch("");
     setVendorResults([]);
     toast.success(`${v.company_name} added`);
   };
 
   const handleSend = async () => {
-    const finalVendorIds = vendorList.map((v) => v.vendor_id);
+    const finalVendorIds = [...selectedVendorIds];
     if (!finalVendorIds.length) {
       toast.error("No vendors selected");
       return;
@@ -226,27 +365,33 @@ function RFQPreviewPage() {
         body: JSON.stringify({
           rfq_id: rfqId,
           final_vendor_ids: finalVendorIds,
+          selected_vendor_ids: finalVendorIds,
           deadline,
         }),
       });
-      const result = await res.json();
+      const result: { message?: string } = await res.json();
       if (!res.ok) throw new Error(result.message || `WF8 error: ${res.status}`);
       toast.success("RFQ dispatched successfully!");
       navigate({ to: "/rfq/$rfqId", params: { rfqId } });
-    } catch (err: any) {
-      toast.error(err.message || "Dispatch failed");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Dispatch failed";
+      toast.error(msg);
     } finally {
       setSending(false);
     }
   };
 
-  const alreadyProcured = (rfqItems ?? []).filter((i: any) => i.already_procured);
+  const alreadyProcured = (rfqItems ?? []).filter((i) => i.already_procured);
   const needsScope = rfq?.needs_scope_documents;
 
   if (!resolvedIds.length) {
     return (
       <div className="py-12 text-center text-muted-foreground">
-        No RFQs to preview. <a href="/rfq/new" className="underline">Generate one</a>.
+        No RFQs to preview.{" "}
+        <a href="/rfq/new" className="underline">
+          Generate one
+        </a>
+        .
       </div>
     );
   }
@@ -254,14 +399,35 @@ function RFQPreviewPage() {
   return (
     <div className="space-y-6">
       <div className="rounded-xl p-6" style={{ backgroundColor: "#E8EFF7" }}>
-        <h1 className="font-display text-[28px]" style={{ color: "#1A3A5C" }}>
-          RFQ Preview
-        </h1>
-        {rfq && (
-          <p className="mt-1 text-sm" style={{ color: "#1A3A5C", opacity: 0.7 }}>
-            {rfq.rfq_reference} — {rfq.title}
-          </p>
-        )}
+        <div className="flex items-start justify-between">
+          <div>
+            <Link
+              to="/rfq"
+              className="mb-2 inline-flex items-center gap-1 text-xs font-medium"
+              style={{ color: "#1A3A5C", opacity: 0.7 }}
+            >
+              <ArrowLeft className="h-3 w-3" /> Back to RFQ Tracker
+            </Link>
+            <h1 className="font-display text-[28px]" style={{ color: "#1A3A5C" }}>
+              RFQ Preview & Dispatch
+            </h1>
+            {rfq && (
+              <p className="mt-1 text-sm" style={{ color: "#1A3A5C", opacity: 0.7 }}>
+                {rfq.rfq_reference} — {rfq.title}
+              </p>
+            )}
+          </div>
+          {rfqId && (
+            <Link
+              to="/rfq/$rfqId"
+              params={{ rfqId }}
+              className="text-sm font-medium"
+              style={{ color: "var(--accent)" }}
+            >
+              RFQ Detail →
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Tabs for multiple RFQ groups */}
@@ -344,7 +510,10 @@ function RFQPreviewPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead style={{ backgroundColor: "var(--table-header)" }}>
-                    <tr className="text-left text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--table-header-text)" }}>
+                    <tr
+                      className="text-left text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: "var(--table-header-text)" }}
+                    >
                       <th className="px-3 py-2">#</th>
                       <th className="px-3 py-2">Description</th>
                       <th className="px-3 py-2">Qty</th>
@@ -352,14 +521,14 @@ function RFQPreviewPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(rfqItems ?? []).map((item: any) => (
+                    {(rfqItems ?? []).map((item) => (
                       <tr key={item.item_id} className="border-t border-border">
                         <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
                           {item.sap_item_number || item.item_number}
                         </td>
                         <td className="px-3 py-2">{item.description}</td>
                         <td className="px-3 py-2 text-right">{item.quantity}</td>
-                        <td className="px-3 py-2">{item.unit || "—"}</td>
+                        <td className="px-3 py-2">{item.unit || "\u2014"}</td>
                       </tr>
                     ))}
                     {!(rfqItems ?? []).length && (
@@ -399,7 +568,10 @@ function RFQPreviewPage() {
                 className="rounded-xl border p-4"
                 style={{ borderColor: "#F59E0B", backgroundColor: "#FDF3E0" }}
               >
-                <div className="flex items-center gap-2 font-semibold text-sm" style={{ color: "#7A5200" }}>
+                <div
+                  className="flex items-center gap-2 font-semibold text-sm"
+                  style={{ color: "#7A5200" }}
+                >
                   <AlertTriangle className="h-4 w-4" />
                   {alreadyProcured.length} item(s) already procured
                 </div>
@@ -443,80 +615,141 @@ function RFQPreviewPage() {
               </label>
             </div>
 
-            {/* Vendor cards — grouped by category */}
+            {/* Vendor cards — grouped by category with checkboxes */}
             <div className="rounded-xl border border-border bg-card p-6">
-              <h3
-                className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-              >
-                Vendors ({vendorList.length})
+              <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Vendors ({vendorList.length}) — {selectedCount} selected
               </h3>
               {vendorList.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-2">
                   No vendors. Search and add below.
                 </p>
               )}
-              {vendorList.length > 0 && (() => {
-                const grouped = vendorList.reduce((acc: Record<string, any[]>, v: any) => {
-                  const cat = v.matched_category || 'Uncategorised';
-                  if (!acc[cat]) acc[cat] = [];
-                  acc[cat].push(v);
-                  return acc;
-                }, {});
-                const categoryNames = Object.keys(grouped).sort();
-                return (
-                  <div className="space-y-4">
-                    {categoryNames.map((categoryName) => (
-                      <div key={categoryName}>
-                        <div
-                          className="flex items-center justify-between px-3 py-1.5 rounded-t-lg"
-                          style={{ backgroundColor: '#E8EFF7' }}
-                        >
-                          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#1A3A5C' }}>
-                            {categoryName} ({grouped[categoryName].length})
-                          </span>
-                          <button
-                            onClick={() => grouped[categoryName].forEach(v => removeVendor(v.id))}
-                            className="text-xs font-medium"
-                            style={{ color: '#DC2626' }}
-                          >
-                            Remove all
-                          </button>
-                        </div>
-                        <div className="space-y-2 rounded-b-lg border border-border p-2">
-                          {grouped[categoryName].map((v: any) => (
+              {vendorList.length > 0 && (
+                <div className="mb-3 flex items-center gap-3">
+                  <button
+                    onClick={allSelected ? deselectAll : selectAll}
+                    className="text-xs font-medium"
+                    style={{ color: "var(--accent)" }}
+                  >
+                    {allSelected ? "Deselect all" : "Select all"}
+                  </button>
+                  {selectedCount > 0 && !allSelected && (
+                    <button
+                      onClick={deselectAll}
+                      className="text-xs font-medium text-muted-foreground"
+                    >
+                      Deselect all
+                    </button>
+                  )}
+                </div>
+              )}
+              {vendorList.length > 0 &&
+                (() => {
+                  const grouped = vendorList.reduce<Record<string, RfqVendorRow[]>>((acc, v) => {
+                    const cat = v.matched_category || "Uncategorised";
+                    if (!acc[cat]) acc[cat] = [];
+                    acc[cat].push(v);
+                    return acc;
+                  }, {});
+                  const categoryNames = Object.keys(grouped).sort();
+                  return (
+                    <div className="space-y-4">
+                      {categoryNames.map((categoryName) => {
+                        const catVendors = grouped[categoryName];
+                        const catIds = catVendors.map((v) => v.vendor_id);
+                        const checkedCount = catIds.filter((id) =>
+                          selectedVendorIds.has(id),
+                        ).length;
+                        const allChecked = checkedCount === catIds.length;
+                        const someChecked = checkedCount > 0 && !allChecked;
+                        return (
+                          <div key={categoryName}>
                             <div
-                              key={v.id}
-                              className="flex items-start justify-between rounded-lg border border-border p-3"
+                              className="flex items-center justify-between px-3 py-1.5 rounded-t-lg"
+                              style={{ backgroundColor: "#E8EFF7" }}
                             >
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium text-sm truncate">
-                                    {v.vendors?.company_name || "Unknown Vendor"}
-                                  </span>
-                                </div>
-                                <div className="mt-0.5 text-xs text-muted-foreground truncate">
-                                  {v.email_to}
-                                </div>
-                                {v.contact_person && (
-                                  <div className="mt-0.5 text-xs text-muted-foreground">
-                                    {v.contact_person}
-                                  </div>
-                                )}
-                              </div>
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={allChecked}
+                                  ref={(el) => {
+                                    if (el) el.indeterminate = someChecked;
+                                  }}
+                                  onChange={() => toggleCategory(catVendors)}
+                                  className="h-4 w-4 rounded accent-[var(--accent)]"
+                                />
+                                <span
+                                  className="text-xs font-semibold uppercase tracking-wider"
+                                  style={{ color: "#1A3A5C" }}
+                                >
+                                  {categoryName} ({catVendors.length})
+                                </span>
+                              </label>
                               <button
-                                onClick={() => removeVendor(v.id)}
-                                className="ml-2 flex-shrink-0 rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive-soft"
+                                onClick={() => catVendors.forEach((v) => removeVendor(v.id))}
+                                className="text-xs font-medium"
+                                style={{ color: "#DC2626" }}
                               >
-                                <X className="h-4 w-4" />
+                                Remove all
                               </button>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
+                            <div className="space-y-2 rounded-b-lg border border-border p-2">
+                              {catVendors.map((v) => (
+                                <div
+                                  key={v.id}
+                                  className="flex items-start gap-3 rounded-lg border border-border p-3"
+                                  style={{
+                                    opacity: selectedVendorIds.has(v.vendor_id) ? 1 : 0.5,
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedVendorIds.has(v.vendor_id)}
+                                    onChange={() => toggleVendor(v.vendor_id)}
+                                    className="mt-0.5 h-4 w-4 flex-shrink-0 rounded accent-[var(--accent)]"
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium text-sm truncate">
+                                        {v.vendors?.company_name || "Unknown Vendor"}
+                                      </span>
+                                      {isTestVendor(v) && (
+                                        <span
+                                          className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase"
+                                          style={{
+                                            backgroundColor: "#FDF3E0",
+                                            color: "#7A5200",
+                                          }}
+                                        >
+                                          TEST
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="mt-0.5 text-xs text-muted-foreground truncate">
+                                      {v.email_to}
+                                    </div>
+                                    {v.contact_person && (
+                                      <div className="mt-0.5 text-xs text-muted-foreground">
+                                        {v.contact_person}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={() => removeVendor(v.id)}
+                                    className="ml-2 flex-shrink-0 rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive-soft"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
 
               {/* Add vendor search */}
               <div className="mt-4 relative">
@@ -558,7 +791,7 @@ function RFQPreviewPage() {
             {/* Send button */}
             <button
               onClick={() => setShowConfirm(true)}
-              disabled={sending || !vendorList.length}
+              disabled={sending || !selectedCount}
               className="w-full rounded-md py-3 text-sm font-semibold text-white disabled:opacity-50"
               style={{ backgroundColor: "var(--accent)" }}
             >
@@ -567,7 +800,7 @@ function RFQPreviewPage() {
                   <Loader2 className="h-4 w-4 animate-spin" /> Sending…
                 </span>
               ) : (
-                `Send RFQ to ${vendorList.length} Vendor${vendorList.length !== 1 ? "s" : ""}`
+                `Send RFQ to ${selectedCount} Vendor${selectedCount !== 1 ? "s" : ""}`
               )}
             </button>
           </div>
@@ -582,8 +815,8 @@ function RFQPreviewPage() {
               Confirm Dispatch
             </h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              Send this RFQ to {vendorList.length} vendor
-              {vendorList.length !== 1 ? "s" : ""}? Deadline: {deadline || "not set"}.
+              Send this RFQ to {selectedCount} vendor
+              {selectedCount !== 1 ? "s" : ""}? Deadline: {deadline || "not set"}.
             </p>
             <div className="mt-4 flex gap-3">
               <button

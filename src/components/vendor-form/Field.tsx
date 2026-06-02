@@ -22,17 +22,12 @@ export function Field({
 }: FieldProps) {
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <label
-        htmlFor={htmlFor}
-        className="text-[14px] font-medium text-foreground"
-      >
+      <label htmlFor={htmlFor} className="text-[14px] font-medium text-foreground">
         {label}
         {required && <span className="ml-1 text-destructive">*</span>}
       </label>
       {children}
-      {helper && !error && (
-        <p className="text-[13px] text-muted-foreground">{helper}</p>
-      )}
+      {helper && !error && <p className="text-[13px] text-muted-foreground">{helper}</p>}
       {error && <p className="text-[13px] text-destructive">{error}</p>}
     </div>
   );

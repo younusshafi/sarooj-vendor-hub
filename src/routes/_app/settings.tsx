@@ -24,11 +24,7 @@ function useSetting(key: string) {
   });
 }
 
-async function saveSetting(
-  key: string,
-  value: string,
-  userEmail: string
-): Promise<void> {
+async function saveSetting(key: string, value: string, userEmail: string): Promise<void> {
   const { error } = await supabase
     .from("system_settings")
     .update({
@@ -82,9 +78,7 @@ function SettingTextField({
     <div className="space-y-2">
       <div>
         <div className="text-sm font-semibold text-foreground">{label}</div>
-        {description && (
-          <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
-        )}
+        {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
       </div>
       {isLoading ? (
         <div className="h-10 w-full animate-pulse rounded-md bg-secondary" />
@@ -161,9 +155,7 @@ function SettingNumberField({
     <div className="space-y-2">
       <div>
         <div className="text-sm font-semibold text-foreground">{label}</div>
-        {description && (
-          <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
-        )}
+        {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
       </div>
       {isLoading ? (
         <div className="h-10 w-32 animate-pulse rounded-md bg-secondary" />
@@ -211,10 +203,7 @@ function SettingsPage() {
 
       <div className="rounded-xl border border-border bg-card p-6">
         <div className="mb-6 flex items-center gap-3">
-          <span
-            className="h-2 w-2 rounded-full"
-            style={{ backgroundColor: "#60A5FA" }}
-          />
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "#60A5FA" }} />
           <h2 className="text-base font-semibold" style={{ color: "#1A3A5C" }}>
             RFQ Settings
           </h2>

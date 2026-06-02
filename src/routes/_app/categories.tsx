@@ -43,10 +43,7 @@ function useCategories() {
     queryKey: ["categories-mapping"],
     queryFn: async () => {
       const [vendorsRes, mappingsRes] = await Promise.all([
-        supabase
-          .from("vendors")
-          .select("categories")
-          .in("status", ["listed", "registered"]),
+        supabase.from("vendors").select("categories").in("status", ["listed", "registered"]),
         supabase.from("category_groups").select("*"),
       ]);
 
@@ -73,10 +70,7 @@ function useCategories() {
       }
 
       // Merge into unified rows
-      const allCategories = new Set([
-        ...Object.keys(countMap),
-        ...Object.keys(groupMap),
-      ]);
+      const allCategories = new Set([...Object.keys(countMap), ...Object.keys(groupMap)]);
       const rows: CategoryRow[] = [];
       for (const cat of allCategories) {
         rows.push({
@@ -89,7 +83,7 @@ function useCategories() {
       rows.sort((a, b) =>
         a.vendor_category.localeCompare(b.vendor_category, undefined, {
           sensitivity: "base",
-        })
+        }),
       );
       return rows;
     },
@@ -117,7 +111,7 @@ function CategoryRow({
           updated_by: userEmail,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "vendor_category" }
+        { onConflict: "vendor_category" },
       );
       if (error) throw error;
       toast.success(`"${row.vendor_category}" → ${newGroup}`);
@@ -132,19 +126,14 @@ function CategoryRow({
   return (
     <div className="flex items-center justify-between gap-4 rounded-md px-4 py-2.5 text-sm">
       <div className="flex items-center gap-3 min-w-0">
-        <span className="truncate font-medium text-foreground">
-          {row.vendor_category}
-        </span>
+        <span className="truncate font-medium text-foreground">{row.vendor_category}</span>
         <span className="shrink-0 text-xs text-muted-foreground">
           {row.vendor_count} vendor{row.vendor_count !== 1 ? "s" : ""}
         </span>
       </div>
       <div className="flex items-center gap-2 shrink-0">
         {saving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-        <Select
-          value={row.procurement_group ?? ""}
-          onValueChange={handleChange}
-        >
+        <Select value={row.procurement_group ?? ""} onValueChange={handleChange}>
           <SelectTrigger className="w-[220px] h-8 text-xs">
             <SelectValue placeholder="Assign group…" />
           </SelectTrigger>
@@ -169,7 +158,7 @@ function CategoriesPage() {
   const [search, setSearch] = useState("");
 
   const filtered = (rows ?? []).filter((r) =>
-    r.vendor_category.toLowerCase().includes(search.toLowerCase())
+    r.vendor_category.toLowerCase().includes(search.toLowerCase()),
   );
 
   const unmapped = filtered.filter((r) => !r.procurement_group);
@@ -183,15 +172,12 @@ function CategoriesPage() {
     grouped[g].push(r);
   }
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: ["categories-mapping"] });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["categories-mapping"] });
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-[28px] text-foreground">
-          Category Mapping
-        </h1>
+        <h1 className="font-display text-[28px] text-foreground">Category Mapping</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Control how vendor categories group into procurement pools for RFQs.
         </p>
@@ -245,10 +231,7 @@ function CategoriesPage() {
             const items = grouped[group];
             if (!items || items.length === 0) return null;
             return (
-              <div
-                key={group}
-                className="rounded-xl border border-border overflow-hidden"
-              >
+              <div key={group} className="rounded-xl border border-border overflow-hidden">
                 <div
                   className="px-4 py-3 text-sm font-semibold"
                   style={{

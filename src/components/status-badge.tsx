@@ -10,7 +10,13 @@ const STYLES: Record<string, { bg: string; fg: string }> = {
   inactive: { bg: "var(--badge-inactive-bg)", fg: "var(--badge-inactive-fg)" },
 };
 
-export function StatusBadge({ status, large = false }: { status: VendorStatus | string; large?: boolean }) {
+export function StatusBadge({
+  status,
+  large = false,
+}: {
+  status: VendorStatus | string;
+  large?: boolean;
+}) {
   const style = STYLES[status] ?? STYLES.inactive;
   return (
     <span
@@ -41,7 +47,8 @@ export function ConfidenceDot({ level }: { level: string | null }) {
 }
 
 export function CategoryTags({ categories }: { categories: string[] | null }) {
-  if (!categories || categories.length === 0) return <span className="text-muted-foreground">—</span>;
+  if (!categories || categories.length === 0)
+    return <span className="text-muted-foreground">—</span>;
   const shown = categories.slice(0, 2);
   const extra = categories.length - shown.length;
   return (

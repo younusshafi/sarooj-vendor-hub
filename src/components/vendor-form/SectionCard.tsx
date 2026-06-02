@@ -13,9 +13,7 @@ export function SectionCard({ number, title, children }: SectionCardProps) {
         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-[14px] font-semibold text-primary-foreground">
           {number}
         </span>
-        <h2 className="font-serif text-[20px] leading-none text-foreground">
-          {title}
-        </h2>
+        <h2 className="font-serif text-[20px] leading-none text-foreground">{title}</h2>
       </header>
       <div className="flex flex-col gap-5">{children}</div>
     </section>
