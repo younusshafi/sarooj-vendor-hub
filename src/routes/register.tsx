@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 const SUPABASE_URL = "https://fimfybfgjrbkcylmyekz.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q";
-const WEBHOOK_URL = "https://n8n.zavia-ai.com/webhook/vendor-onboarding";
+const WEBHOOK_URL = "https://n8n.zavia-ai.com/webhook/scc-vendor-registration";
 
 async function uploadDocumentToSupabase(file: File, storagePath: string): Promise<void> {
   const url = `${SUPABASE_URL}/storage/v1/object/vendor-documents/${storagePath}`;
