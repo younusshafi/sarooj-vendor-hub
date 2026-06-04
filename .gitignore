@@ -31,3 +31,8 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+
+# Archives & generated output
+*.zip
+tree.txt
+output_verification.md
