@@ -36,3 +36,10 @@ dist-ssr
 *.zip
 tree.txt
 output_verification.md
+
+# Local working/spec docs
+STAGE_*.md
+MERGE_INVENTORY.md
+CATEGORY_MAPPING_SCREEN_SPEC.md
+verify_pr_contracts.mjs
+.lovable/plan.md
