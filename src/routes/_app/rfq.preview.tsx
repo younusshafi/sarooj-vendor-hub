@@ -298,7 +298,7 @@ function RFQPreviewPage() {
     const pattern = `%${q}%`;
     const { data, error } = await supabase
       .from("vendors")
-      .select("vendor_id,company_name,email,contacts,contact_person,status,categories")
+      .select("vendor_id,company_name,contacts,contact_person,status,categories")
       .or(`company_name.ilike.${pattern},contact_person.ilike.${pattern}`)
       .neq("status", "blacklisted")
       .limit(10);
@@ -312,21 +312,19 @@ function RFQPreviewPage() {
       (v: {
         vendor_id: string;
         company_name: string;
-        email: string | null;
         contacts: VendorContact[] | null;
         contact_person: string | null;
         status: string;
         categories: string[] | null;
       }) => {
-        // Prefer contacts JSONB email, fall back to flat email column
-        const contactsEmail =
+        const firstEmail =
           Array.isArray(v.contacts)
             ? (v.contacts.find((c) => c.email)?.email ?? null)
             : null;
         return {
           vendor_id: v.vendor_id,
           company_name: v.company_name,
-          email: contactsEmail || v.email || null,
+          email: firstEmail,
           contact_person: v.contact_person,
           status: v.status,
           categories: v.categories,
