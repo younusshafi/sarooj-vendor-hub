@@ -59,8 +59,8 @@ function RFQSummaryPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="rounded-xl p-6" style={{ backgroundColor: "#E0F2EA" }}>
-        <h1 className="font-display text-[28px]" style={{ color: "#0D5C3A" }}>
+      <div className="rounded-xl p-6" style={{ backgroundColor: "var(--accent-soft)" }}>
+        <h1 className="font-display text-[28px]" style={{ color: "var(--primary-hover)" }}>
           Created {rfqCount} RFQ{rfqCount !== 1 ? "s" : ""} across {prCount} PR
           {prCount !== 1 ? "s" : ""} from{" "}
           <code

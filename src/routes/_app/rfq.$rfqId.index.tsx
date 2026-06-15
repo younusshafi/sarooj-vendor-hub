@@ -425,7 +425,7 @@ function VendorsTabPanel({
         <div
           className="fixed top-4 right-4 z-50 rounded-lg px-4 py-2.5 text-sm font-medium shadow-lg"
           style={{
-            backgroundColor: toast.type === "success" ? "#0D7A5A" : "#991B1B",
+            backgroundColor: toast.type === "success" ? "var(--accent)" : "#991B1B",
             color: "#fff",
           }}
         >
@@ -461,7 +461,7 @@ function VendorsTabPanel({
             to="/rfq/preview"
             search={{ rfq_ids: [rfqId] }}
             className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold"
-            style={{ backgroundColor: "#0D7A5A", color: "#fff" }}
+            style={{ backgroundColor: "var(--accent)", color: "#fff" }}
           >
             <Send className="h-4 w-4" />
             Preview & Select Recipients
@@ -492,17 +492,17 @@ function VendorsTabPanel({
               value={deadline}
               onChange={(e) => handleDeadlineChange(e.target.value)}
               className="rounded-lg border border-border px-3 py-1.5 text-sm outline-none"
-              style={{ color: "#0D3D2E" }}
+              style={{ color: "var(--foreground)" }}
             />
             {deadlineSaving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
             {deadlineSaved && !deadlineSaving && (
-              <span className="text-xs font-medium" style={{ color: "#0D7A5A" }}>
+              <span className="text-xs font-medium" style={{ color: "var(--accent)" }}>
                 Saved
               </span>
             )}
           </div>
         ) : (
-          <span className="text-sm font-medium" style={{ color: "#0D3D2E" }}>
+          <span className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
             {rfq.deadline || "—"}
           </span>
         )}
@@ -564,13 +564,13 @@ function VendorsTabPanel({
                           className="border-t border-border"
                           style={{ opacity: isSelected ? 1 : 0.4 }}
                         >
-                          <td className="px-4 py-3 font-medium" style={{ color: "#0D3D2E" }}>
+                          <td className="px-4 py-3 font-medium" style={{ color: "var(--foreground)" }}>
                             <span className="flex items-center gap-2">
                               {v.vendors?.company_name || "—"}
                               {hasSelection && isSelected && (
                                 <CheckCircle
                                   className="h-3.5 w-3.5 flex-shrink-0"
-                                  style={{ color: "#0D5C3A" }}
+                                  style={{ color: "var(--accent)" }}
                                 />
                               )}
                             </span>
@@ -635,7 +635,7 @@ function VendorsTabPanel({
                   <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Subject
                   </div>
-                  <div className="text-sm font-medium" style={{ color: "#0D3D2E" }}>
+                  <div className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
                     {rfq.covering_email_subject}
                   </div>
                 </div>
@@ -647,7 +647,7 @@ function VendorsTabPanel({
                   </div>
                   <div
                     className="prose prose-sm max-w-none text-sm"
-                    style={{ color: "#0D3D2E" }}
+                    style={{ color: "var(--foreground)" }}
                     dangerouslySetInnerHTML={{ __html: rfq.covering_email_body }}
                   />
                 </div>
@@ -706,7 +706,7 @@ function VendorStatusBadge({
 }) {
   if (responseReceived) {
     return (
-      <span className="flex items-center gap-1 text-xs font-medium" style={{ color: "#0D5C3A" }}>
+      <span className="flex items-center gap-1 text-xs font-medium" style={{ color: "var(--accent)" }}>
         <CheckCircle2 className="h-3 w-3" /> Responded
       </span>
     );

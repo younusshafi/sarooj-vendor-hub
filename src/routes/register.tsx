@@ -135,7 +135,7 @@ function SuccessCard() {
         <CheckCircle2 className="h-12 w-12 text-primary" />
       </div>
       <h1 className="mt-6 font-serif text-[32px] text-foreground">Registration Received</h1>
-      <p className="mt-4 text-[16px]" style={{ color: "#4A6560" }}>
+      <p className="mt-4 text-[16px]" style={{ color: "var(--muted-foreground)" }}>
         Thank you. Your registration has been received. Sarooj's procurement team will review and
         contact you.
       </p>
@@ -667,7 +667,7 @@ function VendorRegistrationPage() {
                   value={today}
                   readOnly
                   tabIndex={-1}
-                  style={{ backgroundColor: "#F4F8F6" }}
+                  style={{ backgroundColor: "var(--background)" }}
                 />
               </Field>
             </div>

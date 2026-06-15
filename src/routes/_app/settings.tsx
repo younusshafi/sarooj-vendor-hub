@@ -5,6 +5,7 @@ import { Loader2, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase-external/client";
 import { useAuth } from "@/integrations/supabase-external/auth";
 import { toast } from "sonner";
+import { THEMES, getTheme, applyTheme, type Theme } from "@/lib/theme";
 
 export const Route = createFileRoute("/_app/settings")({
   component: SettingsPage,
@@ -185,6 +186,34 @@ function SettingNumberField({
   );
 }
 
+function ThemePicker() {
+  const [theme, setTheme] = useState<Theme>(getTheme);
+  return (
+    <div className="rounded-xl border border-border bg-card p-6">
+      <h2 className="mb-4 text-base font-semibold text-foreground">Theme</h2>
+      <div className="flex gap-4">
+        {THEMES.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => { applyTheme(t.id); setTheme(t.id); }}
+            className="flex flex-col items-center gap-2 rounded-lg border-2 px-5 py-4 transition-all"
+            style={{
+              borderColor: theme === t.id ? t.swatch : "var(--border)",
+              backgroundColor: theme === t.id ? "var(--secondary)" : "transparent",
+            }}
+          >
+            <span
+              className="h-8 w-8 rounded-full"
+              style={{ backgroundColor: t.swatch }}
+            />
+            <span className="text-sm font-medium text-foreground">{t.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SettingsPage() {
   const { user } = useAuth();
   const userEmail = user?.email ?? "";
@@ -192,6 +221,8 @@ function SettingsPage() {
   return (
     <div className="space-y-8">
       <h1 className="font-display text-[28px] text-foreground">Settings</h1>
+
+      <ThemePicker />
 
       <div className="rounded-xl border border-border bg-card p-6">
         <h2 className="mb-4 text-base font-semibold text-foreground">Account</h2>

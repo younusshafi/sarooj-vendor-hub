@@ -18,8 +18,8 @@ function paymentTermsChip(term: string | null) {
   const risk = ["advance_full", "advance_partial"].includes(term);
   const fav = term.startsWith("pdc") || term.startsWith("credit");
   const unk = term === "tbd";
-  const bg = risk ? "#FEE2E2" : fav ? "#D1FAE5" : unk ? "#FDF3E0" : "#F0F7F4";
-  const fg = risk ? "#991B1B" : fav ? "#065F46" : unk ? "#7A5200" : "#4A6560";
+  const bg = risk ? "#FEE2E2" : fav ? "var(--accent-soft)" : unk ? "#FDF3E0" : "var(--table-header)";
+  const fg = risk ? "#991B1B" : fav ? "var(--primary-hover)" : unk ? "#7A5200" : "var(--muted-foreground)";
   return (
     <span
       className="rounded-full px-2 py-0.5 text-xs font-medium"
@@ -301,11 +301,11 @@ function ComparisonViewPage() {
                           borderRadius: "var(--border-radius-md, 6px)",
                           backgroundColor:
                             b.status === "confirmed"
-                              ? "var(--color-background-success, #D1FAE5)"
+                              ? "var(--accent-soft)"
                               : "var(--color-background-warning, #FDF3E0)",
                           color:
                             b.status === "confirmed"
-                              ? "var(--color-text-success, #065F46)"
+                              ? "var(--primary-hover)"
                               : "var(--color-text-warning, #7A5200)",
                         }}
                       >
@@ -371,7 +371,7 @@ function ComparisonViewPage() {
                               className="px-4 py-3 text-right font-mono text-xs"
                               style={{
                                 backgroundColor: isMin
-                                  ? "#D1FAE5"
+                                  ? "var(--accent-soft)"
                                   : i % 2 === 0
                                     ? "#F0F7FF"
                                     : undefined,
@@ -390,7 +390,7 @@ function ComparisonViewPage() {
                               className="px-4 py-3 text-right font-mono text-xs"
                               style={{
                                 backgroundColor: isMin
-                                  ? "#D1FAE5"
+                                  ? "var(--accent-soft)"
                                   : i % 2 === 0
                                     ? "#F0F7FF"
                                     : undefined,
@@ -498,11 +498,11 @@ function ComparisonViewPage() {
                           borderRadius: "var(--border-radius-md, 6px)",
                           backgroundColor:
                             b.status === "confirmed"
-                              ? "var(--color-background-success, #D1FAE5)"
+                              ? "var(--accent-soft)"
                               : "var(--color-background-warning, #FDF3E0)",
                           color:
                             b.status === "confirmed"
-                              ? "var(--color-text-success, #065F46)"
+                              ? "var(--primary-hover)"
                               : "var(--color-text-warning, #7A5200)",
                         }}
                       >

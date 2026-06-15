@@ -23,7 +23,7 @@ const PAYMENT_OPTIONS = [
 const PAYMENT_METHOD_OPTIONS = ["bank_transfer", "cheque", "pdc", "cash", "tbd"];
 
 function confidenceStyle(confidence: string | null) {
-  if (confidence === "high") return "border-green-400 bg-green-50";
+  if (confidence === "high") return "border-accent bg-accent-soft";
   if (confidence === "medium") return "border-amber-400 bg-amber-50";
   return "border-red-400 bg-red-50";
 }
@@ -268,7 +268,7 @@ function BidReviewPage() {
       <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-card px-4 py-2 text-xs">
         <span className="font-semibold text-muted-foreground">Confidence:</span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded border-2 border-green-400 bg-green-50" />
+          <span className="inline-block h-3 w-3 rounded border-2 border-accent bg-accent-soft" />
           High — AI certain
         </span>
         <span className="flex items-center gap-1">
@@ -521,7 +521,7 @@ function BidReviewPage() {
               onClick={handleConfirm}
               disabled={saving}
               className="flex items-center justify-center gap-2 rounded-md py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-              style={{ backgroundColor: "#0D7A5A" }}
+              style={{ backgroundColor: "var(--accent)" }}
             >
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               CONFIRM BID

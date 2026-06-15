@@ -101,9 +101,9 @@ function InviteVendorPage() {
         <div className="rounded-xl border border-border bg-card p-8 text-center">
           <div
             className="mx-auto flex h-16 w-16 items-center justify-center rounded-full"
-            style={{ backgroundColor: "#E0F2EA" }}
+            style={{ backgroundColor: "var(--accent-soft)" }}
           >
-            <CheckCircle2 className="h-9 w-9" style={{ color: "#0D5C3A" }} />
+            <CheckCircle2 className="h-9 w-9" style={{ color: "var(--primary-hover)" }} />
           </div>
           <h2 className="mt-5 font-display text-[22px] text-foreground">
             Invitation sent to {successData.contact_person} at {successData.vendor_name}
@@ -118,9 +118,9 @@ function InviteVendorPage() {
               reset();
             }}
             className="mt-6 inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-[14px] font-semibold text-white transition-colors"
-            style={{ backgroundColor: "#0D5C3A" }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#0D3D2E")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#0D5C3A")}
+            style={{ backgroundColor: "var(--primary-hover)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--primary)")}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--primary-hover)")}
           >
             Send Another Invitation
           </button>
@@ -248,12 +248,12 @@ function InviteVendorPage() {
             type="submit"
             disabled={isSubmitting}
             className="flex h-[48px] w-full items-center justify-center gap-2 rounded-lg text-[15px] font-semibold text-white transition-colors disabled:opacity-60 md:w-auto md:px-8"
-            style={{ backgroundColor: "#0D5C3A" }}
+            style={{ backgroundColor: "var(--primary-hover)" }}
             onMouseEnter={(e) => {
-              if (!isSubmitting) e.currentTarget.style.backgroundColor = "#0D3D2E";
+              if (!isSubmitting) e.currentTarget.style.backgroundColor = "var(--primary)";
             }}
             onMouseLeave={(e) => {
-              if (!isSubmitting) e.currentTarget.style.backgroundColor = "#0D5C3A";
+              if (!isSubmitting) e.currentTarget.style.backgroundColor = "var(--primary-hover)";
             }}
           >
             {isSubmitting ? (
