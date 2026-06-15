@@ -75,7 +75,7 @@ function OutreachPage() {
         <div className="mt-4">
           <button
             disabled
-            title="Contact Zavia-ai to activate"
+            title="This campaign is built and ready. Activation is intentionally held: starting it sends re-confirmation emails to all vendors in the database, so it's switched on by agreement with your Zavia-ai administrator — not by accident."
             className="cursor-not-allowed rounded-md px-4 py-2 text-sm font-semibold text-white opacity-50"
             style={{ backgroundColor: "var(--accent)" }}
           >
