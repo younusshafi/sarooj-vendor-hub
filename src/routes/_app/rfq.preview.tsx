@@ -57,12 +57,18 @@ interface RfqVendorRow {
   } | null;
 }
 
+interface VendorContact {
+  email?: string;
+  [key: string]: unknown;
+}
+
 interface VendorSearchResult {
   vendor_id: string;
   company_name: string;
   email: string | null;
   contact_person: string | null;
   status: string;
+  categories: string[] | null;
 }
 
 function RFQPreviewPage() {
@@ -291,11 +297,34 @@ function RFQPreviewPage() {
     setSearching(true);
     const { data } = await supabase
       .from("vendors")
-      .select("vendor_id,company_name,email,contact_person,status")
+      .select("vendor_id,company_name,contacts,contact_person,status,categories")
       .ilike("company_name", `%${q}%`)
       .neq("status", "blacklisted")
       .limit(10);
-    setVendorResults((data ?? []) as VendorSearchResult[]);
+    const results: VendorSearchResult[] = (data ?? []).map(
+      (v: {
+        vendor_id: string;
+        company_name: string;
+        contacts: VendorContact[] | null;
+        contact_person: string | null;
+        status: string;
+        categories: string[] | null;
+      }) => {
+        const firstEmail =
+          Array.isArray(v.contacts)
+            ? (v.contacts.find((c) => c.email)?.email ?? null)
+            : null;
+        return {
+          vendor_id: v.vendor_id,
+          company_name: v.company_name,
+          email: firstEmail,
+          contact_person: v.contact_person,
+          status: v.status,
+          categories: v.categories,
+        };
+      },
+    );
+    setVendorResults(results);
     setSearching(false);
   };
 
@@ -304,6 +333,11 @@ function RFQPreviewPage() {
     if (vendorList.some((vl) => vl.vendor_id === v.vendor_id)) {
       toast.info("Vendor already in list");
       return;
+    }
+    if (!v.email) {
+      toast.warning(
+        `${v.company_name} has no email address on file — add one before sending.`,
+      );
     }
     // Add to rfq_vendors in Supabase
     const { data, error } = await supabase
@@ -330,7 +364,7 @@ function RFQPreviewPage() {
         status: string;
       }),
       matched_category: null,
-      vendors: { company_name: v.company_name, status: v.status, categories: null },
+      vendors: { company_name: v.company_name, status: v.status, categories: v.categories },
     };
     setVendorList((prev) => [...prev, newRow]);
     // Auto-select newly added vendor
@@ -770,19 +804,52 @@ function RFQPreviewPage() {
                   )}
                 </div>
                 {vendorResults.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full rounded-md border border-border bg-white shadow-lg">
-                    {vendorResults.map((v) => (
-                      <button
-                        key={v.vendor_id}
-                        onClick={() => addVendor(v)}
-                        className="flex w-full items-start px-3 py-2 text-sm hover:bg-secondary text-left"
-                      >
-                        <div>
-                          <div className="font-medium">{v.company_name}</div>
-                          <div className="text-xs text-muted-foreground">{v.email}</div>
-                        </div>
-                      </button>
-                    ))}
+                  <div className="absolute z-10 mt-1 w-full rounded-md border border-border bg-white shadow-lg max-h-72 overflow-y-auto">
+                    {vendorResults.map((v) => {
+                      const alreadyAdded = vendorList.some(
+                        (vl) => vl.vendor_id === v.vendor_id,
+                      );
+                      return (
+                        <button
+                          key={v.vendor_id}
+                          onClick={() => addVendor(v)}
+                          disabled={alreadyAdded}
+                          className="flex w-full items-start gap-2 px-3 py-2 text-sm hover:bg-secondary text-left disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium truncate">{v.company_name}</span>
+                              {alreadyAdded && (
+                                <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: "#E0F2EA", color: "#0D5C3A" }}>
+                                  Added
+                                </span>
+                              )}
+                              {!v.email && !alreadyAdded && (
+                                <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: "#FDF3E0", color: "#7A5200" }}>
+                                  No email
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {v.email || "No email on file"}
+                            </div>
+                            {v.categories && v.categories.length > 0 && (
+                              <div className="mt-0.5 flex flex-wrap gap-1">
+                                {v.categories.slice(0, 3).map((cat) => (
+                                  <span
+                                    key={cat}
+                                    className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                                    style={{ backgroundColor: "#E8EFF7", color: "#1A3A5C" }}
+                                  >
+                                    {cat}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
