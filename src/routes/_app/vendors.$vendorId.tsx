@@ -62,6 +62,17 @@ function VendorProfilePage() {
       qc.invalidateQueries({ queryKey: ["vendor", vendorId] });
     }
   };
+  const restoreVendor = async () => {
+    const { error } = await supabase
+      .from("vendors")
+      .update({ status: "listed", duplicate_flag: false })
+      .eq("vendor_id", vendorId);
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Vendor restored to Listed.");
+      qc.invalidateQueries({ queryKey: ["vendor", vendorId] });
+    }
+  };
 
   if (vendor.isLoading) return <div className="text-muted-foreground">Loading vendor…</div>;
   if (vendor.isError || !vendor.data)
@@ -104,17 +115,31 @@ function VendorProfilePage() {
             >
               Flag Duplicate
             </button>
-            <button
-              onClick={() => {
-                if (window.confirm("This removes the vendor from the RFQ pool. Continue?")) {
-                  setStatus("blacklisted");
-                }
-              }}
-              className="rounded-md border border-border bg-card px-3 py-1.5 text-sm font-semibold hover:bg-secondary"
-              style={{ color: "var(--toast-error-fg)" }}
-            >
-              Blacklist
-            </button>
+            {v.status === "blacklisted" ? (
+              <button
+                onClick={() => {
+                  if (window.confirm("Restore this vendor to Listed and clear duplicate flag?")) {
+                    restoreVendor();
+                  }
+                }}
+                className="rounded-md border px-3 py-1.5 text-sm font-semibold hover:bg-secondary"
+                style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
+              >
+                Un-blacklist / Restore
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  if (window.confirm("This removes the vendor from the RFQ pool. Continue?")) {
+                    setStatus("blacklisted");
+                  }
+                }}
+                className="rounded-md border border-border bg-card px-3 py-1.5 text-sm font-semibold hover:bg-secondary"
+                style={{ color: "var(--toast-error-fg)" }}
+              >
+                Blacklist
+              </button>
+            )}
             {/* hidden — phase 2 / demo */}
 
           </div>
