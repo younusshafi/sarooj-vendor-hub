@@ -293,7 +293,7 @@ function VendorRegistrationPage() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background" data-theme="crimson">
         <Header />
         <SuccessCard />
         <Footer />
@@ -302,7 +302,7 @@ function VendorRegistrationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" data-theme="crimson">
       <Header />
 
       <main className="mx-auto max-w-[780px] px-6 pb-12 md:px-8">
