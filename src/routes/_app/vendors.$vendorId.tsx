@@ -105,19 +105,18 @@ function VendorProfilePage() {
               Flag Duplicate
             </button>
             <button
-              onClick={() => setStatus("blacklisted")}
+              onClick={() => {
+                if (window.confirm("This removes the vendor from the RFQ pool. Continue?")) {
+                  setStatus("blacklisted");
+                }
+              }}
               className="rounded-md border border-border bg-card px-3 py-1.5 text-sm font-semibold hover:bg-secondary"
               style={{ color: "var(--toast-error-fg)" }}
             >
               Blacklist
             </button>
-            <button
-              onClick={() => toast.info("Validation run — coming soon.")}
-              className="rounded-md px-3 py-1.5 text-sm font-semibold text-white"
-              style={{ backgroundColor: "var(--accent)" }}
-            >
-              Run Validation
-            </button>
+            {/* hidden — phase 2 / demo */}
+
           </div>
         </div>
 

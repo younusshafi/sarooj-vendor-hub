@@ -246,12 +246,7 @@ function PendingCard({
         >
           View Full Profile
         </Link>
-        <button
-          onClick={() => toast.info("Request More Info — coming soon.")}
-          className="rounded-md border border-border bg-card px-3 py-1.5 text-sm font-semibold hover:bg-secondary"
-        >
-          Request More Info
-        </button>
+        {/* hidden — phase 2 / demo */}
         <button
           onClick={onReject}
           className="rounded-md border px-3 py-1.5 text-sm font-semibold"

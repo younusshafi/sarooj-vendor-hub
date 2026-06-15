@@ -37,11 +37,13 @@ const NAV: NavItem[] = [
   { to: "/outreach", label: "Outreach", icon: Mail },
   { to: "/prs", label: "PR Tracker", icon: ClipboardList, dot: "amber" },
   { to: "/rfq", label: "RFQ - Supplies", icon: FileText, dot: "blue" },
+  /* hidden — phase 2 / demo
   {
     href: "https://sarooj-procurement-subcontractors.vercel.app/",
     label: "RFQ Subcontractors",
     icon: FileText,
   },
+  */
   { to: "/categories", label: "Categories", icon: Tags },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];
