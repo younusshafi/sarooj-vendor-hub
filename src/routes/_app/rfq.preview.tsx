@@ -40,7 +40,6 @@ interface RfqItemRow {
   description: string;
   quantity: number;
   unit: string | null;
-  already_procured: boolean | null;
 }
 
 interface RfqVendorRow {
@@ -114,7 +113,7 @@ function RFQPreviewPage() {
       if (!rfqId) return [];
       const { data } = await supabase
         .from("rfq_items")
-        .select("item_id,item_number,sap_item_number,description,quantity,unit,already_procured")
+        .select("item_id,item_number,sap_item_number,description,quantity,unit")
         .eq("rfq_id", rfqId)
         .order("item_number");
       return (data ?? []) as RfqItemRow[];
@@ -422,7 +421,6 @@ function RFQPreviewPage() {
     }
   };
 
-  const alreadyProcured = (rfqItems ?? []).filter((i) => i.already_procured);
   const needsScope = rfq?.needs_scope_documents;
 
   if (!resolvedIds.length) {
@@ -602,25 +600,6 @@ function RFQPreviewPage() {
                 />
               </label>
             </div>
-
-            {/* Already procured */}
-            {alreadyProcured.length > 0 && (
-              <div
-                className="rounded-xl border p-4"
-                style={{ borderColor: "#F59E0B", backgroundColor: "#FDF3E0" }}
-              >
-                <div
-                  className="flex items-center gap-2 font-semibold text-sm"
-                  style={{ color: "#7A5200" }}
-                >
-                  <AlertTriangle className="h-4 w-4" />
-                  {alreadyProcured.length} item(s) already procured
-                </div>
-                <p className="mt-1 text-xs" style={{ color: "#7A5200" }}>
-                  These items have existing POs and will be excluded from the RFQ.
-                </p>
-              </div>
-            )}
 
             {/* Scope warning */}
             {needsScope && (
