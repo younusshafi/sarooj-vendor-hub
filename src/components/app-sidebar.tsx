@@ -14,14 +14,19 @@ import {
   Tags,
   ExternalLink,
   ClipboardList,
+  ChevronRight,
 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase-external/client";
 import { useAuth } from "@/integrations/supabase-external/auth";
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
 
 type NavItem = {
-  to?: string;
-  href?: string;
+  to: string;
   label: string;
   icon: typeof Home;
   exact?: boolean;
@@ -29,14 +34,11 @@ type NavItem = {
   dot?: "blue" | "amber";
 };
 
-const NAV: NavItem[] = [
+/* ── Top-level items ── */
+const TOP_NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: Home, exact: true },
-  { to: "/vendors", label: "Vendors", icon: Building2 },
-  { to: "/pending", label: "Pending Registrations", icon: Inbox, badge: true },
-  { to: "/invite", label: "Invite Vendor", icon: UserPlus },
-  { to: "/outreach", label: "Outreach", icon: Mail },
   { to: "/prs", label: "PR Tracker", icon: ClipboardList, dot: "amber" },
-  { to: "/rfq", label: "RFQ - Supplies", icon: FileText, dot: "blue" },
+  { to: "/rfq", label: "RFQ \u2013 Supplies", icon: FileText, dot: "blue" },
   /* hidden — phase 2 / demo
   {
     href: "https://sarooj-procurement-subcontractors.vercel.app/",
@@ -44,6 +46,18 @@ const NAV: NavItem[] = [
     icon: FileText,
   },
   */
+];
+
+/* ── Vendor group children ── */
+const VENDOR_CHILDREN: NavItem[] = [
+  { to: "/vendors", label: "Vendor List", icon: Building2 },
+  { to: "/pending", label: "Pending Registrations", icon: Inbox, badge: true },
+  { to: "/invite", label: "Invite Vendor", icon: UserPlus },
+  { to: "/outreach", label: "Outreach", icon: Mail },
+];
+
+/* ── Bottom items ── */
+const BOTTOM_NAV: NavItem[] = [
   { to: "/categories", label: "Categories", icon: Tags },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];
@@ -77,6 +91,60 @@ export function AppSidebar() {
   const isActive = (to: string, exact?: boolean) =>
     exact ? path === to : path === to || path.startsWith(to + "/");
 
+  const vendorGroupActive = VENDOR_CHILDREN.some((c) => isActive(c.to, c.exact));
+  const [vendorOpen, setVendorOpen] = useState(vendorGroupActive);
+
+  /* Shared link renderer for flat nav items */
+  function NavLink({ item }: { item: NavItem }) {
+    const Icon = item.icon;
+    const active = isActive(item.to, item.exact);
+    return (
+      <Link
+        to={item.to}
+        onClick={() => setMobileOpen(false)}
+        className="group mb-1 flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors"
+        style={{
+          backgroundColor: active ? "var(--sidebar-primary)" : "transparent",
+          color: active ? "white" : "var(--sidebar-foreground)",
+        }}
+        onMouseEnter={(e) => {
+          if (!active) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)";
+        }}
+        onMouseLeave={(e) => {
+          if (!active) e.currentTarget.style.backgroundColor = "transparent";
+        }}
+      >
+        <span className="flex items-center gap-3">
+          <Icon className="h-4 w-4" />
+          {item.label}
+          {item.dot === "blue" && (
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: "#60A5FA" }}
+            />
+          )}
+          {item.dot === "amber" && (
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: "#F59E0B" }}
+            />
+          )}
+        </span>
+        {item.badge && pendingCount > 0 && (
+          <span
+            className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+            style={{
+              backgroundColor: active ? "rgba(255,255,255,0.2)" : "var(--sidebar-primary)",
+              color: "white",
+            }}
+          >
+            {pendingCount}
+          </span>
+        )}
+      </Link>
+    );
+  }
+
   const sidebarContent = (
     <>
       <div className="px-5 pt-5 pb-4">
@@ -94,84 +162,73 @@ export function AppSidebar() {
         )}
       </div>
       <nav className="flex-1 px-2">
-        {NAV.map((item) => {
-          const Icon = item.icon;
+        {/* Top-level: Dashboard, PR Tracker, RFQ */}
+        {TOP_NAV.map((item) => (
+          <NavLink key={item.to} item={item} />
+        ))}
 
-          if (item.href) {
-            return (
-              <a
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileOpen(false)}
-                className="group mb-1 flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors"
-                style={{
-                  backgroundColor: "transparent",
-                  color: "var(--sidebar-foreground)",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = "transparent";
-                }}
-              >
-                <span className="flex items-center gap-3">
-                  <Icon className="h-4 w-4" />
-                  {item.label}
-                </span>
-                <ExternalLink className="h-3 w-3 opacity-50" />
-              </a>
-            );
-          }
-
-          const active = isActive(item.to!, item.exact);
-          return (
-            <Link
-              key={item.to}
-              to={item.to as string}
-              onClick={() => setMobileOpen(false)}
-              className="group mb-1 flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors"
+        {/* Collapsible Vendors group */}
+        <Collapsible open={vendorOpen || vendorGroupActive} onOpenChange={setVendorOpen}>
+          <CollapsibleTrigger asChild>
+            <button
+              className="group mb-1 flex w-full items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors"
               style={{
-                backgroundColor: active ? "var(--sidebar-primary)" : "transparent",
-                color: active ? "white" : "var(--sidebar-foreground)",
+                backgroundColor: vendorGroupActive
+                  ? "var(--sidebar-primary)"
+                  : "transparent",
+                color: vendorGroupActive
+                  ? "white"
+                  : "var(--sidebar-foreground)",
               }}
               onMouseEnter={(e) => {
-                if (!active) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)";
+                if (!vendorGroupActive)
+                  e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)";
               }}
               onMouseLeave={(e) => {
-                if (!active) e.currentTarget.style.backgroundColor = "transparent";
+                if (!vendorGroupActive) e.currentTarget.style.backgroundColor = "transparent";
               }}
             >
               <span className="flex items-center gap-3">
-                <Icon className="h-4 w-4" />
-                {item.label}
-                {item.dot === "blue" && (
-                  <span
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{ backgroundColor: "#60A5FA" }}
-                  />
-                )}
-                {item.dot === "amber" && (
-                  <span
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{ backgroundColor: "#F59E0B" }}
-                  />
-                )}
+                <Building2 className="h-4 w-4" />
+                Vendors
               </span>
-              {item.badge && pendingCount > 0 && (
-                <span
-                  className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+              <span className="flex items-center gap-2">
+                {!(vendorOpen || vendorGroupActive) && pendingCount > 0 && (
+                  <span
+                    className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                    style={{
+                      backgroundColor: vendorGroupActive
+                        ? "rgba(255,255,255,0.2)"
+                        : "var(--sidebar-primary)",
+                      color: "white",
+                    }}
+                  >
+                    {pendingCount}
+                  </span>
+                )}
+                <ChevronRight
+                  className="h-3.5 w-3.5 transition-transform duration-200"
                   style={{
-                    backgroundColor: active ? "rgba(255,255,255,0.2)" : "var(--sidebar-primary)",
-                    color: "white",
+                    transform: vendorOpen || vendorGroupActive ? "rotate(90deg)" : "rotate(0deg)",
+                    opacity: 0.6,
                   }}
-                >
-                  {pendingCount}
-                </span>
-              )}
-            </Link>
-          );
-        })}
+                />
+              </span>
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="ml-3 border-l border-white/10 pl-2">
+              {VENDOR_CHILDREN.map((item) => (
+                <NavLink key={item.to} item={item} />
+              ))}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* Bottom: Categories, Settings */}
+        {BOTTOM_NAV.map((item) => (
+          <NavLink key={item.to} item={item} />
+        ))}
       </nav>
       <div className="p-3">
         <button
