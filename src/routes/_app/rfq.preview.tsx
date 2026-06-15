@@ -295,29 +295,38 @@ function RFQPreviewPage() {
       return;
     }
     setSearching(true);
-    const { data } = await supabase
+    const pattern = `%${q}%`;
+    const { data, error } = await supabase
       .from("vendors")
-      .select("vendor_id,company_name,contacts,contact_person,status,categories")
-      .ilike("company_name", `%${q}%`)
+      .select("vendor_id,company_name,email,contacts,contact_person,status,categories")
+      .or(`company_name.ilike.${pattern},contact_person.ilike.${pattern}`)
       .neq("status", "blacklisted")
       .limit(10);
+    if (error) {
+      console.error("Vendor search error:", error);
+      setVendorResults([]);
+      setSearching(false);
+      return;
+    }
     const results: VendorSearchResult[] = (data ?? []).map(
       (v: {
         vendor_id: string;
         company_name: string;
+        email: string | null;
         contacts: VendorContact[] | null;
         contact_person: string | null;
         status: string;
         categories: string[] | null;
       }) => {
-        const firstEmail =
+        // Prefer contacts JSONB email, fall back to flat email column
+        const contactsEmail =
           Array.isArray(v.contacts)
             ? (v.contacts.find((c) => c.email)?.email ?? null)
             : null;
         return {
           vendor_id: v.vendor_id,
           company_name: v.company_name,
-          email: firstEmail,
+          email: contactsEmail || v.email || null,
           contact_person: v.contact_person,
           status: v.status,
           categories: v.categories,
