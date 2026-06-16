@@ -6,6 +6,9 @@ import {
   type Vendor,
   type VendorValidation,
   type VendorOutreach,
+  vendorEmail,
+  vendorContactName,
+  vendorPhone,
 } from "@/integrations/supabase-external/client";
 import { StatusBadge, ConfidenceDot } from "@/components/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -232,21 +235,21 @@ function ProfileTab({ v }: { v: Vendor }) {
           </Field>
         </div>
         <div>
-          <Field label="Contact Person">{v.contact_person}</Field>
+          <Field label="Contact Person">{vendorContactName(v)}</Field>
           <Field label="Designation">{v.designation}</Field>
-          <Field label="Mobile">{v.mobile}</Field>
+          <Field label="Mobile">{vendorPhone(v)}</Field>
           <Field label="Telephone">{v.telephone}</Field>
           <Field label="Email">
-            {v.email && (
-              <a href={`mailto:${v.email}`} className="underline">
-                {v.email}
+            {vendorEmail(v) && (
+              <a href={`mailto:${vendorEmail(v)}`} className="underline">
+                {vendorEmail(v)}
               </a>
             )}
           </Field>
           <Field label="Location / City / Country">
             {[v.location, v.city, v.country].filter(Boolean).join(", ")}
           </Field>
-          <Field label="Number of Employees">{v.number_of_employees}</Field>
+          <Field label="Number of Employees">{v.num_employees}</Field>
           <Field label="Main Customers">{v.main_customers}</Field>
         </div>
       </div>
@@ -270,7 +273,7 @@ function ProfileTab({ v }: { v: Vendor }) {
             )}
           </div>
         </div>
-        <Field label="Offered Products / Services">{v.offered_products_services}</Field>
+        <Field label="Offered Products / Services">{v.offered_products}</Field>
         <Field label="Source">{v.source_sheet}</Field>
         <Field label="Remarks">{v.remarks}</Field>
       </div>

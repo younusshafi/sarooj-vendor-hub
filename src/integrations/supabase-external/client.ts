@@ -32,6 +32,13 @@ export type SupplierType = "local" | "international";
 
 export type DataConfidence = "high" | "medium" | "low";
 
+export interface VendorContact {
+  name?: string;
+  email?: string;
+  phone?: string;
+  [key: string]: unknown;
+}
+
 export interface Vendor {
   vendor_id: string;
   company_name: string;
@@ -43,18 +50,16 @@ export interface Vendor {
   cr_last_checked: string | null;
   vat_number: string | null;
   website: string | null;
-  contact_person: string | null;
+  contacts: VendorContact[] | null;
   designation: string | null;
-  mobile: string | null;
   telephone: string | null;
-  email: string | null;
   location: string | null;
   city: string | null;
   country: string | null;
-  number_of_employees: number | null;
+  num_employees: number | null;
   main_customers: string | null;
   categories: string[] | null;
-  offered_products_services: string | null;
+  offered_products: string | null;
   source_sheet: string | null;
   duplicate_flag: boolean | null;
   duplicate_notes: string | null;
@@ -62,6 +67,27 @@ export interface Vendor {
   status: VendorStatus;
   data_confidence: DataConfidence | null;
   created_at: string;
+}
+
+/** Extract first contact's email from the contacts JSONB array */
+export function vendorEmail(v: Vendor): string | null {
+  return Array.isArray(v.contacts)
+    ? (v.contacts.find((c) => c.email)?.email ?? null)
+    : null;
+}
+
+/** Extract first contact's name from the contacts JSONB array */
+export function vendorContactName(v: Vendor): string | null {
+  return Array.isArray(v.contacts)
+    ? (v.contacts.find((c) => c.name)?.name ?? null)
+    : null;
+}
+
+/** Extract first contact's phone from the contacts JSONB array */
+export function vendorPhone(v: Vendor): string | null {
+  return Array.isArray(v.contacts)
+    ? (v.contacts.find((c) => c.phone)?.phone ?? null)
+    : null;
 }
 
 export interface VendorDocument {

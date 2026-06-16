@@ -1,8 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, X, AlertTriangle, Loader2, Search } from "lucide-react";
-import { supabase } from "@/integrations/supabase-external/client";
+import { ArrowLeft, X, Loader2, Search } from "lucide-react";
+import { supabase, type VendorContact } from "@/integrations/supabase-external/client";
 import { useAuth } from "@/integrations/supabase-external/auth";
 import { toast } from "sonner";
 
@@ -29,8 +29,7 @@ interface RfqPreview {
   status: string;
   covering_email_subject: string | null;
   covering_email_body: string | null;
-  terms_and_conditions: string | null;
-  needs_scope_documents: boolean | null;
+  sme_required: boolean | null;
 }
 
 interface RfqItemRow {
@@ -54,11 +53,6 @@ interface RfqVendorRow {
     status: string;
     categories: string[] | null;
   } | null;
-}
-
-interface VendorContact {
-  email?: string;
-  [key: string]: unknown;
 }
 
 interface VendorSearchResult {
@@ -394,7 +388,6 @@ function RFQPreviewPage() {
         .update({
           covering_email_subject: subject,
           covering_email_body: body,
-          terms_and_conditions: termsText,
         })
         .eq("rfq_id", rfqId);
 
@@ -419,8 +412,6 @@ function RFQPreviewPage() {
       setSending(false);
     }
   };
-
-  const needsScope = rfq?.needs_scope_documents;
 
   if (!resolvedIds.length) {
     return (
@@ -600,21 +591,6 @@ function RFQPreviewPage() {
               </label>
             </div>
 
-            {/* Scope warning */}
-            {needsScope && (
-              <div
-                className="rounded-xl border p-4"
-                style={{ borderColor: "#EF4444", backgroundColor: "#FEF2F2" }}
-              >
-                <div className="flex items-center gap-2 font-semibold text-sm text-red-700">
-                  <AlertTriangle className="h-4 w-4" />
-                  Scope documents required
-                </div>
-                <p className="mt-1 text-xs text-red-600">
-                  This subcontract RFQ requires scope documents to be uploaded before dispatch.
-                </p>
-              </div>
-            )}
           </div>
 
           {/* Right column — 40% */}

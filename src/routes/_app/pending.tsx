@@ -6,6 +6,9 @@ import {
   supabase,
   type Vendor,
   type VendorDocument,
+  vendorEmail,
+  vendorContactName,
+  vendorPhone,
 } from "@/integrations/supabase-external/client";
 import { formatDate, formatVendorType, formatSupplierType } from "@/lib/format";
 import {
@@ -186,15 +189,15 @@ function PendingCard({
       <div className="mt-4 grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
         <div>
           <span className="text-muted-foreground">Contact: </span>
-          {v.contact_person ?? "—"}
+          {vendorContactName(v) ?? "—"}
         </div>
         <div>
           <span className="text-muted-foreground">Email: </span>
-          {v.email ?? "—"}
+          {vendorEmail(v) ?? "—"}
         </div>
         <div>
           <span className="text-muted-foreground">Mobile: </span>
-          {v.mobile ?? "—"}
+          {vendorPhone(v) ?? "—"}
         </div>
       </div>
 
