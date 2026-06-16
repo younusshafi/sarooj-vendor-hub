@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ExternalLink,
@@ -14,16 +14,29 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase-external/client";
 import { formatDate } from "@/lib/format";
+import { toast } from "sonner";
+import { BoqUploadStep } from "@/components/frame/BoqUploadStep";
+import { FrameGrid } from "@/components/frame/FrameGrid";
+import { FrameView } from "@/components/frame/FrameView";
+import type { ParseResult, BoqLine } from "@/lib/boq-parse";
 
 export const Route = createFileRoute("/_app/rfq/$rfqId/")({
   component: RFQDetailPage,
 });
 
 type Tab = "overview" | "vendors" | "bids";
+type FramePhase = "upload" | "grid" | "posting" | "view";
+
+const N8N_FRAME = "https://n8n.zavia-ai.com/webhook/scc-frame-generate";
 
 function RFQDetailPage() {
   const { rfqId } = Route.useParams();
   const [tab, setTab] = useState<Tab>("overview");
+
+  // ── Build Frame state (subcontract RFQs only) ──
+  const [framePhase, setFramePhase] = useState<FramePhase>("upload");
+  const [parseResult, setParseResult] = useState<ParseResult | null>(null);
+  const [frameResponse, setFrameResponse] = useState<any>(null);
 
   const { data: rfq, isLoading: rfqLoading } = useQuery({
     queryKey: ["rfq-detail", rfqId],
@@ -54,10 +67,10 @@ function RFQDetailPage() {
       const { data } = await supabase
         .from("rfq_items")
         .select(
-          "item_id, sap_item_number, description, quantity, unit, delivery_date, budget_unit_rate_omr",
+          "item_id, item_number, sap_item_number, description, quantity, unit, delivery_date, budget_unit_rate_omr, item_details, notes, specification",
         )
         .eq("rfq_id", rfqId)
-        .order("sap_item_number");
+        .order("item_number");
       return (data ?? []) as any[];
     },
   });
@@ -76,6 +89,69 @@ function RFQDetailPage() {
     },
     enabled: true,
   });
+
+  // ── Auto-detect frame phase on data load ──
+  const isSubcontract = rfq?.rfq_type === "subcontract";
+  useEffect(() => {
+    if (isSubcontract && rfqItems && rfqItems.length > 0) {
+      setFramePhase("view");
+    }
+  }, [isSubcontract, rfqItems]);
+
+  // ── Build Frame handlers ──
+  const handleParsed = (result: ParseResult) => {
+    setParseResult(result);
+    setFramePhase("grid");
+  };
+
+  const handleFrameLock = async (lines: BoqLine[], preamble: string) => {
+    setFramePhase("posting");
+    try {
+      const requisitionParts = [
+        rfq?.subject_works,
+        rfq?.project_name,
+        rfq?.payment_terms ? `Payment terms: ${rfq.payment_terms}` : null,
+        rfq?.sme_required ? "SME certification required" : null,
+        rfq?.iso_required ? "ISO certification required" : null,
+        rfq?.subcontract_period ? `Programme: ${rfq.subcontract_period}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      const payload = {
+        rfq_id: rfqId,
+        locked_lines: lines.map((l) => ({
+          item: l.item,
+          description: l.description,
+          unit: l.unit,
+          qty: l.qty ?? null,
+          line_type: l.line_type || null,
+        })),
+        boq_preamble: preamble || null,
+        requisition_text: requisitionParts || null,
+        spec_text: null,
+        source_confidence: parseResult?.source_confidence ?? "high",
+        source_remark: parseResult?.source_remark ?? "",
+      };
+
+      const res = await fetch(N8N_FRAME, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await res.json();
+      if (!res.ok || result.success === false) {
+        throw new Error(result.message || `Error: ${res.status}`);
+      }
+      setFrameResponse(result);
+      setFramePhase("view");
+      toast.success("Frame generated successfully");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to generate frame";
+      toast.error(msg);
+      setFramePhase("grid"); // back to grid so officer can retry
+    }
+  };
 
   if (rfqLoading) {
     return (
@@ -165,53 +241,87 @@ function RFQDetailPage() {
 
       {/* Overview tab */}
       {tab === "overview" && (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <InfoCard label="RFQ Reference" value={rfq.rfq_reference || "—"} />
-          <InfoCard label="RFQ Type" value={rfq.rfq_type || "—"} />
-          <InfoCard label="Status" value={rfq.status || "—"} />
-          <InfoCard label="Deadline" value={rfq.deadline || "—"} />
-          <InfoCard label="Sent At" value={rfq.sent_at ? formatDate(rfq.sent_at) : "—"} />
-          <InfoCard label="Created At" value={rfq.created_at ? formatDate(rfq.created_at) : "—"} />
-          {rfq.project_name && <InfoCard label="Project Name" value={rfq.project_name} />}
-          {rfq.project_code && <InfoCard label="Project Code" value={rfq.project_code} />}
-          {rfq.project_location && (
-            <InfoCard label="Project Location" value={rfq.project_location} />
-          )}
-          {rfq.client && <InfoCard label="Client" value={rfq.client} />}
-          {rfq.consultant && <InfoCard label="Consultant" value={rfq.consultant} />}
-          {rfq.created_by && <InfoCard label="Created By" value={rfq.created_by} />}
-          {rfq.drive_folder_url && (
-            <div className="rounded-xl border border-border bg-card p-4">
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Drive Folder
+        <div className="space-y-6">
+          {/* Info cards — shown for all RFQ types */}
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <InfoCard label="RFQ Reference" value={rfq.rfq_reference || "—"} />
+            <InfoCard label="RFQ Type" value={rfq.rfq_type || "—"} />
+            <InfoCard label="Status" value={rfq.status || "—"} />
+            <InfoCard label="Deadline" value={rfq.deadline || "—"} />
+            <InfoCard label="Sent At" value={rfq.sent_at ? formatDate(rfq.sent_at) : "—"} />
+            <InfoCard label="Created At" value={rfq.created_at ? formatDate(rfq.created_at) : "—"} />
+            {rfq.project_name && <InfoCard label="Project Name" value={rfq.project_name} />}
+            {rfq.project_code && <InfoCard label="Project Code" value={rfq.project_code} />}
+            {rfq.project_location && (
+              <InfoCard label="Project Location" value={rfq.project_location} />
+            )}
+            {rfq.client && <InfoCard label="Client" value={rfq.client} />}
+            {rfq.consultant && <InfoCard label="Consultant" value={rfq.consultant} />}
+            {rfq.created_by && <InfoCard label="Created By" value={rfq.created_by} />}
+            {rfq.drive_folder_url && (
+              <div className="rounded-xl border border-border bg-card p-4">
+                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Drive Folder
+                </div>
+                <a
+                  href={rfq.drive_folder_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 flex items-center gap-1 text-sm font-medium"
+                  style={{ color: "var(--accent)" }}
+                >
+                  Open in Drive <ExternalLink className="h-3 w-3" />
+                </a>
               </div>
-              <a
-                href={rfq.drive_folder_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-1 flex items-center gap-1 text-sm font-medium"
-                style={{ color: "var(--accent)" }}
-              >
-                Open in Drive <ExternalLink className="h-3 w-3" />
-              </a>
+            )}
+            {rfq.pr_numbers && rfq.pr_numbers.length > 0 && (
+              <div className="rounded-xl border border-border bg-card p-4 sm:col-span-2">
+                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  PR Numbers
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {rfq.pr_numbers.map((pr: string) => (
+                    <span key={pr} className="rounded font-mono text-xs px-2 py-0.5 bg-secondary">
+                      {pr}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Subcontract RFQ — Build Frame workflow */}
+          {isSubcontract && framePhase === "upload" && (
+            <BoqUploadStep onParsed={handleParsed} />
+          )}
+          {isSubcontract && framePhase === "grid" && parseResult && (
+            <FrameGrid
+              initialLines={parseResult.lines}
+              preamble={parseResult.preamble}
+              sourceConfidence={parseResult.source_confidence}
+              sourceRemark={parseResult.source_remark}
+              onLock={handleFrameLock}
+            />
+          )}
+          {isSubcontract && framePhase === "posting" && (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card py-16">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <p className="mt-3 text-sm text-muted-foreground">
+                Generating frame — this takes about 20 seconds…
+              </p>
             </div>
           )}
-          {rfq.pr_numbers && rfq.pr_numbers.length > 0 && (
-            <div className="rounded-xl border border-border bg-card p-4 sm:col-span-2">
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                PR Numbers
-              </div>
-              <div className="mt-1 flex flex-wrap gap-1">
-                {rfq.pr_numbers.map((pr: string) => (
-                  <span key={pr} className="rounded font-mono text-xs px-2 py-0.5 bg-secondary">
-                    {pr}
-                  </span>
-                ))}
-              </div>
-            </div>
+          {isSubcontract && framePhase === "view" && (
+            <FrameView
+              rfq={rfq}
+              rfqItems={rfqItems ?? []}
+              frameData={frameResponse}
+            />
           )}
-          {rfqItems && rfqItems.length > 0 && (
-            <div className="rounded-xl border border-border bg-card sm:col-span-2 lg:col-span-3">
+
+          {/* Materials RFQ — standard items table */}
+          {!isSubcontract && rfqItems && rfqItems.length > 0 && (
+            <div className="rounded-xl border border-border bg-card">
               <div className="px-4 py-3 border-b border-border">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Items ({rfqItems.length})
