@@ -91,7 +91,7 @@ function RFQDetailPage() {
   });
 
   // ── Auto-detect frame phase on data load ──
-  const isSubcontract = rfq?.rfq_type === "subcontract";
+  const isSubcontract = rfq?.rfq_type === "subcontractor";
   useEffect(() => {
     if (isSubcontract && rfqItems && rfqItems.length > 0) {
       setFramePhase("view");
