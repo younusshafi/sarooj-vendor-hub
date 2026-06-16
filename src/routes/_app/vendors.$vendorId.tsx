@@ -282,114 +282,58 @@ function ProfileTab({ v }: { v: Vendor }) {
 }
 
 const BUCKET = "vendor-documents";
-const ROOT_PREFIX = "vendor-docs-pending";
 
-function slugify(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-function formatBytes(n: number | null | undefined): string {
-  if (!n && n !== 0) return "—";
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
-}
-
-interface StorageDoc {
-  documentType: string;
-  filename: string;
-  path: string;
-  sizeBytes: number | null;
-  uploadedAt: string | null;
+interface DocRow {
+  document_id: string;
+  document_type: string;
+  filename: string | null;
+  drive_file_url: string | null;
+  submitted_at: string | null;
+  signedUrl: string | null;
 }
 
 function DocumentsTab({ vendor }: { vendor: Vendor }) {
   const docs = useQuery({
-    queryKey: ["vendor-storage-docs", vendor.vendor_id],
-    queryFn: async (): Promise<StorageDoc[]> => {
-      const slug = slugify(vendor.company_name);
-      const { data: topLevel, error: listErr } = await supabase.storage
-        .from(BUCKET)
-        .list(ROOT_PREFIX, { limit: 1000, sortBy: { column: "created_at", order: "desc" } });
-      if (listErr) throw listErr;
+    queryKey: ["vendor-docs-table", vendor.vendor_id],
+    queryFn: async (): Promise<DocRow[]> => {
+      const { data, error } = await supabase
+        .from("vendor_documents")
+        .select("document_id,document_type,filename,drive_file_url,submitted_at")
+        .eq("vendor_id", vendor.vendor_id)
+        .eq("submitted", true)
+        .not("drive_file_url", "is", null)
+        .order("submitted_at", { ascending: false });
+      if (error) throw error;
 
-      const folders = (topLevel ?? []).filter((e) => !e.metadata); // folders have no metadata
-      // Match folders ending with _{slug} (n8n pattern: {timestamp}_{slug})
-      let matched = folders.filter((f) => f.name.toLowerCase().endsWith(`_${slug}`));
-      if (matched.length === 0 && slug) {
-        matched = folders.filter((f) => f.name.toLowerCase().includes(slug));
-      }
-      if (matched.length === 0) return [];
-
-      // Prefer folder whose timestamp prefix is closest to (but not after) vendor.created_at
-      const vendorTs = new Date(vendor.created_at).getTime();
-      matched.sort((a, b) => {
-        const ta = parseInt(a.name.split("_")[0], 10) || 0;
-        const tb = parseInt(b.name.split("_")[0], 10) || 0;
-        return Math.abs(ta - vendorTs) - Math.abs(tb - vendorTs);
-      });
-      const folder = matched[0].name;
-
-      // List document_type subfolders
-      const { data: subdirs, error: subErr } = await supabase.storage
-        .from(BUCKET)
-        .list(`${ROOT_PREFIX}/${folder}`, { limit: 1000 });
-      if (subErr) throw subErr;
-
-      const results: StorageDoc[] = [];
-      for (const sd of subdirs ?? []) {
-        if (sd.metadata) {
-          // File directly in the vendor folder
-          results.push({
-            documentType: "Other",
-            filename: sd.name,
-            path: `${ROOT_PREFIX}/${folder}/${sd.name}`,
-            sizeBytes: (sd.metadata as { size?: number }).size ?? null,
-            uploadedAt: sd.created_at ?? null,
-          });
-          continue;
-        }
-        const { data: files, error: fErr } = await supabase.storage
-          .from(BUCKET)
-          .list(`${ROOT_PREFIX}/${folder}/${sd.name}`, { limit: 1000 });
-        if (fErr) throw fErr;
-        for (const f of files ?? []) {
-          if (!f.metadata) continue;
-          results.push({
-            documentType: sd.name,
-            filename: f.name,
-            path: `${ROOT_PREFIX}/${folder}/${sd.name}/${f.name}`,
-            sizeBytes: (f.metadata as { size?: number }).size ?? null,
-            uploadedAt: f.created_at ?? null,
-          });
-        }
-      }
-      return results;
+      // Generate signed URLs for each document
+      const rows: DocRow[] = await Promise.all(
+        (data ?? []).map(async (row: any) => {
+          let signedUrl: string | null = null;
+          if (row.drive_file_url) {
+            const { data: signed } = await supabase.storage
+              .from(BUCKET)
+              .createSignedUrl(row.drive_file_url, 3600);
+            signedUrl = signed?.signedUrl ?? null;
+          }
+          return {
+            document_id: row.document_id,
+            document_type: row.document_type ?? "Other",
+            filename: row.filename,
+            drive_file_url: row.drive_file_url,
+            submitted_at: row.submitted_at,
+            signedUrl,
+          };
+        }),
+      );
+      return rows;
     },
   });
-
-  const openFile = async (path: string) => {
-    const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60);
-    if (error || !data) {
-      const pub = supabase.storage.from(BUCKET).getPublicUrl(path);
-      if (pub.data?.publicUrl) {
-        window.open(pub.data.publicUrl, "_blank", "noopener,noreferrer");
-        return;
-      }
-      toast.error(error?.message ?? "Could not open file.");
-      return;
-    }
-    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
-  };
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       {docs.isError && (
         <div className="px-4 py-3 text-sm" style={{ color: "var(--toast-error-fg)" }}>
-          Storage error: {(docs.error as Error)?.message ?? "Unknown error"}
+          Error loading documents: {(docs.error as Error)?.message ?? "Unknown error"}
         </div>
       )}
       <table className="w-full text-sm">
@@ -400,41 +344,45 @@ function DocumentsTab({ vendor }: { vendor: Vendor }) {
           >
             <th className="px-4 py-3">Document Type</th>
             <th className="px-4 py-3">Filename</th>
-            <th className="px-4 py-3">Size</th>
             <th className="px-4 py-3">Uploaded</th>
           </tr>
         </thead>
         <tbody>
           {docs.isLoading && (
             <tr>
-              <td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">
+              <td colSpan={3} className="px-4 py-6 text-center text-muted-foreground">
                 Loading…
               </td>
             </tr>
           )}
           {!docs.isLoading && !docs.isError && (docs.data?.length ?? 0) === 0 && (
             <tr>
-              <td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">
-                No documents found in storage for this vendor.
+              <td colSpan={3} className="px-4 py-6 text-center text-muted-foreground">
+                No documents found for this vendor.
               </td>
             </tr>
           )}
           {docs.data?.map((d) => (
-            <tr key={d.path} className="border-t border-border">
+            <tr key={d.document_id} className="border-t border-border">
               <td className="px-4 py-3 font-medium">
-                {titleCase(d.documentType.replace(/_/g, " "))}
+                {titleCase(d.document_type.replace(/_/g, " "))}
               </td>
               <td className="px-4 py-3">
-                <button
-                  onClick={() => openFile(d.path)}
-                  className="underline hover:text-foreground"
-                  style={{ color: "var(--accent)" }}
-                >
-                  {d.filename}
-                </button>
+                {d.signedUrl ? (
+                  <a
+                    href={d.signedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-foreground"
+                    style={{ color: "var(--accent)" }}
+                  >
+                    {d.filename ?? "View"}
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">{d.filename ?? "—"}</span>
+                )}
               </td>
-              <td className="px-4 py-3 text-muted-foreground">{formatBytes(d.sizeBytes)}</td>
-              <td className="px-4 py-3 text-muted-foreground">{formatDate(d.uploadedAt)}</td>
+              <td className="px-4 py-3 text-muted-foreground">{formatDate(d.submitted_at)}</td>
             </tr>
           ))}
         </tbody>
