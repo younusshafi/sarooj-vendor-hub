@@ -294,11 +294,10 @@ function RFQPreviewPage() {
       return;
     }
     setSearching(true);
-    const pattern = `%${q}%`;
     const { data, error } = await supabase
       .from("vendors")
-      .select("vendor_id,company_name,contacts,contact_person,status,categories")
-      .or(`company_name.ilike.${pattern},contact_person.ilike.${pattern}`)
+      .select("vendor_id,company_name,contacts,status,categories")
+      .ilike("company_name", `%${q}%`)
       .neq("status", "blacklisted")
       .limit(10);
     if (error) {
@@ -312,10 +311,10 @@ function RFQPreviewPage() {
         vendor_id: string;
         company_name: string;
         contacts: VendorContact[] | null;
-        contact_person: string | null;
         status: string;
         categories: string[] | null;
       }) => {
+        const firstContact = Array.isArray(v.contacts) ? v.contacts[0] : null;
         const firstEmail =
           Array.isArray(v.contacts)
             ? (v.contacts.find((c) => c.email)?.email ?? null)
@@ -324,7 +323,7 @@ function RFQPreviewPage() {
           vendor_id: v.vendor_id,
           company_name: v.company_name,
           email: firstEmail,
-          contact_person: v.contact_person,
+          contact_person: (firstContact?.name as string) ?? null,
           status: v.status,
           categories: v.categories,
         };
