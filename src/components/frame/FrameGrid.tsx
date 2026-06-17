@@ -70,9 +70,7 @@ export function FrameGrid({
     });
   };
 
-  const validLines = lines.filter(
-    (l) => l.description.trim() && l.unit.trim() && l.qty !== null && l.qty > 0,
-  );
+  const validLines = lines.filter((l) => l.description.trim());
   const canLock = validLines.length > 0;
 
   return (
