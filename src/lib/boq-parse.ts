@@ -279,7 +279,9 @@ function tryParseItemLine(cells: string[]): BoqLine | null {
 export async function parseBoqPdf(file: File): Promise<ParseResult> {
   // Dynamic import to keep pdfjs-dist out of the main bundle
   const pdfjsLib = await import("pdfjs-dist");
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+  // Use Vite ?url import for the bundled worker — version always matches the installed package
+  const workerUrl = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
+  pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl.default;
 
   const buf = await file.arrayBuffer();
   const doc = await pdfjsLib.getDocument({ data: buf }).promise;
