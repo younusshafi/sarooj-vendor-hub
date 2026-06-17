@@ -40,13 +40,6 @@ const TOP_NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: Home, exact: true },
   { to: "/prs", label: "PR Tracker", icon: ClipboardList, dot: "amber" },
   { to: "/rfq", label: "RFQ \u2013 Supplies", icon: FileText, dot: "blue" },
-  /* hidden — phase 2 / demo
-  {
-    href: "https://sarooj-procurement-subcontractors.vercel.app/",
-    label: "RFQ Subcontractors",
-    icon: FileText,
-  },
-  */
 ];
 
 /* ── Vendor group children ── */
@@ -168,6 +161,23 @@ export function AppSidebar() {
         {TOP_NAV.map((item) => (
           <NavLink key={item.to} item={item} />
         ))}
+
+        {/* External link to subcontractor app */}
+        <a
+          href="https://sarooj-procurement-subcontractors.vercel.app/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group mb-1 flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors"
+          style={{ color: "var(--sidebar-foreground)" }}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)")}
+          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+        >
+          <span className="flex items-center gap-3">
+            <FileText className="h-4 w-4" />
+            Subcontractor RFQs
+          </span>
+          <ExternalLink className="h-3 w-3" style={{ opacity: 0.5 }} />
+        </a>
 
         {/* Collapsible Vendors group */}
         <Collapsible open={vendorOpen || vendorGroupActive} onOpenChange={setVendorOpen}>
