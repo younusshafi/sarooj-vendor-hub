@@ -10,7 +10,6 @@ export const Route = createFileRoute("/_app/rfq/")({
 });
 
 const STATUS_OPTIONS = ["draft", "sent", "closed", "awarded", "cancelled"];
-const TYPE_OPTIONS = ["materials", "subcontract"];
 
 // ── Types ──
 
@@ -110,16 +109,18 @@ function RFQStatusBadge({ status }: { status: string }) {
 function RFQTrackerPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
-  const [rfqType, setRfqType] = useState("");
   const [createdBy, setCreatedBy] = useState("");
   const [collapsedBuckets, setCollapsedBuckets] = useState<Set<BucketKey>>(new Set());
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["rfqs"],
     queryFn: async () => {
+      // Supplies module: materials RFQs only. Subcontractor RFQs (SRs) live in
+      // the separate subcontractor app and must never render in this frameless detail flow.
       const q = supabase
         .from("rfqs")
         .select("rfq_id,rfq_reference,title,rfq_type,status,sent_at,deadline,created_at,created_by")
+        .eq("rfq_type", "materials")
         .order("created_at", { ascending: false });
       const { data, error } = await q;
       if (error) throw error;
@@ -140,7 +141,6 @@ function RFQTrackerPage() {
     if (!data) return [];
     let result = data;
     if (status) result = result.filter((r) => r.status === status);
-    if (rfqType) result = result.filter((r) => r.rfq_type === rfqType);
     if (createdBy) result = result.filter((r) => r.created_by === createdBy);
     if (search) {
       const q = search.toLowerCase();
@@ -150,7 +150,7 @@ function RFQTrackerPage() {
       );
     }
     return result;
-  }, [data, status, rfqType, createdBy, search]);
+  }, [data, status, createdBy, search]);
 
   // Group into date buckets
   const buckets = useMemo(() => {
@@ -183,7 +183,7 @@ function RFQTrackerPage() {
     });
   };
 
-  const hasFilters = !!(search || status || rfqType || createdBy);
+  const hasFilters = !!(search || status || createdBy);
 
   return (
     <div className="space-y-6">
@@ -215,21 +215,6 @@ function RFQTrackerPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="min-w-[220px] flex-1 rounded-md border border-border bg-white px-3 py-2 text-sm outline-none"
           />
-          <label className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground">Type:</span>
-            <select
-              value={rfqType}
-              onChange={(e) => setRfqType(e.target.value)}
-              className="rounded-md border border-border bg-white px-2 py-1.5 text-sm outline-none"
-            >
-              <option value="">All</option>
-              {TYPE_OPTIONS.map((o) => (
-                <option key={o} value={o}>
-                  {o.charAt(0).toUpperCase() + o.slice(1)}
-                </option>
-              ))}
-            </select>
-          </label>
           <label className="flex items-center gap-2 text-sm">
             <span className="text-muted-foreground">Status:</span>
             <select
@@ -265,7 +250,6 @@ function RFQTrackerPage() {
               onClick={() => {
                 setSearch("");
                 setStatus("");
-                setRfqType("");
                 setCreatedBy("");
               }}
               className="text-sm font-medium"

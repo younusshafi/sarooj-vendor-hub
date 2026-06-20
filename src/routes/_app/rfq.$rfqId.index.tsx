@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ExternalLink,
@@ -18,6 +18,11 @@ import { formatDate } from "@/lib/format";
 export const Route = createFileRoute("/_app/rfq/$rfqId/")({
   component: RFQDetailPage,
 });
+
+// This is the materials (Supplies) RFQ detail page. Subcontractor RFQs have no
+// detail view here — if one is reached directly by URL, deep-link out to the
+// subcontractor app instead of rendering it frameless.
+const SUBCONTRACTOR_APP_URL = "https://sarooj-procurement-subcontractors.vercel.app";
 
 type Tab = "overview" | "vendors" | "bids";
 
@@ -77,7 +82,15 @@ function RFQDetailPage() {
     enabled: true,
   });
 
-  if (rfqLoading) {
+  // Guard: a subcontractor RFQ reached here directly belongs to the other app.
+  const isSubcontractor = !!rfq && rfq.rfq_type !== "materials";
+  useEffect(() => {
+    if (isSubcontractor) {
+      window.location.replace(`${SUBCONTRACTOR_APP_URL}/rfq/${rfqId}`);
+    }
+  }, [isSubcontractor, rfqId]);
+
+  if (rfqLoading || isSubcontractor) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -564,7 +577,10 @@ function VendorsTabPanel({
                           className="border-t border-border"
                           style={{ opacity: isSelected ? 1 : 0.4 }}
                         >
-                          <td className="px-4 py-3 font-medium" style={{ color: "var(--foreground)" }}>
+                          <td
+                            className="px-4 py-3 font-medium"
+                            style={{ color: "var(--foreground)" }}
+                          >
                             <span className="flex items-center gap-2">
                               {v.vendors?.company_name || "—"}
                               {hasSelection && isSelected && (
@@ -706,7 +722,10 @@ function VendorStatusBadge({
 }) {
   if (responseReceived) {
     return (
-      <span className="flex items-center gap-1 text-xs font-medium" style={{ color: "var(--accent)" }}>
+      <span
+        className="flex items-center gap-1 text-xs font-medium"
+        style={{ color: "var(--accent)" }}
+      >
         <CheckCircle2 className="h-3 w-3" /> Responded
       </span>
     );

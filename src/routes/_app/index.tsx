@@ -9,6 +9,11 @@ export const Route = createFileRoute("/_app/")({
   component: DashboardPage,
 });
 
+// Subcontractor RFQs (SRs) are owned by a separate app. They may appear in
+// cross-type summaries here, but their detail view must deep-link out — this
+// materials app has no (frameless) detail page for them.
+const SUBCONTRACTOR_APP_URL = "https://sarooj-procurement-subcontractors.vercel.app";
+
 function useStats() {
   return useQuery({
     queryKey: ["dashboard-stats"],
@@ -84,18 +89,18 @@ function useProcurementStats() {
     queryKey: ["dashboard-procurement-stats"],
     queryFn: async () => {
       const [openRfqs, bidsToReview, prRows, comparisons] = await Promise.all([
+        // Open RFQs is a materials-module metric — exclude subcontractor RFQs.
         supabase
           .from("rfqs")
           .select("*", { count: "exact", head: true })
-          .eq("status", "issued"),
+          .eq("status", "issued")
+          .eq("rfq_type", "materials"),
         supabase
           .from("bids")
           .select("*", { count: "exact", head: true })
           .eq("status", "ai_extracted_pending_review"),
         fetchPrTracker(),
-        supabase
-          .from("comparisons")
-          .select("*", { count: "exact", head: true }),
+        supabase.from("comparisons").select("*", { count: "exact", head: true }),
       ]);
       return {
         openRfqs: openRfqs.count ?? 0,
@@ -112,6 +117,7 @@ interface RfqRow {
   rfq_reference: string | null;
   title: string | null;
   category_detected: string[] | null;
+  rfq_type: string | null;
   status: string;
   created_at: string;
 }
@@ -170,7 +176,7 @@ function DashboardPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("rfqs")
-        .select("rfq_id,rfq_reference,title,category_detected,status,created_at")
+        .select("rfq_id,rfq_reference,title,category_detected,rfq_type,status,created_at")
         .order("created_at", { ascending: false })
         .limit(5);
       if (error) throw error;
@@ -352,9 +358,7 @@ function DashboardPage() {
                     {rfq.rfq_reference || "—"}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="font-medium text-foreground">
-                      {rfq.title || "—"}
-                    </div>
+                    <div className="font-medium text-foreground">{rfq.title || "—"}</div>
                     {rfq.category_detected && rfq.category_detected.length > 0 && (
                       <div className="mt-0.5 text-xs text-muted-foreground">
                         {rfq.category_detected.slice(0, 2).join(", ")}
@@ -367,18 +371,29 @@ function DashboardPage() {
                   <td className="px-4 py-3">
                     <RfqStatusBadge status={rfq.status} />
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {formatDate(rfq.created_at)}
-                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">{formatDate(rfq.created_at)}</td>
                   <td className="px-4 py-3 text-right">
-                    <Link
-                      to="/rfq/$rfqId"
-                      params={{ rfqId: rfq.rfq_id }}
-                      className="text-sm font-semibold"
-                      style={{ color: "var(--accent)" }}
-                    >
-                      View
-                    </Link>
+                    {rfq.rfq_type === "materials" ? (
+                      <Link
+                        to="/rfq/$rfqId"
+                        params={{ rfqId: rfq.rfq_id }}
+                        className="text-sm font-semibold"
+                        style={{ color: "var(--accent)" }}
+                      >
+                        View
+                      </Link>
+                    ) : (
+                      // Subcontractor RFQ — deep-link to the subcontractor app.
+                      <a
+                        href={`${SUBCONTRACTOR_APP_URL}/rfq/${rfq.rfq_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-semibold"
+                        style={{ color: "var(--accent)" }}
+                      >
+                        View ↗
+                      </a>
+                    )}
                   </td>
                 </tr>
               ))}
