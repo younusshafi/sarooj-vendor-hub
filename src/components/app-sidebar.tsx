@@ -24,7 +24,6 @@ import {
   CollapsibleTrigger,
   CollapsibleContent,
 } from "@/components/ui/collapsible";
-import { THEMES, getTheme, applyTheme, type Theme } from "@/lib/theme";
 
 type NavItem = {
   to: string;
@@ -76,7 +75,6 @@ export function AppSidebar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const { data: pendingCount = 0 } = usePendingCount();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [theme, setThemeState] = useState<Theme>(getTheme);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -243,21 +241,6 @@ export function AppSidebar() {
         ))}
       </nav>
       <div className="p-3 space-y-2">
-        <div className="flex items-center gap-2 px-3">
-          {THEMES.map((t) => (
-            <button
-              key={t.id}
-              title={t.label}
-              onClick={() => { applyTheme(t.id); setThemeState(t.id); }}
-              className="h-5 w-5 rounded-full border-2 transition-transform"
-              style={{
-                backgroundColor: t.swatch,
-                borderColor: theme === t.id ? "#fff" : "transparent",
-                transform: theme === t.id ? "scale(1.15)" : "scale(1)",
-              }}
-            />
-          ))}
-        </div>
         <button
           onClick={handleLogout}
           className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors"
