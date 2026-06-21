@@ -1,11 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { supabase, type VendorOutreach } from "@/integrations/supabase-external/client";
 import { formatDateTime } from "@/lib/format";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/outreach")({
   component: OutreachPage,
 });
+
+// Gated TEST campaign — the n8n workflow self-selects recipients and only emails
+// vendors tagged category 'OUTREACH_TEST'; it cannot reach real vendors.
+// Hardcoded full URL to match this repo's webhook convention (rfq.new.tsx /
+// rfq.preview.tsx / invite.tsx) — this repo does not use a VITE_N8N_BASE_URL.
+const N8N_OUTREACH_CAMPAIGN = "https://n8n.zavia-ai.com/webhook/scc-outreach-campaign";
 
 function OutreachPage() {
   const stats = useQuery({
@@ -47,6 +55,31 @@ function OutreachPage() {
     },
   });
 
+  const [starting, setStarting] = useState(false);
+
+  const handleStartCampaign = async () => {
+    const confirmed = window.confirm(
+      "This sends re-confirmation outreach to OUTREACH_TEST vendors only (test scope). Continue?",
+    );
+    if (!confirmed) return;
+    setStarting(true);
+    try {
+      const res = await fetch(N8N_OUTREACH_CAMPAIGN, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      toast.success("Test outreach campaign started — OUTREACH_TEST vendors only.");
+      // Refresh the tiles and the history table so new sends appear.
+      await Promise.all([stats.refetch(), history.refetch()]);
+    } catch {
+      toast.error("Failed to start the campaign. Please try again.");
+    } finally {
+      setStarting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="font-display text-[28px] text-foreground">Vendor Outreach Campaign</h1>
@@ -69,17 +102,19 @@ function OutreachPage() {
 
       <div className="rounded-xl border border-border bg-card p-6">
         <p className="text-sm text-foreground">
-          The outreach campaign sends re-confirmation emails to all vendors in the database. Start
-          the campaign once you have confirmed the email content with your Zavia-ai administrator.
+          Gated test campaign: this sends re-confirmation outreach only to vendors tagged with the{" "}
+          <span className="font-semibold">OUTREACH_TEST</span> category. Real vendors are never
+          contacted.
         </p>
         <div className="mt-4">
           <button
-            disabled
-            title="This campaign is built and ready. Activation is intentionally held: starting it sends re-confirmation emails to all vendors in the database, so it's switched on by agreement with your Zavia-ai administrator — not by accident."
-            className="cursor-not-allowed rounded-md px-4 py-2 text-sm font-semibold text-white opacity-50"
+            onClick={handleStartCampaign}
+            disabled={starting}
+            title="Sends a gated TEST outreach campaign — only vendors tagged category 'OUTREACH_TEST' are emailed. Real vendors are never contacted."
+            className="rounded-md px-4 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-50"
             style={{ backgroundColor: "var(--accent)" }}
           >
-            Start Campaign
+            {starting ? "Starting…" : "Start Test Campaign"}
           </button>
         </div>
       </div>
