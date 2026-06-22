@@ -7,7 +7,8 @@ import { supabase } from "@/integrations/supabase-external/client";
 import { toast } from "sonner";
 import { Loader2, Mail, Save } from "lucide-react";
 
-export function RfqEmailEditor({ rfqId }: { rfqId: string }) {
+export function RfqEmailEditor({ rfqId, status = "draft" }: { rfqId: string; status?: string }) {
+  const readOnly = status !== "draft";
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [loading, setLoading] = useState(true);
@@ -78,20 +79,26 @@ export function RfqEmailEditor({ rfqId }: { rfqId: string }) {
             <Mail className="h-5 w-5" />
             Covering Email
           </CardTitle>
-          <Button
-            type="button"
-            size="sm"
-            disabled={saving}
-            onClick={handleSave}
-            className="gap-1.5 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
-          >
-            {saving ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Save className="h-3.5 w-3.5" />
-            )}
-            Save
-          </Button>
+          {readOnly ? (
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Issued — read only
+            </span>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              disabled={saving}
+              onClick={handleSave}
+              className="gap-1.5 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
+            >
+              {saving ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Save className="h-3.5 w-3.5" />
+              )}
+              Save
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -111,6 +118,7 @@ export function RfqEmailEditor({ rfqId }: { rfqId: string }) {
             id="email_subject"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
+            disabled={readOnly}
             className="mt-1"
           />
         </div>
@@ -122,7 +130,8 @@ export function RfqEmailEditor({ rfqId }: { rfqId: string }) {
               id="email_body"
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm font-mono min-h-[200px] focus:outline-none focus:ring-2 focus:ring-ring"
+              disabled={readOnly}
+              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm font-mono min-h-[200px] focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-70"
             />
             <details className="rounded-md border border-border p-3">
               <summary className="cursor-pointer text-xs font-medium text-muted-foreground">

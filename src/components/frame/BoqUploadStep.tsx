@@ -78,7 +78,7 @@ export function BoqUploadStep({ onParsed }: Props) {
 
   return (
     <div className="rounded-xl border border-border bg-card p-6">
-      <h2 className="mb-4 text-base font-semibold text-foreground">Build Frame — Upload BOQ</h2>
+      <h2 className="mb-4 text-base font-semibold text-foreground">Upload BoQ</h2>
 
       {/* Sheet picker */}
       {candidateSheets && (

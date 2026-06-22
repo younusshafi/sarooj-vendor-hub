@@ -16,7 +16,8 @@ interface RfqFields {
   sme_required: boolean;
 }
 
-export function RfqEditableFields({ rfqId }: { rfqId: string }) {
+export function RfqEditableFields({ rfqId, status = "draft" }: { rfqId: string; status?: string }) {
+  const readOnly = status !== "draft";
   const [fields, setFields] = useState<RfqFields | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -83,20 +84,26 @@ export function RfqEditableFields({ rfqId }: { rfqId: string }) {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">RFQ Details</CardTitle>
-          <Button
-            type="button"
-            size="sm"
-            disabled={saving}
-            onClick={handleSave}
-            className="gap-1.5 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
-          >
-            {saving ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Save className="h-3.5 w-3.5" />
-            )}
-            Save
-          </Button>
+          {readOnly ? (
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Issued — read only
+            </span>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              disabled={saving}
+              onClick={handleSave}
+              className="gap-1.5 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
+            >
+              {saving ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Save className="h-3.5 w-3.5" />
+              )}
+              Save
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -107,6 +114,7 @@ export function RfqEditableFields({ rfqId }: { rfqId: string }) {
               id="edit_project_name"
               value={fields.project_name}
               onChange={(e) => updateField("project_name", e.target.value)}
+              disabled={readOnly}
               className="mt-1"
             />
           </div>
@@ -116,6 +124,7 @@ export function RfqEditableFields({ rfqId }: { rfqId: string }) {
               id="edit_project_location"
               value={fields.project_location}
               onChange={(e) => updateField("project_location", e.target.value)}
+              disabled={readOnly}
               className="mt-1"
             />
           </div>
@@ -128,6 +137,7 @@ export function RfqEditableFields({ rfqId }: { rfqId: string }) {
               id="edit_payment_terms"
               value={fields.payment_terms}
               onChange={(e) => updateField("payment_terms", e.target.value)}
+              disabled={readOnly}
               className="mt-1"
             />
           </div>
@@ -137,6 +147,7 @@ export function RfqEditableFields({ rfqId }: { rfqId: string }) {
               id="edit_subcontract_period"
               value={fields.subcontract_period}
               onChange={(e) => updateField("subcontract_period", e.target.value)}
+              disabled={readOnly}
               className="mt-1"
             />
           </div>
@@ -147,6 +158,7 @@ export function RfqEditableFields({ rfqId }: { rfqId: string }) {
             id="edit_sme_required"
             checked={fields.sme_required}
             onCheckedChange={(checked) => updateField("sme_required", checked)}
+            disabled={readOnly}
           />
           <Label htmlFor="edit_sme_required">SME Required</Label>
         </div>

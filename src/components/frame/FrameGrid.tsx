@@ -245,7 +245,7 @@ export function FrameGrid({
             className="flex items-center gap-2 rounded-md bg-foreground px-5 py-2 text-sm font-semibold text-background disabled:opacity-40"
           >
             <Lock className="h-4 w-4" />
-            Lock & Build Frame
+            Lock & Build BoQ
           </button>
         </div>
       </div>

@@ -588,7 +588,7 @@ function RfqPreviewPage() {
     { key: "overview" as const, label: "Overview" },
     { key: "vendors" as const, label: "Vendors" },
     { key: "documents" as const, label: "Documents" },
-    { key: "frame" as const, label: "Frame" },
+    { key: "frame" as const, label: "BoQ Upload" },
   ];
 
   return (
@@ -660,9 +660,9 @@ function RfqPreviewPage() {
             </CardContent>
           </Card>
 
-          <RfqEditableFields rfqId={rfqId} />
+          <RfqEditableFields rfqId={rfqId} status={header.status} />
 
-          <RfqEmailEditor rfqId={rfqId} />
+          <RfqEmailEditor rfqId={rfqId} status={header.status} />
 
           <RfqDispatchPanel rfqId={rfqId} selectedVendors={selectedVendors} />
         </div>
