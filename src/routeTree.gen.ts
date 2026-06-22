@@ -14,6 +14,7 @@ import { Route as RegisterRouteImport } from './routes/register'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as BidTokenRouteImport } from './routes/bid.$token'
 import { Route as AppVendorsRouteImport } from './routes/_app/vendors'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppRfqRouteImport } from './routes/_app/rfq'
@@ -61,6 +62,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppRoute,
+} as any)
+const BidTokenRoute = BidTokenRouteImport.update({
+  id: '/bid/$token',
+  path: '/bid/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AppVendorsRoute = AppVendorsRouteImport.update({
   id: '/vendors',
@@ -192,6 +198,7 @@ export interface FileRoutesByFullPath {
   '/rfq': typeof AppRfqRouteWithChildren
   '/settings': typeof AppSettingsRoute
   '/vendors': typeof AppVendorsRouteWithChildren
+  '/bid/$token': typeof BidTokenRoute
   '/prs/$prNumber': typeof AppPrsPrNumberRoute
   '/rfq/$rfqId': typeof AppRfqRfqIdRouteWithChildren
   '/rfq/bids': typeof AppRfqBidsRoute
@@ -217,6 +224,7 @@ export interface FileRoutesByTo {
   '/outreach': typeof AppOutreachRoute
   '/pending': typeof AppPendingRoute
   '/settings': typeof AppSettingsRoute
+  '/bid/$token': typeof BidTokenRoute
   '/': typeof AppIndexRoute
   '/prs/$prNumber': typeof AppPrsPrNumberRoute
   '/rfq/bids': typeof AppRfqBidsRoute
@@ -247,6 +255,7 @@ export interface FileRoutesById {
   '/_app/rfq': typeof AppRfqRouteWithChildren
   '/_app/settings': typeof AppSettingsRoute
   '/_app/vendors': typeof AppVendorsRouteWithChildren
+  '/bid/$token': typeof BidTokenRoute
   '/_app/': typeof AppIndexRoute
   '/_app/prs/$prNumber': typeof AppPrsPrNumberRoute
   '/_app/rfq/$rfqId': typeof AppRfqRfqIdRouteWithChildren
@@ -279,6 +288,7 @@ export interface FileRouteTypes {
     | '/rfq'
     | '/settings'
     | '/vendors'
+    | '/bid/$token'
     | '/prs/$prNumber'
     | '/rfq/$rfqId'
     | '/rfq/bids'
@@ -304,6 +314,7 @@ export interface FileRouteTypes {
     | '/outreach'
     | '/pending'
     | '/settings'
+    | '/bid/$token'
     | '/'
     | '/prs/$prNumber'
     | '/rfq/bids'
@@ -333,6 +344,7 @@ export interface FileRouteTypes {
     | '/_app/rfq'
     | '/_app/settings'
     | '/_app/vendors'
+    | '/bid/$token'
     | '/_app/'
     | '/_app/prs/$prNumber'
     | '/_app/rfq/$rfqId'
@@ -356,6 +368,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  BidTokenRoute: typeof BidTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -394,6 +407,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/bid/$token': {
+      id: '/bid/$token'
+      path: '/bid/$token'
+      fullPath: '/bid/$token'
+      preLoaderRoute: typeof BidTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_app/vendors': {
       id: '/_app/vendors'
@@ -658,6 +678,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  BidTokenRoute: BidTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
