@@ -9,7 +9,13 @@ Living list of open items. Updated 2026-06-22.
 vendor a **single-use web link** to a validated, typed table of the RFQ's material list (SR: the
 BoQ schedule). Vendor types unit rates directly; on submit the data writes to the DB instantly,
 the link becomes **dead (destructive / one-time)**, and the bid flows straight into comparison.
-AI becomes a fallback, not the primary path. Applies to MR and SR.
+Applies to MR and SR.
+
+**Link is the SOLE intake path (decided 22 Jun).** The material list lives *behind the link*, so the
+email carries only the link (not the schedule) — a vendor cannot quote without opening it. Email
+replies are NOT accepted: dispatch email says so + use no-reply/un-ingested reply-to. The inbound
+email→AI-extraction n8n flow is **retired for these RFQs** ("AI out the window"; deterministic only).
+Vendor gets a **confirmation email** on submit.
 
 **Why it's good:** deterministic structured input > AI extraction for numeric bid data (no
 confidence/QA step, no mis-reads).
@@ -53,30 +59,33 @@ officer-added with a required note; sheet shows raw + equalized. Vendor side reu
 `bid_items.deviations_from_rfq` / `bids.exclusions` / `scope_coverage_percent`; **officer equalization
 value is NEW (backend)** at the comparison layer. MR + SR (SR's scope-coverage answer).
 
-**C — Per-line PO award split.** Award line-by-line, not one winner per RFQ (20 lines could split
-5/5/3/… across vendors); each awarded vendor gets their own PO. Default per-line award = lowest
-**equalized** rate (B feeds C); require a note when awarding a non-lowest line. Needs per-line award
-storage + PO tables + split-PO generation — **all NEW (backend; PO gen likely n8n)**. FE: per-row
-vendor selector + split summary + note-when-not-lowest.
+**C — Per-line award selection (PO generation OUT of scope).** Officer awards line-by-line, not one
+winner per RFQ (20 lines could split 5/5/3/… across vendors). Default per-line award = lowest
+**equalized** rate (B feeds C); require a note when awarding a non-lowest line. **In scope:** store
+the per-line award decisions (new per-line award table/columns, backend). **OUT of scope:** PO
+tables + PO generation — the officer raises POs himself externally using the award decisions (may
+revisit later). FE: per-row vendor selector + split summary + note-when-not-lowest.
 
-**D — Two-step approval (officer → head), rr-style.** Officer finalizes the comparison/awards and
-**submits for approval**; the full data goes by **email to the procurement head (Rabia)** with a
-single-use review link (mirror rr `rr.review.$token` / `rr_review_by_token`). On her approval it is
-**locked/stored for good** and POs issue; on return-with-comments the officer revises and resubmits
-(rr return/resubmit). Schema already supports the chain: `comparisons.prepared_by` / `reviewed_by` /
-`verified_by` / `approved_by` (default "Rabia Vahabudeen") / `approval_date` / `approved_at` /
-`status`. FE: officer "submit for approval" + Rabia's `/comparison-review/$token` page. Backend:
-state-machine RPCs + email + lock-on-approve + PO trigger.
+**D — Two-step approval (officer → head Rabia ONLY), rr-style.** Officer finalizes the comparison/
+awards and **submits for approval**; the full data goes by **email to Rabia** with a single-use
+review link (mirror rr `rr.review.$token` / `rr_review_by_token`). On her approval it is
+**locked/stored for good** (comparison + awards + equalizations immutable; bids already locked at
+deadline); on return-with-comments the officer revises and resubmits, and the **officer is notified
+when she approves/returns** (close the loop). No PO issuance (out of scope). Schema supports it:
+`comparisons.prepared_by` (officer) / `approved_by` (default "Rabia Vahabudeen") / `approval_date` /
+`approved_at` / `status` (reviewed_by/verified_by unused — 2 stages only). FE: officer "submit for
+approval" + Rabia's `/comparison-review/$token` page. Backend: state-machine RPCs + emails +
+lock-on-approve.
 
-**Consolidated flow:** RFQ issued → vendors price via single-use link (A) [AI fallback] → bids land
-in `bids`/`bid_items` → officer reviews comparison, equalizes exclusions (B), awards per line (C) →
-submits for approval → head approves via single-use link (D) → locked + split POs issue.
+**Consolidated flow:** RFQ issued → vendors price via single-use link (A; link is the only path) →
+bids land in `bids`/`bid_items` → officer reviews comparison, equalizes exclusions (B), awards per
+line (C) → submits for approval → Rabia approves via single-use link (D) → locked. Officer raises
+POs externally (out of scope). Notifications: officer ⇄ Rabia, and vendor confirmation on submit.
 
-**Open decisions to confirm:** (1) approval stages — officer→Rabia only, or also reviewer/verifier
-(schema allows 4 roles)? (2) what exactly locks on final approval (comparison + awards +
-equalizations immutable; bids already locked at deadline). (3) per-line brand → new `bid_items`
-column. (4) PO issuance triggered on final approval. (5) deadline extension control on dashboard
-reopens vendor links.
+**Resolved decisions (22 Jun):** approval = officer→Rabia only; final approval locks comparison +
+awards + equalizations; per-line brand = new `bid_items` column; **PO out of scope** (officer manual);
+any procurement officer can award/submit/extend (for now); deadline extension on dashboard reopens
+vendor links; link is the sole intake (no email quotes; AI email path retired).
 
 ### Dashboard "latest 5" confusion (from 21 Jun PR sanity check — RESOLVED, no data loss)
 The dashboard "Recent Materials RFQs" widget is capped at `.limit(5)` (`index.tsx:237`), so a
