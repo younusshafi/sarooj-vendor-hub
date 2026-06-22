@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase-external/client";
 import { useAuth } from "@/integrations/supabase-external/auth";
 import { toast } from "sonner";
 import { exportComparisonSheet } from "@/utils/exportComparison";
+import { ComparisonAwardPanel } from "@/components/comparison-award-panel";
 
 export const Route = createFileRoute("/_app/rfq/$rfqId/comparison")({
   component: ComparisonViewPage,
@@ -18,8 +19,20 @@ function paymentTermsChip(term: string | null) {
   const risk = ["advance_full", "advance_partial"].includes(term);
   const fav = term.startsWith("pdc") || term.startsWith("credit");
   const unk = term === "tbd";
-  const bg = risk ? "#FEE2E2" : fav ? "var(--accent-soft)" : unk ? "#FDF3E0" : "var(--table-header)";
-  const fg = risk ? "#991B1B" : fav ? "var(--primary-hover)" : unk ? "#7A5200" : "var(--muted-foreground)";
+  const bg = risk
+    ? "#FEE2E2"
+    : fav
+      ? "var(--accent-soft)"
+      : unk
+        ? "#FDF3E0"
+        : "var(--table-header)";
+  const fg = risk
+    ? "#991B1B"
+    : fav
+      ? "var(--primary-hover)"
+      : unk
+        ? "#7A5200"
+        : "var(--muted-foreground)";
   return (
     <span
       className="rounded-full px-2 py-0.5 text-xs font-medium"
@@ -655,6 +668,15 @@ function ComparisonViewPage() {
           </div>
         )}
       </div>
+
+      {/* Per-line award & equalization (B + C) */}
+      {comparison?.comparison_id && (bids?.length ?? 0) > 0 && (rfqItems?.length ?? 0) > 0 && (
+        <ComparisonAwardPanel
+          comparisonId={comparison.comparison_id}
+          rfqItems={rfqItems!}
+          bids={bids!}
+        />
+      )}
 
       {/* Decision capture card */}
       <div className="rounded-xl border border-border bg-card p-6">
