@@ -672,6 +672,7 @@ function RfqPreviewPage() {
         <div className="space-y-6">
           <RfqVendorList
             rfqId={rfqId}
+            status={header.status}
             selected={selectedVendors}
             onSelectionChange={setSelectedVendors}
           />

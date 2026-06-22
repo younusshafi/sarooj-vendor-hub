@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase-external/client";
 import { formatDate } from "@/lib/format";
+import { excludeTestBatch, splitRecipients, groupByCategory, wasSent } from "@/lib/rfq-vendors";
 
 export const Route = createFileRoute("/_app/rfq/$rfqId/")({
   component: RFQDetailPage,
@@ -376,11 +377,17 @@ function VendorsTabPanel({
 }) {
   const isDraft = rfq.status === "draft";
 
-  const filteredVendors = vendors.filter(
-    (v: any) => !(v.vendors?.categories ?? []).includes("TEST_BATCH"),
-  );
+  // All non-TEST_BATCH vendors (the full matched pool).
+  const allVendors = excludeTestBatch(vendors);
+  // Recipients = vendors actually sent the RFQ (sent_at set by dispatch).
+  const { recipients, uncontacted } = splitRecipients(allVendors);
 
-  // Read saved selection from sessionStorage (set by Preview page)
+  // Once issued, default to recipients only; a toggle reveals the full pool.
+  const [showAll, setShowAll] = useState(false);
+  const displayVendors = isDraft || showAll ? allVendors : recipients;
+
+  // Read saved selection from sessionStorage (set by Preview page) — draft only,
+  // used to highlight which vendors are queued for dispatch before issue.
   const [savedSelection] = useState<Set<string>>(() => {
     try {
       const stored = sessionStorage.getItem(`rfq_selection_${rfqId}`);
@@ -390,8 +397,8 @@ function VendorsTabPanel({
     }
     return new Set<string>();
   });
-  const hasSelection = savedSelection.size > 0;
-  const selectedCount = filteredVendors.filter((v: any) => savedSelection.has(v.vendor_id)).length;
+  const hasSelection = isDraft && savedSelection.size > 0;
+  const selectedCount = allVendors.filter((v: any) => savedSelection.has(v.vendor_id)).length;
 
   const [emailExpanded, setEmailExpanded] = useState(true);
   const [deadline, setDeadline] = useState<string>(rfq.deadline ?? "");
@@ -427,7 +434,7 @@ function VendorsTabPanel({
     [rfqId, showToast],
   );
 
-  const vendorCount = filteredVendors.length;
+  const vendorCount = allVendors.length;
 
   return (
     <div className="space-y-4">
@@ -447,24 +454,49 @@ function VendorsTabPanel({
       {/* Header row */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold" style={{ color: "#1A3A5C" }}>
-            {vendorsLoading ? "Vendors" : `Vendors (${vendorCount})`}
-          </span>
-          {hasSelection && (
-            <span
-              className="rounded-full px-3 py-0.5 text-xs font-medium"
-              style={{ backgroundColor: "#E0F2EA", color: "#0D5C3A" }}
-            >
-              {selectedCount} of {vendorCount} selected for dispatch
+          {vendorsLoading ? (
+            <span className="text-sm font-semibold" style={{ color: "#1A3A5C" }}>
+              Vendors
             </span>
-          )}
-          {rfq.status === "issued" && rfq.sent_at && (
-            <span
-              className="rounded-full px-3 py-0.5 text-xs font-medium"
-              style={{ backgroundColor: "#E8F5EE", color: "#0D5C3A" }}
-            >
-              Sent {formatDate(rfq.sent_at)}
-            </span>
+          ) : isDraft ? (
+            <>
+              <span className="text-sm font-semibold" style={{ color: "#1A3A5C" }}>
+                Vendors ({vendorCount})
+              </span>
+              {hasSelection && (
+                <span
+                  className="rounded-full px-3 py-0.5 text-xs font-medium"
+                  style={{ backgroundColor: "#E0F2EA", color: "#0D5C3A" }}
+                >
+                  {selectedCount} of {vendorCount} selected for dispatch
+                </span>
+              )}
+            </>
+          ) : (
+            <>
+              <span className="text-sm font-semibold" style={{ color: "#1A3A5C" }}>
+                Sent to {recipients.length} vendor{recipients.length !== 1 ? "s" : ""}
+              </span>
+              {rfq.sent_at && (
+                <span
+                  className="rounded-full px-3 py-0.5 text-xs font-medium"
+                  style={{ backgroundColor: "#E8F5EE", color: "#0D5C3A" }}
+                >
+                  Sent {formatDate(rfq.sent_at)}
+                </span>
+              )}
+              {uncontacted.length > 0 && (
+                <button
+                  onClick={() => setShowAll((v) => !v)}
+                  className="text-xs font-medium underline"
+                  style={{ color: "var(--accent)" }}
+                >
+                  {showAll
+                    ? "Show recipients only"
+                    : `Show all matched (${uncontacted.length} un-contacted)`}
+                </button>
+              )}
+            </>
           )}
         </div>
         {isDraft ? (
@@ -525,19 +557,15 @@ function VendorsTabPanel({
           <Loader2 className="mx-auto h-5 w-5 animate-spin" />
         </div>
       )}
-      {!vendorsLoading && filteredVendors.length === 0 && (
+      {!vendorsLoading && displayVendors.length === 0 && (
         <div className="rounded-xl border border-border bg-card px-4 py-8 text-center text-muted-foreground">
-          No vendors assigned
+          {isDraft ? "No vendors assigned" : "No vendors have been sent this RFQ yet"}
         </div>
       )}
       {!vendorsLoading &&
+        displayVendors.length > 0 &&
         (() => {
-          const grouped = filteredVendors.reduce((acc: Record<string, any[]>, v: any) => {
-            const cat = v.matched_category || "Uncategorised";
-            if (!acc[cat]) acc[cat] = [];
-            acc[cat].push(v);
-            return acc;
-          }, {});
+          const grouped = groupByCategory(displayVendors);
           const categoryNames = Object.keys(grouped).sort();
           return categoryNames.map((categoryName) => (
             <div key={categoryName} className="mb-4">
@@ -568,12 +596,16 @@ function VendorsTabPanel({
                   </thead>
                   <tbody>
                     {grouped[categoryName].map((v: any) => {
-                      const isSelected = !hasSelection || savedSelection.has(v.vendor_id);
+                      // Draft: dim vendors not queued for dispatch. Issued (when
+                      // showing the full pool): dim the un-contacted vendors.
+                      const dimmed = isDraft
+                        ? hasSelection && !savedSelection.has(v.vendor_id)
+                        : showAll && !wasSent(v);
                       return (
                         <tr
                           key={v.id}
                           className="border-t border-border"
-                          style={{ opacity: isSelected ? 1 : 0.4 }}
+                          style={{ opacity: dimmed ? 0.4 : 1 }}
                         >
                           <td
                             className="px-4 py-3 font-medium"
@@ -581,7 +613,7 @@ function VendorsTabPanel({
                           >
                             <span className="flex items-center gap-2">
                               {v.vendors?.company_name || "—"}
-                              {hasSelection && isSelected && (
+                              {hasSelection && !dimmed && (
                                 <CheckCircle
                                   className="h-3.5 w-3.5 flex-shrink-0"
                                   style={{ color: "var(--accent)" }}

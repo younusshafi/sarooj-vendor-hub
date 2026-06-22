@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase-external/client";
 import { toast } from "sonner";
 import { Loader2, Search, X } from "lucide-react";
+import { excludeTestBatch, splitRecipients, groupByCategory, wasSent } from "@/lib/rfq-vendors";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -53,20 +54,31 @@ export interface SelectedVendor {
 
 export function RfqVendorList({
   rfqId,
+  status = "draft",
   selected,
   onSelectionChange,
   onCountChange,
 }: {
   rfqId: string;
+  /** RFQ status — drives recipients-only view + read-only gating once issued. */
+  status?: string;
   selected: SelectedVendor[];
   onSelectionChange: (next: SelectedVendor[]) => void;
   onCountChange?: (count: number) => void;
 }) {
+  const isDraft = status === "draft";
   const [vendorList, setVendorList] = useState<RfqVendor[]>([]);
   // Selection is owned by the parent route (so it survives tab switches);
   // derive a Set of vendor_ids for cheap membership checks during render.
   const selectedIds = new Set(selected.map((s) => s.vendor_id));
   const [loading, setLoading] = useState(true);
+  // Once issued, default to recipients only (sent_at set); toggle reveals the pool.
+  const [showAll, setShowAll] = useState(false);
+
+  // Full matched pool (minus TEST_BATCH) and the actually-sent recipients.
+  const allVendors = excludeTestBatch(vendorList);
+  const { recipients, uncontacted } = splitRecipients(allVendors);
+  const displayVendors = isDraft || showAll ? allVendors : recipients;
   const [vendorSearch, setVendorSearch] = useState("");
   const [vendorResults, setVendorResults] = useState<VendorSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -125,7 +137,7 @@ export function RfqVendorList({
   };
 
   const selectAll = () => {
-    onSelectionChange(vendorList.map((v) => ({ vendor_id: v.vendor_id, name: nameOf(v) })));
+    onSelectionChange(displayVendors.map((v) => ({ vendor_id: v.vendor_id, name: nameOf(v) })));
   };
 
   const deselectAll = () => {
@@ -133,7 +145,7 @@ export function RfqVendorList({
   };
 
   const selectedCount = selected.length;
-  const allSelected = vendorList.length > 0 && selectedCount === vendorList.length;
+  const allSelected = displayVendors.length > 0 && selectedCount === displayVendors.length;
 
   // ── Search ──
 
@@ -255,12 +267,7 @@ export function RfqVendorList({
 
   // ── Group vendors by category ──
 
-  const grouped = vendorList.reduce<Record<string, RfqVendor[]>>((acc, v) => {
-    const cat = v.matched_category || "Uncategorised";
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(v);
-    return acc;
-  }, {});
+  const grouped = groupByCategory(displayVendors);
   const categoryNames = Object.keys(grouped).sort();
 
   // ── Render ──
@@ -278,30 +285,49 @@ export function RfqVendorList({
       {/* Header */}
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold" style={{ color: "#1A3A5C" }}>
-          Vendors ({vendorList.length}) — {selectedCount} selected
+          {isDraft
+            ? `Vendors (${allVendors.length}) — ${selectedCount} selected`
+            : `Sent to ${recipients.length} vendor${recipients.length !== 1 ? "s" : ""}`}
         </span>
-        {vendorList.length > 0 && (
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
+          {/* Selection controls — draft only (issued RFQs are read-only) */}
+          {isDraft && allVendors.length > 0 && (
+            <>
+              <button
+                onClick={allSelected ? deselectAll : selectAll}
+                className="text-xs font-medium"
+                style={{ color: "var(--accent)" }}
+              >
+                {allSelected ? "Deselect all" : "Select all"}
+              </button>
+              {selectedCount > 0 && !allSelected && (
+                <button onClick={deselectAll} className="text-xs font-medium text-muted-foreground">
+                  Deselect all
+                </button>
+              )}
+            </>
+          )}
+          {/* Recipients/pool toggle — issued only */}
+          {!isDraft && uncontacted.length > 0 && (
             <button
-              onClick={allSelected ? deselectAll : selectAll}
-              className="text-xs font-medium"
+              onClick={() => setShowAll((v) => !v)}
+              className="text-xs font-medium underline"
               style={{ color: "var(--accent)" }}
             >
-              {allSelected ? "Deselect all" : "Select all"}
+              {showAll
+                ? "Show recipients only"
+                : `Show all matched (${uncontacted.length} un-contacted)`}
             </button>
-            {selectedCount > 0 && !allSelected && (
-              <button onClick={deselectAll} className="text-xs font-medium text-muted-foreground">
-                Deselect all
-              </button>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Vendor list grouped by category */}
-      {vendorList.length === 0 && (
+      {displayVendors.length === 0 && (
         <div className="rounded-xl border border-border bg-card px-4 py-8 text-center text-muted-foreground text-sm">
-          No vendors assigned. Search and add below.
+          {isDraft
+            ? "No vendors assigned. Search and add below."
+            : "No vendors have been sent this RFQ yet."}
         </div>
       )}
 
@@ -319,15 +345,17 @@ export function RfqVendorList({
               style={{ backgroundColor: "#E8EFF7" }}
             >
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={allChecked}
-                  ref={(el) => {
-                    if (el) el.indeterminate = someChecked;
-                  }}
-                  onChange={() => toggleCategory(catVendors)}
-                  className="h-4 w-4 rounded accent-[var(--accent)]"
-                />
+                {isDraft && (
+                  <input
+                    type="checkbox"
+                    checked={allChecked}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someChecked;
+                    }}
+                    onChange={() => toggleCategory(catVendors)}
+                    className="h-4 w-4 rounded accent-[var(--accent)]"
+                  />
+                )}
                 <span
                   className="text-xs font-semibold uppercase tracking-wider"
                   style={{ color: "#1A3A5C" }}
@@ -335,27 +363,39 @@ export function RfqVendorList({
                   {categoryName} ({catVendors.length})
                 </span>
               </label>
-              <button
-                onClick={() => catVendors.forEach((v) => removeVendor(v))}
-                className="text-xs font-medium"
-                style={{ color: "#DC2626" }}
-              >
-                Remove all
-              </button>
+              {isDraft && (
+                <button
+                  onClick={() => catVendors.forEach((v) => removeVendor(v))}
+                  className="text-xs font-medium"
+                  style={{ color: "#DC2626" }}
+                >
+                  Remove all
+                </button>
+              )}
             </div>
             <div className="space-y-2 rounded-b-lg border border-border p-2">
               {catVendors.map((v) => (
                 <div
                   key={v.id}
                   className="flex items-start gap-3 rounded-lg border border-border p-3"
-                  style={{ opacity: selectedIds.has(v.vendor_id) ? 1 : 0.5 }}
+                  style={{
+                    opacity: isDraft
+                      ? selectedIds.has(v.vendor_id)
+                        ? 1
+                        : 0.5
+                      : showAll && !wasSent(v)
+                        ? 0.5
+                        : 1,
+                  }}
                 >
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(v.vendor_id)}
-                    onChange={() => toggleVendor(v)}
-                    className="mt-0.5 h-4 w-4 flex-shrink-0 rounded accent-[var(--accent)]"
-                  />
+                  {isDraft && (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(v.vendor_id)}
+                      onChange={() => toggleVendor(v)}
+                      className="mt-0.5 h-4 w-4 flex-shrink-0 rounded accent-[var(--accent)]"
+                    />
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm truncate">
@@ -410,12 +450,14 @@ export function RfqVendorList({
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => removeVendor(v)}
-                    className="ml-2 flex-shrink-0 rounded p-1 text-muted-foreground hover:text-destructive"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  {isDraft && (
+                    <button
+                      onClick={() => removeVendor(v)}
+                      className="ml-2 flex-shrink-0 rounded p-1 text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -423,65 +465,67 @@ export function RfqVendorList({
         );
       })}
 
-      {/* Add vendor search */}
-      <div className="relative">
+      {/* Add vendor search — draft only (issued RFQs are read-only) */}
+      {isDraft && (
         <div className="relative">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search vendors to add..."
-            value={vendorSearch}
-            onChange={(e) => searchVendors(e.target.value)}
-            className="w-full rounded-md border border-border bg-white pl-9 pr-3 py-2 text-sm outline-none"
-          />
-          {searching && (
-            <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
-          )}
-        </div>
-        {vendorResults.length > 0 && (
-          <div className="absolute z-10 mt-1 w-full rounded-md border border-border bg-white shadow-lg max-h-72 overflow-y-auto">
-            {vendorResults.map((v) => {
-              const alreadyAdded = vendorList.some((vl) => vl.vendor_id === v.vendor_id);
-              return (
-                <button
-                  key={v.vendor_id}
-                  onClick={() => addVendor(v)}
-                  disabled={alreadyAdded}
-                  className="flex w-full items-start gap-2 px-3 py-2 text-sm hover:bg-secondary text-left disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium truncate">{v.company_name}</span>
-                      {alreadyAdded && (
-                        <span
-                          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                          style={{ backgroundColor: "#E0F2EA", color: "#0D5C3A" }}
-                        >
-                          Added
-                        </span>
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search vendors to add..."
+              value={vendorSearch}
+              onChange={(e) => searchVendors(e.target.value)}
+              className="w-full rounded-md border border-border bg-white pl-9 pr-3 py-2 text-sm outline-none"
+            />
+            {searching && (
+              <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+            )}
+          </div>
+          {vendorResults.length > 0 && (
+            <div className="absolute z-10 mt-1 w-full rounded-md border border-border bg-white shadow-lg max-h-72 overflow-y-auto">
+              {vendorResults.map((v) => {
+                const alreadyAdded = vendorList.some((vl) => vl.vendor_id === v.vendor_id);
+                return (
+                  <button
+                    key={v.vendor_id}
+                    onClick={() => addVendor(v)}
+                    disabled={alreadyAdded}
+                    className="flex w-full items-start gap-2 px-3 py-2 text-sm hover:bg-secondary text-left disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium truncate">{v.company_name}</span>
+                        {alreadyAdded && (
+                          <span
+                            className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                            style={{ backgroundColor: "#E0F2EA", color: "#0D5C3A" }}
+                          >
+                            Added
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">{v.email}</div>
+                      {v.categories && v.categories.length > 0 && (
+                        <div className="mt-0.5 flex flex-wrap gap-1">
+                          {v.categories.slice(0, 3).map((cat) => (
+                            <span
+                              key={cat}
+                              className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                              style={{ backgroundColor: "#E8EFF7", color: "#1A3A5C" }}
+                            >
+                              {cat}
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </div>
-                    <div className="text-xs text-muted-foreground truncate">{v.email}</div>
-                    {v.categories && v.categories.length > 0 && (
-                      <div className="mt-0.5 flex flex-wrap gap-1">
-                        {v.categories.slice(0, 3).map((cat) => (
-                          <span
-                            key={cat}
-                            className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-                            style={{ backgroundColor: "#E8EFF7", color: "#1A3A5C" }}
-                          >
-                            {cat}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
