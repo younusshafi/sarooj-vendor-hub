@@ -371,10 +371,11 @@ function ComparisonViewPage() {
                               className="px-4 py-3 text-right font-mono text-xs"
                               style={{
                                 backgroundColor: isMin
-                                  ? "var(--accent-soft)"
+                                  ? "#E0F2EA"
                                   : i % 2 === 0
                                     ? "#F0F7FF"
                                     : undefined,
+                                color: isMin ? "#0D5C3A" : undefined,
                               }}
                             >
                               {rate != null ? (
@@ -390,10 +391,11 @@ function ComparisonViewPage() {
                               className="px-4 py-3 text-right font-mono text-xs"
                               style={{
                                 backgroundColor: isMin
-                                  ? "var(--accent-soft)"
+                                  ? "#E0F2EA"
                                   : i % 2 === 0
                                     ? "#F0F7FF"
                                     : undefined,
+                                color: isMin ? "#0D5C3A" : undefined,
                               }}
                             >
                               {amt != null ? (
