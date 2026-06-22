@@ -14,17 +14,31 @@ AI becomes a fallback, not the primary path. Applies to MR and SR.
 **Why it's good:** deterministic structured input > AI extraction for numeric bid data (no
 confidence/QA step, no mis-reads).
 
-**⚠️ Mostly BACKEND (rule 1) — needs handoff. Frontend can own only the form UI.**
-- Frontend (us): public `/bid/:token` route (no auth), typed/validated editable table, submit UX,
-  used/expired/success states; admin "copy bid link" affordance.
-- Backend (operator): single-use **token table + issuance**; attach link in dispatch email (n8n);
-  **secure submit endpoint** (Supabase edge fn or n8n webhook, service-role) that atomically
-  validates token + marks used + writes `bids`/`bid_items`; RLS for any anon reads; token→rfq/
-  vendor mapping; server-side validation (never trust client). Token must be unguessable, hashed
-  at rest, expire at deadline, rate-limited.
-- Open: confirm `bids`/`bid_items` shape so the form populates the exact comparison schema; SR
-  has **no bid screen yet** — this could be SR's primary intake (bigger backend lift).
-- Next step when revisited: write the frontend↔backend contract so both build in parallel.
+**PROVEN PATTERN EXISTS** in the rr (rental-request) app `SCC Lease Frontend Code/
+scc-lease-frontend` — same stack (React 19 + TanStack Router + Supabase + shadcn). It combines
+exactly the two halves the client described:
+- Single-use link: public route `src/routes/rr.review.$token.tsx` (`/rr/review/$token`). Token is
+  an opaque string in the URL; loaded via Supabase **RPC** `rr_get_by_token(p_token)` →
+  `{found:false}` if invalid/used. Submit via RPC `rr_review_by_token(p_token, decision, payload)`.
+  **Single-use = workflow state**: the RPC advances status, so the token goes stale — NO separate
+  tokens table, NO time expiry. States: loading / used ("Response Recorded") / invalid-expired /
+  error / valid.
+- Vendor-inputs-data: public `rr.new` + `RrForm` writes via RPCs `rr_create_draft` / `rr_submit`
+  called from the browser with the **anon key**; RLS + SECURITY-DEFINER RPCs enforce safety. Empty
+  →null coercion (our rule 5). No edge function / node server.
+
+**Architecture for the bid link (mirror rr):**
+- Backend (operator, rule 1 — but they've built this exact shape already):
+  - token column on `rfq_vendors` (e.g. `bid_token`).
+  - RPC `bid_get_by_token(p_token)` → RFQ + item list + vendor, or `{found:false}` once submitted.
+  - RPC `bid_submit_by_token(p_token, p_payload)` → validate, write `bids`/`bid_items`, mark
+    submitted (single-use via status), return ok. Server-side validation inside the RPC.
+  - dispatch email (n8n) includes the link.
+- Frontend (us): public `/bid/$token` route + typed/validated editable table + used/expired/
+  success states, modelled on `rr.review.$token.tsx`. Buildable against a stubbed RPC.
+- Open: confirm `bids`/`bid_items` shape (comparison reads it); SR has **no bid screen yet** →
+  this could be SR's primary intake (define SR bid model first).
+- Next step when revisited: write the frontend↔backend RPC contract; build FE against a stub.
 
 ### Dashboard "latest 5" confusion (from 21 Jun PR sanity check — RESOLVED, no data loss)
 The dashboard "Recent Materials RFQs" widget is capped at `.limit(5)` (`index.tsx:237`), so a
