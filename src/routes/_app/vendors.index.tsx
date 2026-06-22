@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { MoreHorizontal, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase, type Vendor } from "@/integrations/supabase-external/client";
 import { StatusBadge, ConfidenceDot, CategoryTags, SupplierPill } from "@/components/status-badge";
@@ -15,11 +15,25 @@ import { toast } from "sonner";
 
 const PAGE_SIZE = 50;
 
+type VendorsSearch = {
+  status?: string;
+  dup?: boolean;
+};
+
 export const Route = createFileRoute("/_app/vendors/")({
+  // Allow deep-linking from the dashboard tiles, e.g. /vendors?status=pending_review
+  // or /vendors?status=active (listed+registered) or /vendors?dup=true.
+  validateSearch: (search: Record<string, unknown>): VendorsSearch => ({
+    status: typeof search.status === "string" ? search.status : undefined,
+    dup: search.dup === true || search.dup === "true" ? true : undefined,
+  }),
   component: VendorsPage,
 });
 
+// "active" is a synthetic value (listed + registered) handled specially in the query;
+// the rest are real vendors.status values.
 const STATUS_OPTIONS = [
+  "active",
   "listed",
   "registered",
   "pending_review",
@@ -39,23 +53,35 @@ const CONFIDENCE = ["high", "medium", "low"];
 
 function VendorsPage() {
   const navigate = useNavigate();
+  const sp = Route.useSearch();
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState(sp.status ?? "");
   const [vtype, setVtype] = useState("");
   const [stype, setStype] = useState("");
   const [category, setCategory] = useState("");
   const [confidence, setConfidence] = useState("");
+  const [dup, setDup] = useState<boolean>(!!sp.dup);
   const [page, setPage] = useState(0);
 
-  const filters = { search, status, vtype, stype, category, confidence };
-  const hasFilters = !!(search || status || vtype || stype || category || confidence);
+  // Keep filters in sync when navigated here with new search params (e.g. clicking
+  // a different dashboard tile while already on /vendors).
+  useEffect(() => {
+    setStatus(sp.status ?? "");
+    setDup(!!sp.dup);
+    setPage(0);
+  }, [sp.status, sp.dup]);
+
+  const filters = { search, status, vtype, stype, category, confidence, dup };
+  const hasFilters = !!(search || status || vtype || stype || category || confidence || dup);
 
   const categoriesQuery = useQuery({
     queryKey: ["vendor-categories"],
     queryFn: async () => {
       const { data } = await supabase.from("vendors").select("categories").limit(1000);
       const set = new Set<string>();
-      (data ?? []).forEach((row: any) => (row.categories ?? []).forEach((c: string) => set.add(c)));
+      (data as { categories: string[] | null }[] | null)?.forEach((row) =>
+        (row.categories ?? []).forEach((c) => set.add(c)),
+      );
       return Array.from(set).sort();
     },
     staleTime: 1000 * 60 * 10,
@@ -66,7 +92,9 @@ function VendorsPage() {
     queryFn: async () => {
       let q = supabase.from("vendors").select("*", { count: "exact" }).order("company_name");
       if (search) q = q.ilike("company_name", `%${search}%`);
-      if (status) q = q.eq("status", status);
+      if (status === "active") q = q.in("status", ["listed", "registered"]);
+      else if (status) q = q.eq("status", status);
+      if (dup) q = q.eq("duplicate_flag", true);
       if (vtype) q = q.eq("vendor_type", vtype);
       if (stype) q = q.eq("supplier_type", stype);
       if (confidence) q = q.eq("data_confidence", confidence);
@@ -88,6 +116,7 @@ function VendorsPage() {
     setStype("");
     setCategory("");
     setConfidence("");
+    setDup(false);
     setPage(0);
   };
 
@@ -209,6 +238,18 @@ function VendorsPage() {
             }}
             options={CONFIDENCE}
           />
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={dup}
+              onChange={(e) => {
+                setDup(e.target.checked);
+                setPage(0);
+              }}
+              className="h-4 w-4 rounded border-border"
+            />
+            <span className="text-muted-foreground">Duplicates only</span>
+          </label>
           {hasFilters && (
             <button
               onClick={clearFilters}

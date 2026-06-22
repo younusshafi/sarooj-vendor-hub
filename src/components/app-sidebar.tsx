@@ -12,18 +12,13 @@ import {
   UserPlus,
   FileText,
   Tags,
-  ExternalLink,
   ClipboardList,
   ChevronRight,
 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase-external/client";
 import { useAuth } from "@/integrations/supabase-external/auth";
-import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 
 type NavItem = {
   to: string;
@@ -32,16 +27,22 @@ type NavItem = {
   exact?: boolean;
   badge?: boolean;
   dot?: "blue" | "amber";
+  search?: Record<string, unknown>;
 };
 
 /* ── Top-level items ── */
 const TOP_NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: Home, exact: true },
   { to: "/prs", label: "PR Tracker", icon: ClipboardList, dot: "amber" },
-  { to: "/rfq", label: "RFQ \u2013 Supplies", icon: FileText, dot: "blue" },
 ];
 
-/* ── Vendor group children ── */
+/* RFQ group children (unified tracker, filtered by type) */
+const RFQ_CHILDREN: NavItem[] = [
+  { to: "/rfq", label: "Materials RFQs", icon: FileText, search: { type: "materials" } },
+  { to: "/rfq", label: "Subcontractor RFQs", icon: FileText, search: { type: "subcontractor" } },
+];
+
+/* Vendor group children */
 const VENDOR_CHILDREN: NavItem[] = [
   { to: "/vendors", label: "Vendor List", icon: Building2 },
   { to: "/pending", label: "Pending Registrations", icon: Inbox, badge: true },
@@ -73,6 +74,10 @@ export function AppSidebar() {
   const { user } = useAuth();
   const router = useRouter();
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const currentSearch = useRouterState({
+    select: (s) => s.location.search as Record<string, unknown>,
+  });
+  const currentType = typeof currentSearch.type === "string" ? currentSearch.type : "";
   const { data: pendingCount = 0 } = usePendingCount();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -87,13 +92,19 @@ export function AppSidebar() {
   const vendorGroupActive = VENDOR_CHILDREN.some((c) => isActive(c.to, c.exact));
   const [vendorOpen, setVendorOpen] = useState(vendorGroupActive);
 
+  const rfqGroupActive = path === "/rfq" || path.startsWith("/rfq/");
+  const [rfqOpen, setRfqOpen] = useState(rfqGroupActive);
+
   /* Shared link renderer for flat nav items */
   function NavLink({ item }: { item: NavItem }) {
     const Icon = item.icon;
-    const active = isActive(item.to, item.exact);
+    const active = item.search
+      ? isActive(item.to, item.exact) && currentType === (item.search.type as string)
+      : isActive(item.to, item.exact);
     return (
       <Link
         to={item.to}
+        search={item.search}
         onClick={() => setMobileOpen(false)}
         className="group mb-1 flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors"
         style={{
@@ -111,16 +122,10 @@ export function AppSidebar() {
           <Icon className="h-4 w-4" />
           {item.label}
           {item.dot === "blue" && (
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ backgroundColor: "#60A5FA" }}
-            />
+            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "#60A5FA" }} />
           )}
           {item.dot === "amber" && (
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ backgroundColor: "#F59E0B" }}
-            />
+            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "#F59E0B" }} />
           )}
         </span>
         {item.badge && pendingCount > 0 && (
@@ -160,22 +165,44 @@ export function AppSidebar() {
           <NavLink key={item.to} item={item} />
         ))}
 
-        {/* External link to subcontractor app */}
-        <a
-          href="https://sarooj-procurement-subcontractors.vercel.app/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group mb-1 flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors"
-          style={{ color: "var(--sidebar-foreground)" }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)")}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
-        >
-          <span className="flex items-center gap-3">
-            <FileText className="h-4 w-4" />
-            Subcontractor RFQs
-          </span>
-          <ExternalLink className="h-3 w-3" style={{ opacity: 0.5 }} />
-        </a>
+        {/* RFQ group: unified tracker filtered by type */}
+        <Collapsible open={rfqOpen || rfqGroupActive} onOpenChange={setRfqOpen}>
+          <CollapsibleTrigger asChild>
+            <button
+              className="group mb-1 flex w-full items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors"
+              style={{
+                backgroundColor: rfqGroupActive ? "var(--sidebar-primary)" : "transparent",
+                color: rfqGroupActive ? "white" : "var(--sidebar-foreground)",
+              }}
+              onMouseEnter={(e) => {
+                if (!rfqGroupActive)
+                  e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)";
+              }}
+              onMouseLeave={(e) => {
+                if (!rfqGroupActive) e.currentTarget.style.backgroundColor = "transparent";
+              }}
+            >
+              <span className="flex items-center gap-3">
+                <FileText className="h-4 w-4" />
+                RFQ
+              </span>
+              <ChevronRight
+                className="h-3.5 w-3.5 transition-transform duration-200"
+                style={{
+                  transform: rfqOpen || rfqGroupActive ? "rotate(90deg)" : "rotate(0deg)",
+                  opacity: 0.6,
+                }}
+              />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="ml-3 border-l border-white/10 pl-2">
+              {RFQ_CHILDREN.map((item) => (
+                <NavLink key={item.label} item={item} />
+              ))}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
 
         {/* Collapsible Vendors group */}
         <Collapsible open={vendorOpen || vendorGroupActive} onOpenChange={setVendorOpen}>
@@ -183,12 +210,8 @@ export function AppSidebar() {
             <button
               className="group mb-1 flex w-full items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors"
               style={{
-                backgroundColor: vendorGroupActive
-                  ? "var(--sidebar-primary)"
-                  : "transparent",
-                color: vendorGroupActive
-                  ? "white"
-                  : "var(--sidebar-foreground)",
+                backgroundColor: vendorGroupActive ? "var(--sidebar-primary)" : "transparent",
+                color: vendorGroupActive ? "white" : "var(--sidebar-foreground)",
               }}
               onMouseEnter={(e) => {
                 if (!vendorGroupActive)

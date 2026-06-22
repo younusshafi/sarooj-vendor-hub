@@ -9,10 +9,6 @@ export const Route = createFileRoute("/_app/prs/$prNumber")({
   component: PrDetailPage,
 });
 
-// Subcontractor RFQs live in a separate app — a PR can span both types, so the
-// SR detail link must deep-link out rather than open the frameless materials page.
-const SUBCONTRACTOR_APP_URL = "https://sarooj-procurement-subcontractors.vercel.app";
-
 function PrStatusBadge({ code }: { code: string }) {
   const c = code as PrStatusCode;
   const style = PR_STATUS_BADGE[c] ?? { bg: "#E5EAE8", text: "#0D3D2E" };
@@ -207,15 +203,14 @@ function PrDetailPage() {
                         Detail <ChevronRight className="h-3 w-3" />
                       </Link>
                     ) : (
-                      <a
-                        href={`${SUBCONTRACTOR_APP_URL}/rfq/${row.rfq_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <Link
+                        to="/rfq/sub/$rfqId"
+                        params={{ rfqId: row.rfq_id }}
                         className="inline-flex items-center gap-1 text-xs font-medium"
                         style={{ color: "var(--accent)" }}
                       >
-                        Detail ↗
-                      </a>
+                        Detail <ChevronRight className="h-3 w-3" />
+                      </Link>
                     )}
                     {row.rfq_type === "materials" &&
                       (row.comparisons_count > 0 || row.finalised_count > 0) && (

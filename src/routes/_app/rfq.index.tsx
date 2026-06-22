@@ -1,15 +1,29 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, ChevronDown, ChevronUp, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase-external/client";
 import { formatDate } from "@/lib/format";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+type RfqSearch = { status?: string; type?: string };
 
 export const Route = createFileRoute("/_app/rfq/")({
+  // Allow deep-linking from dashboard tiles + sidebar, e.g. /rfq?status=issued&type=materials
+  validateSearch: (search: Record<string, unknown>): RfqSearch => ({
+    status: typeof search.status === "string" ? search.status : undefined,
+    type: search.type === "materials" || search.type === "subcontractor" ? search.type : undefined,
+  }),
   component: RFQTrackerPage,
 });
 
-const STATUS_OPTIONS = ["draft", "sent", "closed", "awarded", "cancelled"];
+// Real materials RFQ statuses in the data are draft + issued only.
+const STATUS_OPTIONS = ["draft", "issued"];
 
 // ── Types ──
 
@@ -90,6 +104,7 @@ function dateToBucket(dateStr: string): BucketKey {
 function RFQStatusBadge({ status }: { status: string }) {
   const colors: Record<string, { bg: string; fg: string }> = {
     draft: { bg: "#F0F7F4", fg: "#4A6560" },
+    issued: { bg: "#E8EFF7", fg: "#1A3A5C" },
     sent: { bg: "#E8EFF7", fg: "#1A3A5C" },
     closed: { bg: "#FDF3E0", fg: "#7A5200" },
     awarded: { bg: "#E8F5EE", fg: "#0D5C3A" },
@@ -107,20 +122,27 @@ function RFQStatusBadge({ status }: { status: string }) {
 }
 
 function RFQTrackerPage() {
+  const sp = Route.useSearch();
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState(sp.status ?? "");
+  const [typeFilter, setTypeFilter] = useState(sp.type ?? "");
   const [createdBy, setCreatedBy] = useState("");
   const [collapsedBuckets, setCollapsedBuckets] = useState<Set<BucketKey>>(new Set());
+
+  // Sync when navigated here with new status/type params (e.g. from a dashboard tile or sidebar).
+  useEffect(() => {
+    setStatus(sp.status ?? "");
+    setTypeFilter(sp.type ?? "");
+  }, [sp.status, sp.type]);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["rfqs"],
     queryFn: async () => {
-      // Supplies module: materials RFQs only. Subcontractor RFQs (SRs) live in
-      // the separate subcontractor app and must never render in this frameless detail flow.
+      // Unified tracker: lists both materials (MR) and subcontractor (SR) RFQs.
+      // Each row routes to its type's detail screen (see the View link below).
       const q = supabase
         .from("rfqs")
         .select("rfq_id,rfq_reference,title,rfq_type,status,sent_at,deadline,created_at,created_by")
-        .eq("rfq_type", "materials")
         .order("created_at", { ascending: false });
       const { data, error } = await q;
       if (error) throw error;
@@ -141,6 +163,7 @@ function RFQTrackerPage() {
     if (!data) return [];
     let result = data;
     if (status) result = result.filter((r) => r.status === status);
+    if (typeFilter) result = result.filter((r) => r.rfq_type === typeFilter);
     if (createdBy) result = result.filter((r) => r.created_by === createdBy);
     if (search) {
       const q = search.toLowerCase();
@@ -150,7 +173,7 @@ function RFQTrackerPage() {
       );
     }
     return result;
-  }, [data, status, createdBy, search]);
+  }, [data, status, typeFilter, createdBy, search]);
 
   // Group into date buckets
   const buckets = useMemo(() => {
@@ -183,7 +206,7 @@ function RFQTrackerPage() {
     });
   };
 
-  const hasFilters = !!(search || status || createdBy);
+  const hasFilters = !!(search || status || typeFilter || createdBy);
 
   return (
     <div className="space-y-6">
@@ -197,13 +220,22 @@ function RFQTrackerPage() {
               Manage and track all Request for Quotations
             </p>
           </div>
-          <Link
-            to="/rfq/new"
-            className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white"
-            style={{ backgroundColor: "var(--accent)" }}
-          >
-            <Plus className="h-4 w-4" /> New RFQ
-          </Link>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white"
+              style={{ backgroundColor: "var(--accent)" }}
+            >
+              <Plus className="h-4 w-4" /> New RFQ <ChevronDown className="h-3.5 w-3.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <Link to="/rfq/new">Materials RFQ</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/rfq/sub/new">Subcontractor RFQ</Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -231,6 +263,18 @@ function RFQTrackerPage() {
             </select>
           </label>
           <label className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Type:</span>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="rounded-md border border-border bg-white px-2 py-1.5 text-sm outline-none"
+            >
+              <option value="">All</option>
+              <option value="materials">Materials</option>
+              <option value="subcontractor">Subcontractor</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm">
             <span className="text-muted-foreground">Created by:</span>
             <select
               value={createdBy}
@@ -250,6 +294,7 @@ function RFQTrackerPage() {
               onClick={() => {
                 setSearch("");
                 setStatus("");
+                setTypeFilter("");
                 setCreatedBy("");
               }}
               className="text-sm font-medium"
@@ -358,7 +403,9 @@ function RFQTrackerPage() {
                         </td>
                         <td className="px-4 py-3">
                           <Link
-                            to="/rfq/$rfqId"
+                            to={
+                              rfq.rfq_type === "subcontractor" ? "/rfq/sub/$rfqId" : "/rfq/$rfqId"
+                            }
                             params={{ rfqId: rfq.rfq_id }}
                             className="flex items-center gap-1 text-sm font-medium"
                             style={{ color: "var(--accent)" }}

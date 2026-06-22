@@ -1,0 +1,697 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { getDraft, clearFiles } from "@/lib/subcontract-draft";
+import { supabase } from "@/integrations/supabase-external/client";
+import { uploadDocument, postWebhook } from "@/lib/subcontract-webhook";
+import { fileToBase64 } from "@/lib/file-utils";
+import { toast } from "sonner";
+import {
+  ExternalLink,
+  FileText,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  RotateCcw,
+  Eye,
+  Upload,
+} from "lucide-react";
+import { RfqEditableFields } from "@/components/rfq-editable-fields";
+import { RfqVendorList, type SelectedVendor } from "@/components/rfq-vendor-list";
+import { RfqEmailEditor } from "@/components/rfq-email-editor";
+import { RfqDispatchPanel } from "@/components/rfq-dispatch-panel";
+import { BoqUploadStep } from "@/components/frame/BoqUploadStep";
+import { FrameGrid } from "@/components/frame/FrameGrid";
+import { FrameView } from "@/components/frame/FrameView";
+import { injectScheduleIntoBody, updateBoqFlag, updateIntroLine } from "@/lib/frame-email";
+import type { BoqLine, ParseResult } from "@/lib/boq-parse";
+import type { FrameData, FrameRfqRow, FrameItemRow } from "@/lib/subcontract-types";
+
+const ACCEPTED_EXTENSIONS = ".pdf,.xlsx,.xls,.doc,.docx,.png,.jpg";
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
+
+export const Route = createFileRoute("/_app/rfq/sub/$rfqId")({
+  component: RfqPreviewPage,
+});
+
+interface RfqHeader {
+  rfq_reference: string;
+  subject_works: string;
+  scope_summary: string | null; // from generate response (in-memory) or ai_notes (DB)
+  vendor_count: number;
+  drive_folder_url: string | null;
+  status: string;
+  covering_email_subject: string | null;
+  covering_email_body: string | null;
+}
+
+type UploadStatus = "pending" | "uploading" | "done" | "error";
+
+interface FileUploadItem {
+  file: File;
+  fileType: string;
+  status: UploadStatus;
+  error?: string;
+  driveUrl?: string;
+}
+
+function FileUploadProgress({
+  rfqId,
+  files,
+  fileTypes,
+}: {
+  rfqId: string;
+  files: File[];
+  fileTypes: string[];
+}) {
+  const uploadedRef = useRef(false);
+  const [items, setItems] = useState<FileUploadItem[]>(() =>
+    files.map((file, i) => ({
+      file,
+      fileType: fileTypes[i] || "other",
+      status: "pending",
+    })),
+  );
+  const [uploading, setUploading] = useState(false);
+
+  const updateItem = (index: number, updates: Partial<FileUploadItem>) => {
+    setItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...updates } : item)));
+  };
+
+  const uploadAll = useCallback(async () => {
+    if (uploadedRef.current) return;
+    setUploading(true);
+    let allSucceeded = true;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].status === "done") continue;
+
+      updateItem(i, { status: "uploading", error: undefined });
+
+      try {
+        const base64 = await fileToBase64(items[i].file);
+        const result = await uploadDocument(rfqId, items[i].file, items[i].fileType, base64);
+
+        if (result.ok && result.data.success) {
+          updateItem(i, { status: "done", driveUrl: result.data.drive_file_url });
+        } else {
+          const errMsg = result.ok ? "Upload returned an error" : result.error;
+          updateItem(i, { status: "error", error: errMsg });
+          allSucceeded = false;
+        }
+      } catch (err) {
+        updateItem(i, {
+          status: "error",
+          error: err instanceof Error ? err.message : "Upload failed",
+        });
+        allSucceeded = false;
+      }
+    }
+    setUploading(false);
+    if (allSucceeded) {
+      uploadedRef.current = true;
+      clearFiles(rfqId);
+    }
+  }, [items, rfqId]);
+
+  const retryFile = async (index: number) => {
+    updateItem(index, { status: "uploading", error: undefined });
+    try {
+      const item = items[index];
+      const base64 = await fileToBase64(item.file);
+      const result = await uploadDocument(rfqId, item.file, item.fileType, base64);
+
+      if (result.ok && result.data.success) {
+        updateItem(index, { status: "done", driveUrl: result.data.drive_file_url });
+        // Check if all items are now done
+        const updatedItems = items.map((it, i) =>
+          i === index ? { ...it, status: "done" as const } : it,
+        );
+        if (updatedItems.every((it) => it.status === "done")) {
+          uploadedRef.current = true;
+          clearFiles(rfqId);
+        }
+      } else {
+        const errMsg = result.ok ? "Upload returned an error" : result.error;
+        updateItem(index, { status: "error", error: errMsg });
+      }
+    } catch (err) {
+      updateItem(index, {
+        status: "error",
+        error: err instanceof Error ? err.message : "Retry failed",
+      });
+    }
+  };
+
+  // Auto-start upload on mount — once only
+  useEffect(() => {
+    if (!uploadedRef.current && items.some((i) => i.status === "pending")) {
+      uploadAll();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const allDone = items.every((i) => i.status === "done");
+  const hasErrors = items.some((i) => i.status === "error");
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">
+          Document Upload
+          {allDone && (
+            <span className="ml-2 text-sm font-normal text-[var(--accent)]">Complete</span>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {items.map((item, index) => (
+          <div
+            key={`${item.file.name}-${index}`}
+            className="flex items-center gap-3 rounded-md border border-border p-3"
+          >
+            <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="flex-1 truncate text-sm">{item.file.name}</span>
+            <span className="text-xs text-muted-foreground">{item.fileType}</span>
+
+            {item.status === "pending" && (
+              <span className="text-xs text-muted-foreground">Waiting...</span>
+            )}
+            {item.status === "uploading" && (
+              <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" />
+            )}
+            {item.status === "done" && <CheckCircle2 className="h-4 w-4 text-[var(--accent)]" />}
+            {item.status === "error" && (
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-destructive" />
+                <button
+                  type="button"
+                  onClick={() => retryFile(index)}
+                  className="text-xs text-[var(--accent)] hover:underline"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {hasErrors && !uploading && (
+          <Button type="button" variant="outline" size="sm" onClick={uploadAll} className="mt-2">
+            Retry Failed
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+interface Attachment {
+  attachment_id: string;
+  filename: string;
+  file_type: string;
+  drive_file_url: string | null;
+}
+
+function DocumentsList({ rfqId }: { rfqId: string }) {
+  const [docs, setDocs] = useState<Attachment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [addingFile, setAddingFile] = useState(false);
+  const addFileRef = useRef<HTMLInputElement>(null);
+
+  const fetchDocs = useCallback(async () => {
+    const { data } = await supabase
+      .from("rfq_attachments")
+      .select("attachment_id, filename, file_type, drive_file_url")
+      .eq("rfq_id", rfqId)
+      .order("uploaded_at", { ascending: true });
+    setDocs(data ?? []);
+    setLoading(false);
+  }, [rfqId]);
+
+  useEffect(() => {
+    fetchDocs();
+  }, [fetchDocs]);
+
+  const handleAddFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (addFileRef.current) addFileRef.current.value = "";
+
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error(
+        "File too large. For files over 100 MB, please upload directly to the RFQ Drive folder and inform procurement.",
+      );
+      return;
+    }
+
+    setAddingFile(true);
+    try {
+      const base64 = await fileToBase64(file);
+      const result = await uploadDocument(rfqId, file, "other", base64);
+      if (result.ok && result.data.success) {
+        toast.success(`${file.name} uploaded successfully`);
+        fetchDocs();
+      } else {
+        toast.error(`Upload failed: ${result.ok ? "Backend error" : result.error}`);
+      }
+    } catch {
+      toast.error("Upload failed");
+    }
+    setAddingFile(false);
+  };
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Documents</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">Loading documents...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg">Documents</CardTitle>
+          <div>
+            <input
+              ref={addFileRef}
+              type="file"
+              accept={ACCEPTED_EXTENSIONS}
+              onChange={handleAddFile}
+              className="hidden"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={addingFile}
+              onClick={() => addFileRef.current?.click()}
+              className="gap-1.5"
+            >
+              {addingFile ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Upload className="h-3.5 w-3.5" />
+              )}
+              Add File
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {docs.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No documents attached yet.</p>
+        ) : (
+          docs.map((doc) => (
+            <div
+              key={doc.attachment_id}
+              className="flex items-center gap-3 rounded-md border border-border p-3"
+            >
+              <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="flex-1 truncate text-sm">{doc.filename}</span>
+              <Badge variant="secondary" className="text-xs">
+                {doc.file_type}
+              </Badge>
+              {doc.drive_file_url && (
+                <a
+                  href={doc.drive_file_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-[var(--accent)] hover:underline"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  View
+                </a>
+              )}
+            </div>
+          ))
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Frame tab orchestration ─────────────────────────────────────────────────
+
+type FrameStage = "loading" | "upload" | "grid" | "locking" | "view";
+
+function FrameTab({ rfqId }: { rfqId: string }) {
+  const [stage, setStage] = useState<FrameStage>("loading");
+  const [rfqRow, setRfqRow] = useState<FrameRfqRow | null>(null);
+  const [rfqItems, setRfqItems] = useState<FrameItemRow[]>([]);
+  const [parseResult, setParseResult] = useState<ParseResult | null>(null);
+  const [frameData, setFrameData] = useState<FrameData | null>(null);
+
+  // On mount, check if rfq_items already exist for this RFQ
+  useEffect(() => {
+    (async () => {
+      const [{ data: rfq }, { data: items }] = await Promise.all([
+        supabase
+          .from("rfqs")
+          .select("rfq_id, rfq_reference, subject_works, template, template_variant")
+          .eq("rfq_id", rfqId)
+          .single(),
+        supabase
+          .from("rfq_items")
+          .select("*")
+          .eq("rfq_id", rfqId)
+          .order("item_number", { ascending: true }),
+      ]);
+
+      setRfqRow(rfq);
+      const rows = items ?? [];
+      setRfqItems(rows);
+      setStage(rows.length > 0 ? "view" : "upload");
+    })();
+  }, [rfqId]);
+
+  // After parse, move to grid
+  const handleParsed = (result: ParseResult) => {
+    setParseResult(result);
+    setStage("grid");
+  };
+
+  // Lock & Build Frame → POST webhook, then reload items
+  const handleLock = async (lines: BoqLine[], preamble: string) => {
+    setStage("locking");
+
+    const confidence = parseResult?.source_confidence ?? "manual";
+    const remark = parseResult?.source_remark ?? "";
+
+    const payload = {
+      rfq_id: rfqId,
+      locked_lines: lines,
+      boq_preamble: preamble,
+      requisition_text: "",
+      spec_text: "",
+      source_confidence: confidence,
+      source_remark: remark,
+    };
+
+    const result = await postWebhook<FrameData>("/webhook/scc-frame-generate", payload);
+
+    if (!result.ok) {
+      toast.error(`Frame generation failed: ${result.error}`);
+      setStage("grid");
+      return;
+    }
+
+    setFrameData(result.data);
+
+    // Reload rfq_items from Supabase
+    const { data: items } = await supabase
+      .from("rfq_items")
+      .select("*")
+      .eq("rfq_id", rfqId)
+      .order("item_number", { ascending: true });
+
+    const { data: rfq } = await supabase
+      .from("rfqs")
+      .select("rfq_id, rfq_reference, subject_works, template, template_variant")
+      .eq("rfq_id", rfqId)
+      .single();
+
+    setRfqItems(items ?? []);
+    if (rfq) setRfqRow(rfq);
+
+    // Inject schedule table into covering email body
+    try {
+      const { data: emailRow } = await supabase
+        .from("rfqs")
+        .select("covering_email_body")
+        .eq("rfq_id", rfqId)
+        .single();
+
+      if (emailRow?.covering_email_body != null && (items ?? []).length > 0) {
+        let updatedBody = injectScheduleIntoBody(
+          emailRow.covering_email_body,
+          (items ?? []).map((it) => ({
+            item_number: it.item_number,
+            description: it.description ?? "",
+            unit: it.unit,
+            quantity: it.quantity,
+          })),
+        );
+        updatedBody = updateBoqFlag(updatedBody);
+        updatedBody = updateIntroLine(updatedBody);
+
+        await supabase
+          .from("rfqs")
+          .update({ covering_email_body: updatedBody })
+          .eq("rfq_id", rfqId);
+      }
+    } catch {
+      // Non-fatal — frame is locked even if email injection fails
+      console.error("Failed to inject schedule into email body");
+    }
+
+    setStage("view");
+    toast.success("Frame locked successfully");
+  };
+
+  if (stage === "loading") {
+    return <p className="text-sm text-muted-foreground">Loading frame data...</p>;
+  }
+
+  if (stage === "upload") {
+    return <BoqUploadStep onParsed={handleParsed} />;
+  }
+
+  if (stage === "grid" && parseResult) {
+    return (
+      <FrameGrid
+        initialLines={parseResult.lines}
+        preamble={parseResult.preamble}
+        sourceConfidence={parseResult.source_confidence}
+        sourceRemark={parseResult.source_remark}
+        onLock={handleLock}
+      />
+    );
+  }
+
+  if (stage === "locking") {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-8">
+        <Loader2 className="h-5 w-5 animate-spin text-[var(--accent)]" />
+        <span className="text-sm text-muted-foreground">Building frame...</span>
+      </div>
+    );
+  }
+
+  // stage === "view"
+  return <FrameView rfq={rfqRow ?? {}} rfqItems={rfqItems} frameData={frameData} />;
+}
+
+function RfqPreviewPage() {
+  const { rfqId } = Route.useParams();
+  const draft = getDraft(rfqId);
+  const [header, setHeader] = useState<RfqHeader | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"overview" | "vendors" | "documents" | "frame">(
+    "overview",
+  );
+  // Vendor selection lives here (not in RfqVendorList) so it persists across
+  // Overview/Vendors tab switches and is available to the dispatch panel.
+  const [selectedVendors, setSelectedVendors] = useState<SelectedVendor[]>([]);
+
+  // If store has data, use it directly
+  useEffect(() => {
+    if (draft) {
+      const r = draft.response;
+      setHeader({
+        rfq_reference: r.rfq_reference,
+        subject_works: r.subject_works,
+        scope_summary: r.scope_summary,
+        vendor_count: r.vendor_count,
+        drive_folder_url: r.drive_folder_url,
+        status: "draft",
+        covering_email_subject: r.covering_email_subject,
+        covering_email_body: r.covering_email_body,
+      });
+      return;
+    }
+
+    // Fallback: fetch from Supabase on hard refresh
+    setLoading(true);
+    (async () => {
+      const { data: rfq, error: rfqErr } = await supabase
+        .from("rfqs")
+        .select(
+          "rfq_reference, subject_works, ai_notes, drive_folder_url, status, covering_email_subject, covering_email_body",
+        )
+        .eq("rfq_id", rfqId)
+        .single();
+
+      if (rfqErr || !rfq) {
+        setError(rfqErr?.message ?? "RFQ not found");
+        setLoading(false);
+        return;
+      }
+
+      const { count } = await supabase
+        .from("rfq_vendors")
+        .select("id", { count: "exact", head: true })
+        .eq("rfq_id", rfqId);
+
+      setHeader({
+        rfq_reference: rfq.rfq_reference,
+        subject_works: rfq.subject_works,
+        scope_summary: rfq.ai_notes,
+        vendor_count: count ?? 0,
+        drive_folder_url: rfq.drive_folder_url,
+        status: rfq.status,
+        covering_email_subject: rfq.covering_email_subject,
+        covering_email_body: rfq.covering_email_body,
+      });
+      setLoading(false);
+    })();
+  }, [draft, rfqId]);
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-muted-foreground">Loading RFQ...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-destructive">Error: {error}</p>
+      </div>
+    );
+  }
+
+  if (!header) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  // Determine file types from the store (attachments selected in the form)
+  const storeFiles = draft?.files ?? [];
+  const storeFileTypes = draft?.fileTypes ?? [];
+
+  const tabs = [
+    { key: "overview" as const, label: "Overview" },
+    { key: "vendors" as const, label: "Vendors" },
+    { key: "documents" as const, label: "Documents" },
+    { key: "frame" as const, label: "Frame" },
+  ];
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-6 p-6">
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="font-display text-2xl text-foreground">{header.rfq_reference}</h1>
+          <p className="mt-1 text-lg text-foreground">{header.subject_works}</p>
+        </div>
+        <Badge
+          variant={header.status === "issued" ? "default" : "secondary"}
+          className="text-xs uppercase"
+        >
+          {header.status}
+        </Badge>
+      </div>
+
+      <div className="flex gap-1 border-b border-border">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === tab.key
+                ? "border-b-2 border-[var(--accent)] text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "overview" && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Overview</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {header.scope_summary && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Scope Summary</p>
+                  <p className="mt-0.5 text-sm">{header.scope_summary}</p>
+                </div>
+              )}
+
+              <div className="flex gap-6">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Vendors</p>
+                  <p className="mt-0.5 text-sm font-semibold">{header.vendor_count}</p>
+                </div>
+                {header.drive_folder_url && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">Drive Folder</p>
+                    <a
+                      href={header.drive_folder_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-0.5 inline-flex items-center gap-1 text-sm font-medium text-[var(--accent)] hover:underline"
+                    >
+                      Open in Drive
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <RfqEditableFields rfqId={rfqId} />
+
+          <RfqEmailEditor rfqId={rfqId} />
+
+          <RfqDispatchPanel rfqId={rfqId} selectedVendors={selectedVendors} />
+        </div>
+      )}
+
+      {activeTab === "vendors" && (
+        <div className="space-y-6">
+          <RfqVendorList
+            rfqId={rfqId}
+            selected={selectedVendors}
+            onSelectionChange={setSelectedVendors}
+          />
+        </div>
+      )}
+
+      {activeTab === "documents" && (
+        <div className="space-y-6">
+          {storeFiles.length > 0 && (
+            <FileUploadProgress rfqId={rfqId} files={storeFiles} fileTypes={storeFileTypes} />
+          )}
+          <DocumentsList rfqId={rfqId} />
+        </div>
+      )}
+
+      {activeTab === "frame" && (
+        <div className="space-y-6">
+          <FrameTab rfqId={rfqId} />
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -19,15 +19,13 @@ export const Route = createFileRoute("/_app/rfq/$rfqId/")({
   component: RFQDetailPage,
 });
 
-// This is the materials (Supplies) RFQ detail page. Subcontractor RFQs have no
-// detail view here — if one is reached directly by URL, deep-link out to the
-// subcontractor app instead of rendering it frameless.
-const SUBCONTRACTOR_APP_URL = "https://sarooj-procurement-subcontractors.vercel.app";
-
+// This is the materials (Supplies) RFQ detail page. Subcontractor RFQs have their
+// own in-app detail screen — if one is reached here directly by URL, redirect to it.
 type Tab = "overview" | "vendors" | "bids";
 
 function RFQDetailPage() {
   const { rfqId } = Route.useParams();
+  const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("overview");
 
   const { data: rfq, isLoading: rfqLoading } = useQuery({
@@ -82,13 +80,13 @@ function RFQDetailPage() {
     enabled: true,
   });
 
-  // Guard: a subcontractor RFQ reached here directly belongs to the other app.
+  // Guard: a subcontractor RFQ reached here directly belongs to the SR detail screen.
   const isSubcontractor = !!rfq && rfq.rfq_type !== "materials";
   useEffect(() => {
     if (isSubcontractor) {
-      window.location.replace(`${SUBCONTRACTOR_APP_URL}/rfq/${rfqId}`);
+      navigate({ to: "/rfq/sub/$rfqId", params: { rfqId }, replace: true });
     }
-  }, [isSubcontractor, rfqId]);
+  }, [isSubcontractor, rfqId, navigate]);
 
   if (rfqLoading || isSubcontractor) {
     return (

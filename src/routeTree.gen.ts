@@ -33,6 +33,8 @@ import { Route as AppRfqBidsRouteImport } from './routes/_app/rfq.bids'
 import { Route as AppRfqRfqIdRouteImport } from './routes/_app/rfq.$rfqId'
 import { Route as AppPrsPrNumberRouteImport } from './routes/_app/prs.$prNumber'
 import { Route as AppRfqRfqIdIndexRouteImport } from './routes/_app/rfq.$rfqId.index'
+import { Route as AppRfqSubNewRouteImport } from './routes/_app/rfq.sub.new'
+import { Route as AppRfqSubRfqIdRouteImport } from './routes/_app/rfq.sub.$rfqId'
 import { Route as AppRfqRfqIdComparisonRouteImport } from './routes/_app/rfq.$rfqId.comparison'
 import { Route as AppRfqRfqIdBidsBidIdReviewRouteImport } from './routes/_app/rfq.$rfqId.bids.$bidId.review'
 
@@ -155,6 +157,16 @@ const AppRfqRfqIdIndexRoute = AppRfqRfqIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRfqRfqIdRoute,
 } as any)
+const AppRfqSubNewRoute = AppRfqSubNewRouteImport.update({
+  id: '/sub/new',
+  path: '/sub/new',
+  getParentRoute: () => AppRfqRoute,
+} as any)
+const AppRfqSubRfqIdRoute = AppRfqSubRfqIdRouteImport.update({
+  id: '/sub/$rfqId',
+  path: '/sub/$rfqId',
+  getParentRoute: () => AppRfqRoute,
+} as any)
 const AppRfqRfqIdComparisonRoute = AppRfqRfqIdComparisonRouteImport.update({
   id: '/comparison',
   path: '/comparison',
@@ -191,6 +203,8 @@ export interface FileRoutesByFullPath {
   '/rfq/': typeof AppRfqIndexRoute
   '/vendors/': typeof AppVendorsIndexRoute
   '/rfq/$rfqId/comparison': typeof AppRfqRfqIdComparisonRoute
+  '/rfq/sub/$rfqId': typeof AppRfqSubRfqIdRoute
+  '/rfq/sub/new': typeof AppRfqSubNewRoute
   '/rfq/$rfqId/': typeof AppRfqRfqIdIndexRoute
   '/rfq/$rfqId/bids/$bidId/review': typeof AppRfqRfqIdBidsBidIdReviewRoute
 }
@@ -214,6 +228,8 @@ export interface FileRoutesByTo {
   '/rfq': typeof AppRfqIndexRoute
   '/vendors': typeof AppVendorsIndexRoute
   '/rfq/$rfqId/comparison': typeof AppRfqRfqIdComparisonRoute
+  '/rfq/sub/$rfqId': typeof AppRfqSubRfqIdRoute
+  '/rfq/sub/new': typeof AppRfqSubNewRoute
   '/rfq/$rfqId': typeof AppRfqRfqIdIndexRoute
   '/rfq/$rfqId/bids/$bidId/review': typeof AppRfqRfqIdBidsBidIdReviewRoute
 }
@@ -243,6 +259,8 @@ export interface FileRoutesById {
   '/_app/rfq/': typeof AppRfqIndexRoute
   '/_app/vendors/': typeof AppVendorsIndexRoute
   '/_app/rfq/$rfqId/comparison': typeof AppRfqRfqIdComparisonRoute
+  '/_app/rfq/sub/$rfqId': typeof AppRfqSubRfqIdRoute
+  '/_app/rfq/sub/new': typeof AppRfqSubNewRoute
   '/_app/rfq/$rfqId/': typeof AppRfqRfqIdIndexRoute
   '/_app/rfq/$rfqId/bids/$bidId/review': typeof AppRfqRfqIdBidsBidIdReviewRoute
 }
@@ -272,6 +290,8 @@ export interface FileRouteTypes {
     | '/rfq/'
     | '/vendors/'
     | '/rfq/$rfqId/comparison'
+    | '/rfq/sub/$rfqId'
+    | '/rfq/sub/new'
     | '/rfq/$rfqId/'
     | '/rfq/$rfqId/bids/$bidId/review'
   fileRoutesByTo: FileRoutesByTo
@@ -295,6 +315,8 @@ export interface FileRouteTypes {
     | '/rfq'
     | '/vendors'
     | '/rfq/$rfqId/comparison'
+    | '/rfq/sub/$rfqId'
+    | '/rfq/sub/new'
     | '/rfq/$rfqId'
     | '/rfq/$rfqId/bids/$bidId/review'
   id:
@@ -323,6 +345,8 @@ export interface FileRouteTypes {
     | '/_app/rfq/'
     | '/_app/vendors/'
     | '/_app/rfq/$rfqId/comparison'
+    | '/_app/rfq/sub/$rfqId'
+    | '/_app/rfq/sub/new'
     | '/_app/rfq/$rfqId/'
     | '/_app/rfq/$rfqId/bids/$bidId/review'
   fileRoutesById: FileRoutesById
@@ -504,6 +528,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRfqRfqIdIndexRouteImport
       parentRoute: typeof AppRfqRfqIdRoute
     }
+    '/_app/rfq/sub/new': {
+      id: '/_app/rfq/sub/new'
+      path: '/sub/new'
+      fullPath: '/rfq/sub/new'
+      preLoaderRoute: typeof AppRfqSubNewRouteImport
+      parentRoute: typeof AppRfqRoute
+    }
+    '/_app/rfq/sub/$rfqId': {
+      id: '/_app/rfq/sub/$rfqId'
+      path: '/sub/$rfqId'
+      fullPath: '/rfq/sub/$rfqId'
+      preLoaderRoute: typeof AppRfqSubRfqIdRouteImport
+      parentRoute: typeof AppRfqRoute
+    }
     '/_app/rfq/$rfqId/comparison': {
       id: '/_app/rfq/$rfqId/comparison'
       path: '/comparison'
@@ -557,6 +595,8 @@ interface AppRfqRouteChildren {
   AppRfqPreviewRoute: typeof AppRfqPreviewRoute
   AppRfqSummaryRoute: typeof AppRfqSummaryRoute
   AppRfqIndexRoute: typeof AppRfqIndexRoute
+  AppRfqSubRfqIdRoute: typeof AppRfqSubRfqIdRoute
+  AppRfqSubNewRoute: typeof AppRfqSubNewRoute
 }
 
 const AppRfqRouteChildren: AppRfqRouteChildren = {
@@ -566,6 +606,8 @@ const AppRfqRouteChildren: AppRfqRouteChildren = {
   AppRfqPreviewRoute: AppRfqPreviewRoute,
   AppRfqSummaryRoute: AppRfqSummaryRoute,
   AppRfqIndexRoute: AppRfqIndexRoute,
+  AppRfqSubRfqIdRoute: AppRfqSubRfqIdRoute,
+  AppRfqSubNewRoute: AppRfqSubNewRoute,
 }
 
 const AppRfqRouteWithChildren =

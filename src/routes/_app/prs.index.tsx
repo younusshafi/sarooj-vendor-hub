@@ -1,14 +1,35 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { ChevronRight, AlertTriangle } from "lucide-react";
-import { fetchPrTracker } from "@/lib/pr-queries";
+import { fetchPrTracker, fetchPrTypeMap } from "@/lib/pr-queries";
 import { PrStatusCode, PR_STATUS_LABEL, PR_STATUS_BADGE, type PrTrackerRow } from "@/types/pr";
 import { formatDistanceToNow } from "date-fns";
 
+type PrSearch = { type?: string };
+
 export const Route = createFileRoute("/_app/prs/")({
+  // Allow deep-linking from dashboard tiles: /prs?type=materials or /prs?type=subcontractor
+  validateSearch: (search: Record<string, unknown>): PrSearch => ({
+    type: search.type === "materials" || search.type === "subcontractor" ? search.type : undefined,
+  }),
   component: PrTrackerPage,
 });
+
+function PrTypeBadge({ type }: { type: string | undefined }) {
+  const isSub = type === "subcontractor";
+  return (
+    <span
+      className="rounded-full px-2 py-0.5 text-xs font-medium capitalize"
+      style={{
+        backgroundColor: isSub ? "#FDF3E0" : "#E8EFF7",
+        color: isSub ? "#7A5200" : "#1A3A5C",
+      }}
+    >
+      {type ?? "—"}
+    </span>
+  );
+}
 
 const ALL_STATUS_CODES: PrStatusCode[] = [
   "draft",
@@ -30,8 +51,15 @@ function PrStatusBadge({ code }: { code: PrStatusCode }) {
 }
 
 function PrTrackerPage() {
+  const sp = Route.useSearch();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState(sp.type ?? "");
+
+  // Sync when navigated here with a new type param (e.g. from a dashboard tile).
+  useEffect(() => {
+    setTypeFilter(sp.type ?? "");
+  }, [sp.type]);
 
   const {
     data: rows,
@@ -43,10 +71,21 @@ function PrTrackerPage() {
     queryFn: fetchPrTracker,
   });
 
+  const { data: typeMap } = useQuery({
+    queryKey: ["pr-type-map"],
+    queryFn: fetchPrTypeMap,
+  });
+
+  // Rows narrowed by MR/SR type — drives both the analytics strip and the table.
+  const typeFilteredRows = useMemo(() => {
+    if (!rows) return [];
+    if (!typeFilter) return rows;
+    return rows.filter((r) => (typeMap?.[r.pr_number] ?? "") === typeFilter);
+  }, [rows, typeMap, typeFilter]);
+
   // Filtered rows
   const filtered = useMemo(() => {
-    if (!rows) return [];
-    let result = rows;
+    let result = typeFilteredRows;
     if (statusFilter) {
       result = result.filter((r) => r.pr_status_code === statusFilter);
     }
@@ -55,11 +94,10 @@ function PrTrackerPage() {
       result = result.filter((r) => r.pr_number.toLowerCase().includes(q));
     }
     return result;
-  }, [rows, statusFilter, search]);
+  }, [typeFilteredRows, statusFilter, search]);
 
-  // Analytics: counts per status code
+  // Analytics: counts per status code (respects the active type filter)
   const analytics = useMemo(() => {
-    if (!rows) return { counts: {} as Record<PrStatusCode, number>, aging: 0 };
     const counts: Record<PrStatusCode, number> = {
       draft: 0,
       issued_awaiting: 0,
@@ -69,7 +107,7 @@ function PrTrackerPage() {
     let aging = 0;
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    for (const r of rows) {
+    for (const r of typeFilteredRows) {
       const code = r.pr_status_code as PrStatusCode;
       if (counts[code] !== undefined) counts[code]++;
       if (
@@ -81,7 +119,7 @@ function PrTrackerPage() {
       }
     }
     return { counts, aging };
-  }, [rows]);
+  }, [typeFilteredRows]);
 
   return (
     <div className="space-y-6">
@@ -153,9 +191,21 @@ function PrTrackerPage() {
             </option>
           ))}
         </select>
-        {statusFilter && (
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="rounded-md border border-border bg-white px-3 py-2 text-sm outline-none"
+        >
+          <option value="">All types</option>
+          <option value="materials">Materials</option>
+          <option value="subcontractor">Subcontractor</option>
+        </select>
+        {(statusFilter || typeFilter) && (
           <button
-            onClick={() => setStatusFilter("")}
+            onClick={() => {
+              setStatusFilter("");
+              setTypeFilter("");
+            }}
             className="text-xs underline"
             style={{ color: "var(--accent)" }}
           >
@@ -173,6 +223,7 @@ function PrTrackerPage() {
               style={{ color: "var(--table-header-text)" }}
             >
               <th className="px-4 py-3">PR Number</th>
+              <th className="px-4 py-3">Type</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3 text-center">RFQs</th>
               <th className="px-4 py-3 text-center">Responses</th>
@@ -184,14 +235,14 @@ function PrTrackerPage() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
                   Loading…
                 </td>
               </tr>
             )}
             {isError && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
                   Failed to load.{" "}
                   <button
                     onClick={() => refetch()}
@@ -205,7 +256,7 @@ function PrTrackerPage() {
             )}
             {!isLoading && !isError && filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
                   No purchase requisitions found.
                 </td>
               </tr>
@@ -213,6 +264,9 @@ function PrTrackerPage() {
             {filtered.map((row: PrTrackerRow) => (
               <tr key={row.pr_number} className="border-t border-border hover:bg-secondary/50">
                 <td className="px-4 py-3 font-medium">{row.pr_number}</td>
+                <td className="px-4 py-3">
+                  <PrTypeBadge type={typeMap?.[row.pr_number]} />
+                </td>
                 <td className="px-4 py-3">
                   <PrStatusBadge code={row.pr_status_code} />
                 </td>

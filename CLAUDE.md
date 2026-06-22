@@ -5,7 +5,7 @@ You are working **frontend only** in this repo (React + Vite + TanStack Router +
 ## Non-negotiable rules
 
 1. **Frontend only.** NEVER edit n8n workflows or Supabase schema/tables/views. Those are owned by the backend operator and changed separately. If a task seems to need a backend change, stop and say so in the handoff — do not work around it.
-2. **`scc_procurement` schema on every Supabase call.** Reads must resolve to `scc_procurement`, not `public`. [VERIFY IN REPO] whether the client is configured with `db: { schema: 'scc_procurement' }` or whether calls use `.schema('scc_procurement')`, and follow the existing pattern.
+2. **`scc_procurement` schema on every Supabase call.** Reads must resolve to `scc_procurement`, not `public`. The client (`src/integrations/supabase-external/client.ts`) is configured with `db: { schema: 'scc_procurement' }`, so plain `supabase.from('…')` calls already target the right schema — follow that pattern; no per-call `.schema()` needed. Note: that client **hardcodes** the Supabase URL + anon key (it does not read `import.meta.env`); the `VITE_SUPABASE_*` env vars are used only by `scripts/verify_pr_contracts.mjs`.
 3. **Key on `rfq_id`, never `rfq_reference`.** RFQ reference strings are NOT unique (duplicates exist). Use `rfq_id` (uuid) for React keys and navigation targets.
 4. **`vendors` has no `email` column.** Emails live in `vendors.contacts` (jsonb[]); recipient address is `rfq_vendors.email_to`. Never request `vendors(email)` — PostgREST 400s on unknown columns and nulls the whole row.
 5. **Empty → null on writes.** Coerce empty strings to `null` for any non-text column (date/int/numeric) before writing to Supabase. Mirror the existing bid-confirm handler.
@@ -18,12 +18,12 @@ Run in order; ALL must pass. On failure, fix and re-run — do not proceed to ha
 
 ```bash
 npx tsc --noEmit
-npm run lint            # [VERIFY IN REPO] exact lint script name
+npm run lint            # = "eslint ." (confirmed in package.json)
 npm run build
 node scripts/verify_pr_contracts.mjs
 ```
 
-`verify_pr_contracts.mjs` reads `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` ([VERIFY IN REPO] env names; falls back to `.env.local`/`.env`) and asserts the backend view contracts below over the anon PostgREST path. It exits non-zero if a contract column is missing.
+`verify_pr_contracts.mjs` reads `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (confirmed env names; falls back to `.env.local` then `.env`) and asserts the backend view contracts below over the anon PostgREST path. It exits non-zero if a contract column is missing.
 
 ## Backend contracts (read-only views — already built, do NOT create/alter)
 
