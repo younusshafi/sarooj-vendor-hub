@@ -4,6 +4,36 @@ Living list of open items. Updated 2026-06-22.
 
 ## 🅿️ Parked — needs brainstorming before any code
 
+### Deterministic vendor bid-entry link (replaces AI extraction for bids)
+**Idea (client, 22 Jun):** instead of AI-extracting prices from emailed quote docs, email each
+vendor a **single-use web link** to a validated, typed table of the RFQ's material list (SR: the
+BoQ schedule). Vendor types unit rates directly; on submit the data writes to the DB instantly,
+the link becomes **dead (destructive / one-time)**, and the bid flows straight into comparison.
+AI becomes a fallback, not the primary path. Applies to MR and SR.
+
+**Why it's good:** deterministic structured input > AI extraction for numeric bid data (no
+confidence/QA step, no mis-reads).
+
+**⚠️ Mostly BACKEND (rule 1) — needs handoff. Frontend can own only the form UI.**
+- Frontend (us): public `/bid/:token` route (no auth), typed/validated editable table, submit UX,
+  used/expired/success states; admin "copy bid link" affordance.
+- Backend (operator): single-use **token table + issuance**; attach link in dispatch email (n8n);
+  **secure submit endpoint** (Supabase edge fn or n8n webhook, service-role) that atomically
+  validates token + marks used + writes `bids`/`bid_items`; RLS for any anon reads; token→rfq/
+  vendor mapping; server-side validation (never trust client). Token must be unguessable, hashed
+  at rest, expire at deadline, rate-limited.
+- Open: confirm `bids`/`bid_items` shape so the form populates the exact comparison schema; SR
+  has **no bid screen yet** — this could be SR's primary intake (bigger backend lift).
+- Next step when revisited: write the frontend↔backend contract so both build in parallel.
+
+### Dashboard "latest 5" confusion (from 21 Jun PR sanity check — RESOLVED, no data loss)
+The dashboard "Recent Materials RFQs" widget is capped at `.limit(5)` (`index.tsx:237`), so a
+7-RFQ upload shows only 5 — by design, nothing lost. Full list lives on the PR Tracker (`/prs`,
+14 PRs all present). Also: "PRs tracked" stat is cumulative all-time, and RFQ count ≠ PR count
+(`rfqs.pr_numbers` is many-to-many). Optional UX fixes: add "View all" link / "Showing 5 of N" /
+raise the cap / upload summary "X RFQs across Y PRs".
+
+
 ### BoQ single source of truth (Option B)
 **Problem:** BoQ can be uploaded in two places that do different jobs:
 - **Documents tab** → stores the file (Drive + `rfq_attachments`), but never parses it.
