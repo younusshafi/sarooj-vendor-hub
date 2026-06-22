@@ -40,6 +40,44 @@ exactly the two halves the client described:
   this could be SR's primary intake (define SR bid model first).
 - Next step when revisited: write the frontend↔backend RPC contract; build FE against a stub.
 
+### Comparison & award upgrades (relate to, but decoupled from, the bid link)
+These improve EVERY bid regardless of intake (AI or form) and can ship independently. Today
+`comparisons` is single-winner (`recommended_vendor_id`, `approved_vendor_column`, `selection_type`,
+`is_lowest_price`); no per-line award table and no PO table exist.
+
+**B — Exclusion equalization (vendor-flagged, officer-adjusted).** Vendor states an exclusion in
+their per-line remark ("we won't do X"; e.g. lump line = 13,000 OMR). Officer reads it and adds an
+**equalization value** (budget for the excluded scope) so comparison is apples-to-apples; ranking/
+lowest computed on the **equalized** total. Keep vendor's raw quote intact (audit); equalization is
+officer-added with a required note; sheet shows raw + equalized. Vendor side reuses
+`bid_items.deviations_from_rfq` / `bids.exclusions` / `scope_coverage_percent`; **officer equalization
+value is NEW (backend)** at the comparison layer. MR + SR (SR's scope-coverage answer).
+
+**C — Per-line PO award split.** Award line-by-line, not one winner per RFQ (20 lines could split
+5/5/3/… across vendors); each awarded vendor gets their own PO. Default per-line award = lowest
+**equalized** rate (B feeds C); require a note when awarding a non-lowest line. Needs per-line award
+storage + PO tables + split-PO generation — **all NEW (backend; PO gen likely n8n)**. FE: per-row
+vendor selector + split summary + note-when-not-lowest.
+
+**D — Two-step approval (officer → head), rr-style.** Officer finalizes the comparison/awards and
+**submits for approval**; the full data goes by **email to the procurement head (Rabia)** with a
+single-use review link (mirror rr `rr.review.$token` / `rr_review_by_token`). On her approval it is
+**locked/stored for good** and POs issue; on return-with-comments the officer revises and resubmits
+(rr return/resubmit). Schema already supports the chain: `comparisons.prepared_by` / `reviewed_by` /
+`verified_by` / `approved_by` (default "Rabia Vahabudeen") / `approval_date` / `approved_at` /
+`status`. FE: officer "submit for approval" + Rabia's `/comparison-review/$token` page. Backend:
+state-machine RPCs + email + lock-on-approve + PO trigger.
+
+**Consolidated flow:** RFQ issued → vendors price via single-use link (A) [AI fallback] → bids land
+in `bids`/`bid_items` → officer reviews comparison, equalizes exclusions (B), awards per line (C) →
+submits for approval → head approves via single-use link (D) → locked + split POs issue.
+
+**Open decisions to confirm:** (1) approval stages — officer→Rabia only, or also reviewer/verifier
+(schema allows 4 roles)? (2) what exactly locks on final approval (comparison + awards +
+equalizations immutable; bids already locked at deadline). (3) per-line brand → new `bid_items`
+column. (4) PO issuance triggered on final approval. (5) deadline extension control on dashboard
+reopens vendor links.
+
 ### Dashboard "latest 5" confusion (from 21 Jun PR sanity check — RESOLVED, no data loss)
 The dashboard "Recent Materials RFQs" widget is capped at `.limit(5)` (`index.tsx:237`), so a
 7-RFQ upload shows only 5 — by design, nothing lost. Full list lives on the PR Tracker (`/prs`,
