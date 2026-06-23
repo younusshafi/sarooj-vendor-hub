@@ -1,0 +1,3144 @@
+{
+  "updatedAt": "2026-06-13T02:48:51.247Z",
+  "createdAt": "2026-05-26T03:50:15.952Z",
+  "id": "UV5UaxZ2wkxLJ8K11DRoI",
+  "name": "SCC - WF7 RFQ Agent (SAP Parse + Categorise + Generate)",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "scc-rfq-generate",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "5be6133c-3bf7-42bd-ac69-ce923e57186d",
+      "name": "Webhook - Receive SAP Upload",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        112,
+        1060
+      ],
+      "webhookId": "scc-rfq-generate-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || {};\nconst missing = [];\nif (!body.sap_rows || body.sap_rows.length === 0) missing.push('sap_rows');\nif (!body.filename) missing.push('filename');\nif (!body.created_by) missing.push('created_by');\nif (missing.length > 0) {\n  return [{ json: { error: true, message: 'Missing required fields: ' + missing.join(', ') } }];\n}\nreturn [{ json: { error: false, ...body } }];"
+      },
+      "id": "43564d0c-5255-4061-b718-08563744f981",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        1060
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "v1",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c1b30d59-fc96-4c78-9af6-17d48b886067",
+      "name": "Has Error?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        560,
+        1060
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, message: $json.message }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "b7d7bf1d-8e7b-44b1-93cf-50632b1758fd",
+      "name": "Respond - Validation Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        784,
+        1060
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst body = $('Webhook - Receive SAP Upload').first().json.body;\nconst rows = body.sap_rows || [];\nconst filename = body.filename || 'unknown.xlsx';\nconst createdBy = body.created_by || 'system';\nconst projectName = body.project_name || null;\nconst projectCode = body.project_code || null;\nconst projectLocation = body.project_location || null;\nconst client = body.client || null;\nconst consultant = body.consultant || null;\n\nfunction cleanDescription(materialId) {\n  if (!materialId) return '';\n  // Strip SAP code in parentheses at end: \"ITEM NAME (1000001234)\" → \"ITEM NAME\"\n  return materialId.replace(/\\s*\\(\\d{10}\\)\\s*$/, '').replace(/\\s*\\([A-Z0-9]{10}\\)\\s*$/, '').trim();\n}\n\nfunction extractSapCode(materialId) {\n  if (!materialId) return null;\n  const match = materialId.match(/\\((\\d{10})\\)\\s*$/);\n  return match ? match[1] : null;\n}\n\nfunction extractBrand(itemDetails) {\n  if (!itemDetails || !itemDetails.trim()) return null;\n  const d = itemDetails.trim();\n  // If item details looks like a brand hint (contains brand name or \"brand:\")\n  if (d.toLowerCase().includes('brand:')) return d.replace(/brand:/i, '').trim();\n  // If it's a short spec that looks like a brand (e.g. \"HISENSE/OR ANY BRAND\", \"Jindal Shadeed\")\n  if (d.length < 60 && /brand|make|manufacturer|model/i.test(d)) return d;\n  return null;\n}\n\nconst activeItems = [];\nconst procuredItems = [];\n\nfor (const row of rows) {\n  const status = (row.processing_status || '').toLowerCase();\n  const cleaned = {\n    pr_number: row.pr_number,\n    item_number: row.item_number,\n    material_id: row.material_id,\n    description: cleanDescription(row.material_id),\n    sap_material_code: extractSapCode(row.material_id),\n    item_details: row.item_details || null,\n    brand_hint: extractBrand(row.item_details),\n    quantity: row.quantity,\n    unit: row.unit || 'pcs',\n    processing_status: row.processing_status,\n    delivery_date: row.delivery_date\n  };\n  if (status.includes('po created') || status.includes('(b)')) {\n    procuredItems.push(cleaned);\n  } else {\n    activeItems.push(cleaned);\n  }\n}\n\nif (activeItems.length === 0) {\n  return [{ json: { error: true, message: 'No active items found. All items may have POs already created.' } }];\n}\n\nreturn [{\n  json: {\n    error: false,\n    filename,\n    created_by: createdBy,\n    project_name: projectName,\n    project_code: projectCode,\n    project_location: projectLocation,\n    client,\n    consultant,\n    total_rows: rows.length,\n    active_items: activeItems,\n    procured_items: procuredItems,\n    active_count: activeItems.length,\n    procured_count: procuredItems.length\n  }\n}];\n"
+      },
+      "id": "95d443d5-635e-4a61-8724-46cb5913db86",
+      "name": "Parse SAP Rows + Filter Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        784,
+        1252
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst data = $json;\nconst activeItems = data.active_items || [];\nconst groups = data.procurement_groups || [];\nconst groupList = groups.join(', ');\n\nconst itemsText = activeItems.slice(0, 25).map((item, i) => {\n  return `Item ${i+1}:\n  PR: ${item.pr_number}\n  SAP Item No: ${item.item_number}\n  Description: ${item.description}\n  Item Details: ${item.item_details || 'none'}\n  Quantity: ${item.quantity} ${item.unit || ''}\n  Delivery Date: ${item.delivery_date}`;\n}).join('\\n\\n');\n\nconst prompt = `You are a procurement categorisation assistant for Sarooj Construction Company, Oman.\n\nCategorise each item into one of these procurement groups (use EXACTLY these values):\n${groupList}\n\nThese groups represent the pools of vendors Sarooj sends RFQs to. Choose the single best-fit group for each item based on its description. If an item does not clearly fit any group, use \"Building Materials & Accessories\" as the default.\n\nUse the item description as the primary signal.\n\nReturn ONLY a valid JSON array. No explanation, no markdown, no backticks.\n\nFor each item return:\n{\n  \"item_index\": number (0-based),\n  \"description\": \"item description\",\n  \"category\": \"one group from the list above\",\n  \"confidence\": \"high or low\",\n  \"confidence_reason\": \"only if low, else null\"\n}\n\nItems:\n\n${itemsText}`;\n\nreturn [{ json: { ...data, categorisation_prompt: prompt, unknown_items: activeItems, known_items: [] } }];\n"
+      },
+      "id": "85d1c3b7-45c9-4a29-bc0c-549c24376b76",
+      "name": "Build Categorisation Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1456,
+        1148
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.categorisation_prompt }}",
+        "options": {
+          "systemMessage": "You are a procurement categorisation assistant for Sarooj Construction Company, Oman. Return ONLY valid JSON arrays. No explanation, no markdown fences, no backticks.",
+          "maxIterations": 1
+        }
+      },
+      "id": "38258784-7ffa-48a4-a6c7-64b9fb579d22",
+      "name": "AI Agent - Categorise Items",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1680,
+        1148
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "36fb5ab2-958c-4487-a711-83b9d6116e7b",
+      "name": "Chat Model - Categorise",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1752,
+        1372
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "PpiTCPKVnei6pTtZ",
+          "name": "OpenAI Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst rawText = $json.output || '[]';\nconst promptData = $('Build Categorisation Prompt').first().json;\nconst unknownItems = promptData.unknown_items || [];\nconst knownItems = promptData.known_items || [];\nconst parseNode = $('Parse SAP Rows + Filter Status').first().json;\nconst mergeNode = $('Merge Procurement Context').first().json;\n\nlet aiCategorised = [];\ntry {\n  const clean = rawText.replace(/```json/g, '').replace(/```/g, '').trim();\n  const match = clean.match(/\\[.*\\]/s);\n  aiCategorised = JSON.parse(match ? match[0] : clean);\n} catch(e) {\n  aiCategorised = unknownItems.map((item, i) => ({\n    item_index: i, category: 'Unknown', confidence: 'low',\n    confidence_reason: 'AI parsing failed: ' + e.message\n  }));\n}\n\nfunction fallbackCategory(description) {\n  const d = (description || '').toLowerCase();\n  if (/shovel|spade|pick|hammer|hand tool/.test(d)) return 'Building Materials & Accessories';\n  if (/unistrut|channel|strut|bracket|hanger wire|suspension/.test(d)) return 'Building Materials & Accessories';\n  if (/gypsum|ceiling tile|plaster|drywall|false ceiling/.test(d)) return 'Building Materials & Accessories';\n  if (/screw|bolt|nut|washer|rivet|fastener|anchor/.test(d)) return 'Fasteners & Fixings';\n  if (/tape|glue|adhesive|sealant|pvc glue/.test(d)) return 'Pipes, Fittings & Valves';\n  if (/pipe|tube|socket|elbow|tee/.test(d)) return 'Pipes, Fittings & Valves';\n  if (/valve|fitting|adaptor|coupling|nrv|tap|faucet/.test(d)) return 'Pipes, Fittings & Valves';\n  if (/wire|cable|conductor|flex/.test(d)) return 'Electrical Materials';\n  if (/switch|breaker|fuse|relay|diode|capacitor|resistor|electrical|electric|panel/.test(d)) return 'Electrical Materials';\n  if (/split ac|window ac|air condition|ac unit/.test(d)) return 'HVAC & Cooling';\n  if (/water cooler|cooler|thermos|dispenser|water heater/.test(d)) return 'Welfare & Camp';\n  if (/pillow|mattress|bed|bedsheet|sheet|blanket|towel|linen/.test(d)) return 'Welfare & Camp';\n  if (/ro plant|ro system|water filter|filter catridge|water treatment/.test(d)) return 'Pipes, Fittings & Valves';\n  if (/pump|motor|compressor/.test(d)) return 'Pumps & Mechanical';\n  if (/rebar|bar|rod|steel bar|deformed|straight bar|ht bar|h\\.t\\./.test(d)) return 'Steel & Rebar';\n  if (/transport|freight|logistics|delivery charge|haulage/.test(d)) return 'Logistics & Services';\n  if (/hvac|air handling|ahu|chiller/.test(d)) return 'HVAC & Cooling';\n  if (/cement|opc|ppc/.test(d)) return 'Cement & Concrete';\n  if (/aggregate|sand|gravel|crusher/.test(d)) return 'Aggregates & Sand';\n  if (/scaffold|formwork|shuttering|plywood/.test(d)) return 'Scaffolding & Formwork';\n  return 'Building Materials & Accessories';\n}\n\nconst allCategorised = [...knownItems];\nfor (let i = 0; i < unknownItems.length; i++) {\n  const aiResult = aiCategorised.find(r => Number(r.item_index) === i) || aiCategorised[i];\n  let category = aiResult ? (aiResult.category || 'Unknown') : 'Unknown';\n  let confidence = aiResult ? (aiResult.confidence || 'low') : 'low';\n  if (category === 'Unknown') {\n    category = fallbackCategory(unknownItems[i].description);\n    confidence = 'medium';\n  }\n  allCategorised.push({\n    ...unknownItems[i], category, confidence,\n    confidence_reason: (aiResult && aiResult.confidence_reason) ? aiResult.confidence_reason : null\n  });\n}\n\nconst hitlItems = allCategorised.filter(item => item.category === 'Unknown');\nconst readyItems = allCategorised.filter(item => item.category !== 'Unknown');\n\n// GROUP BY CATEGORY ONLY — all PRs combined into one RFQ per category\nconst groups = {};\nfor (const item of readyItems) {\n  const key = item.category;\n  if (!groups[key]) {\n    groups[key] = {\n      category: item.category,\n      rfq_type: item.rfq_type || 'materials',\n      needs_scope_documents: false,\n      items: []\n    };\n  }\n  if (item.rfq_type === 'subcontract') groups[key].rfq_type = 'subcontract';\n  groups[key].items.push(item);\n}\n\nconst rfqGroups = Object.values(groups);\n\nreturn [{\n  json: {\n    rfq_groups: rfqGroups,\n    group_count: rfqGroups.length,\n    hitl_items: hitlItems,\n    hitl_count: hitlItems.length,\n    procured_items: parseNode.procured_items,\n    procured_count: parseNode.procured_count,\n    filename: parseNode.filename,\n    created_by: parseNode.created_by,\n    project_name: parseNode.project_name,\n    project_code: parseNode.project_code,\n    project_location: parseNode.project_location,\n    client: parseNode.client,\n    consultant: parseNode.consultant,\n    terms_and_conditions: mergeNode.terms_and_conditions || ''\n  }\n}];\n"
+      },
+      "id": "6b1ea953-71de-46fa-9c8f-5d51d5b0dcd8",
+      "name": "Parse + Group by Category",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2032,
+        1148
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst now = new Date();\nconst yy = String(now.getFullYear()).slice(2);\nconst mm = String(now.getMonth() + 1).padStart(2, '0');\nconst period = yy + mm;\nconst data = $json;\nconst groups = data.rfq_groups || [];\nlet materialCount = 0;\nlet subcontractCount = 0;\n\nreturn groups.map((group, i) => {\n  const isSubcontract = group.rfq_type === 'subcontract';\n  const type_index = isSubcontract ? subcontractCount++ : materialCount++;\n  // Collect all PR numbers from items\n  const prNumbers = [...new Set((group.items || []).map(it => it.pr_number).filter(Boolean))].sort();\n  return {\n    json: {\n      ...group,\n      period,\n      group_index: i,\n      type_index,\n      base_seq_mr: data.base_seq_mr,\n      base_seq_sr: data.base_seq_sr,\n      pr_numbers: prNumbers,\n      created_by: data.created_by,\n      project_name: data.project_name,\n      project_code: data.project_code,\n      project_location: data.project_location,\n      client: data.client,\n      consultant: data.consultant,\n      filename: data.filename,\n      terms_and_conditions: data.terms_and_conditions,\n      procured_items: data.procured_items,\n      procured_count: data.procured_count,\n      hitl_items: data.hitl_items,\n      hitl_count: data.hitl_count\n    }\n  };\n});\n"
+      },
+      "id": "9049199f-1c9d-46bf-bacd-373ef55580d9",
+      "name": "Prepare RFQ Groups",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2480,
+        1148
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfqs",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "rfq_reference"
+            },
+            {
+              "name": "rfq_reference",
+              "value": "={{ `like.${$json.rfq_type === 'materials' ? 'MR' : 'SR'}-${$json.period}-%` }}"
+            },
+            {
+              "name": "order",
+              "value": "rfq_reference.desc"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "scc_procurement"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "090cbc32-dc28-4dc9-bc50-5f29f51bba28",
+      "name": "Supabase - Get Last RFQ Reference",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2480,
+        1340
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const groups = $('Prepare RFQ Groups').all();\n// Highest existing sequence for this period+type, read from the DB lookup (robust to empty).\nlet baseMR = 0, baseSR = 0;\nfor (const r of $('Supabase - Get Last RFQ Reference').all()) {\n  const j = r.json || {};\n  const refStr = j.rfq_reference || (Array.isArray(j) && j[0] && j[0].rfq_reference) || null;\n  if (!refStr) continue;\n  const m = String(refStr).match(/^(MR|SR)-\\d+-(\\d+)$/);\n  if (!m) continue;\n  const seq = parseInt(m[2], 10) || 0;\n  if (m[1] === 'MR') baseMR = Math.max(baseMR, seq); else baseSR = Math.max(baseSR, seq);\n}\nreturn groups.map((gr) => {\n  const group = gr.json;\n  const isSubcontract = group.rfq_type === 'subcontract';\n  const prefix = isSubcontract ? 'SR' : 'MR';\n  const base = isSubcontract ? baseSR : baseMR;\n  const nextSeq = base + group.type_index + 1;\n  const reference = prefix + '-' + group.period + '-' + String(nextSeq).padStart(3, '0');\n  const prNumbers = [...new Set((group.items || []).map(i => i.pr_number).filter(Boolean))];\n  return { json: { ...group, rfq_reference: reference, pr_numbers: prNumbers, item_count: group.items.length } };\n});"
+      },
+      "id": "dbad9fc2-b39b-44e0-8efd-b8d9dfdf25c4",
+      "name": "Generate RFQ Reference",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2704,
+        1340
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst allGroups = $('Map Vendor Categories').all();\nconst allVendorItems = $('Query Vendors HTTP').all();\nconst parseData = $('Parse SAP Rows + Filter Status').first().json;\nconst mergeData = $('Merge Procurement Context').first().json;\n\nconst vendorsByGroup = {};\nallVendorItems.forEach((item) => {\n  const groupIdx = (item.pairedItem && item.pairedItem.item !== undefined) ? item.pairedItem.item : 0;\n  if (!vendorsByGroup[groupIdx]) vendorsByGroup[groupIdx] = [];\n  if (item.json && item.json.vendor_id) vendorsByGroup[groupIdx].push(item.json);\n});\n\nreturn allGroups.map((groupItem, i) => {\n  const group = groupItem.json;\n  const vendors = vendorsByGroup[i] || [];\n  // TEST_ALWAYS recipients appended to every RFQ (testing). Limit-proof (post-query). REMOVE BEFORE GO-LIVE.\n  const TEST_RECIPIENTS = [\n    {vendor_id:'04c194da-c27c-43cc-a3d4-5bb9b62cb27e', company_name:'SCC TEST — Alagarsamy Subramanian', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Alagarsamy Subramanian', email:'alagarsamy.subramanian@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n    {vendor_id:'9a430114-0242-45f4-9a7c-d118c834bdf8', company_name:'SCC TEST — Asmahan Al Balushi', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Asmahan Al Balushi', email:'asmahan.albalushi@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n    {vendor_id:'8c50bf10-c79d-4ae2-9e91-c4f731b4cafe', company_name:'SCC TEST — Ather Shaik', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Ather Shaik', email:'ather.shaik@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n    {vendor_id:'a834e748-6919-4c31-8ba6-607a6eb13ccf', company_name:'SCC TEST — Chirag Ail', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Chirag Ail', email:'chirag.ail@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n    {vendor_id:'c56d999c-355d-47d2-90a4-367dde253f75', company_name:'SCC TEST — Haja Naseer', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Haja Naseer', email:'haja.naseer@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n    {vendor_id:'89065893-367f-4a52-938a-7cb560eaa518', company_name:'SCC TEST — Imran M', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Imran M', email:'imran.m@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n    {vendor_id:'d34ee2d4-d6d7-4f04-ada0-5c15fce40b89', company_name:'SCC TEST — Omar Serrano', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Omar Serrano', email:'omar.serrano@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n    {vendor_id:'176061c8-31da-4c4f-939a-2ab11a8267c3', company_name:'SCC TEST — Rabia Vahabudeen', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Rabia Vahabudeen', email:'rabia.vahabudeen@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n    {vendor_id:'68c17797-960d-446e-af5e-3b8e7b00e7f2', company_name:'SCC TEST — Shahid Ashfaque', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Shahid Ashfaque', email:'shahid.ashfaque@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n    {vendor_id:'a2fa7e77-b1b5-49b4-97e1-28b3332b426e', company_name:'SCC TEST — Zamzam Al Rawahi', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Zamzam Al Rawahi', email:'zamzam.alrawahi@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n  ];\n  { const _seen = new Set(vendors.map(x => x.vendor_id)); for (const t of TEST_RECIPIENTS) { if (!_seen.has(t.vendor_id)) { vendors.push(t); _seen.add(t.vendor_id); } } }\n\n  const aiNotes = [];\n  if (vendors.length === 0) aiNotes.push(`No vendors found for category: ${group.category}.`);\n  else if (vendors.length < 3) aiNotes.push(`Only ${vendors.length} vendor(s) found for ${group.category}.`);\n\n  // Get unique PR numbers for this RFQ\n  const prNumbers = [...new Set((group.items || []).map(i => i.pr_number).filter(Boolean))].sort();\n\n  // Build subject line — Option C: first PR + count if multiple\n  let prLabel;\n  if (prNumbers.length === 1) {\n    prLabel = `PR# ${prNumbers[0]}`;\n  } else if (prNumbers.length === 2) {\n    prLabel = `PR# ${prNumbers[0]} & ${prNumbers[1]}`;\n  } else {\n    prLabel = `PR# ${prNumbers[0]} (+${prNumbers.length - 1} more)`;\n  }\n\n  // Today's date\n  const today = new Date();\n  const dd = String(today.getDate()).padStart(2,'0');\n  const mm = String(today.getMonth()+1).padStart(2,'0');\n  const yyyy = today.getFullYear();\n  const dateStr = `${dd}-${mm}-${yyyy}`;\n\n  const emailSubject = `SCC_ENQ_${dateStr}_${group.rfq_reference}, ${prLabel}_${group.category}`;\n\n  // Build one flat table with PR Number as second column\n  // Sort items by PR number then item number\n  const sortedItems = [...(group.items || [])].sort((a, b) => {\n    if (a.pr_number < b.pr_number) return -1;\n    if (a.pr_number > b.pr_number) return 1;\n    return (a.item_number || 0) - (b.item_number || 0);\n  });\n\n  const itemRows = sortedItems.map((itm, j) => {\n    const brand = itm.brand_hint || '';\n    return `<tr>\n      <td style=\"border:1px solid #ccc;padding:5px;text-align:center;\">${j+1}</td>\n      <td style=\"border:1px solid #ccc;padding:5px;text-align:center;font-size:11px;color:#666;\">${itm.pr_number}</td>\n      <td style=\"border:1px solid #ccc;padding:5px;\">${itm.description || itm.material_id}</td>\n      <td style=\"border:1px solid #ccc;padding:5px;text-align:center;\">${itm.quantity}</td>\n      <td style=\"border:1px solid #ccc;padding:5px;text-align:center;\">${itm.unit || 'Nos'}</td>\n      <td style=\"border:1px solid #ccc;padding:5px;\"></td>\n      <td style=\"border:1px solid #ccc;padding:5px;\"></td>\n      <td style=\"border:1px solid #ccc;padding:5px;\">${brand}</td>\n      <td style=\"border:1px solid #ccc;padding:5px;\"></td>\n      <td style=\"border:1px solid #ccc;padding:5px;\"></td>\n    </tr>`;\n  }).join('\\n');\n\n  const itemsTable = `<table style=\"border-collapse:collapse;width:100%;font-size:12px;\">\n  <thead>\n    <tr style=\"background-color:#f5f0c8;\">\n      <th style=\"border:1px solid #ccc;padding:5px;text-align:center;\">S.No</th>\n      <th style=\"border:1px solid #ccc;padding:5px;text-align:center;\">PR Number</th>\n      <th style=\"border:1px solid #ccc;padding:5px;\">Description</th>\n      <th style=\"border:1px solid #ccc;padding:5px;text-align:center;\">Quantity</th>\n      <th style=\"border:1px solid #ccc;padding:5px;text-align:center;\">Unit of Measurement</th>\n      <th style=\"border:1px solid #ccc;padding:5px;text-align:center;\">Unit Rate</th>\n      <th style=\"border:1px solid #ccc;padding:5px;text-align:center;\">Total Rate</th>\n      <th style=\"border:1px solid #ccc;padding:5px;\">Brand Offering By Supplier</th>\n      <th style=\"border:1px solid #ccc;padding:5px;\">Country of Origin</th>\n      <th style=\"border:1px solid #ccc;padding:5px;\">Stock Availability</th>\n    </tr>\n  </thead>\n  <tbody>\n    ${itemRows}\n  </tbody>\n</table>`;\n\n  // T&Cs with placeholders replaced\n  const projectLocation = parseData.project_location || 'Muscat';\n  const tcs = (mergeData.terms_and_conditions || '')\n    .replace(/\\[project_location from upload form\\]/gi, projectLocation)\n    .replace(/\\[project_location\\]/gi, projectLocation)\n    .replace(/\\[deadline set on vendors tab\\]/gi, '[To be confirmed]')\n    .replace(/\\[deadline\\]/gi, '[To be confirmed]');\n\n  const tcsHtml = tcs ? tcs.split('\\n').map(line => line.trim() ? `<p style=\"margin:4px 0;\">${line}</p>` : '').join('') : '';\n\n  const emailBody = `<p>Dear [Contact Person],</p>\n<p>We invite you to submit a quotation for the supply of items as per the following list:</p>\n\n${itemsTable}\n\n<br>\n${tcsHtml}\n\n<p style=\"color:#c00000;font-weight:bold;\">Please reply directly to this email with your quotation. Responses received through any other channel will not be recorded in our system.</p>\n\n<p>Thanks &amp; Regards,<br>\n<strong>[SENDER_NAME]</strong><br>\nProcurement Officer<br>\n<strong>Sarooj Construction Company LLC</strong></p>`;\n\n  const rfqTitle = `${group.category} Procurement`;\n\n  return {\n    json: {\n      ...group,\n      pr_numbers: prNumbers,\n      vendors,\n      vendor_count: vendors.length,\n      ai_notes: aiNotes.join(' | '),\n      items_table_html: itemsTable,\n      covering_email_subject: emailSubject,\n      covering_email_body: emailBody,\n      rfq_title: rfqTitle\n    },\n    pairedItem: { item: i }\n  };\n});\n"
+      },
+      "id": "7c8010f9-776c-459d-93b0-1fa78e4c6747",
+      "name": "Merge Vendors + Build Email Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3664,
+        1340
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.email_prompt }}",
+        "options": {
+          "systemMessage": "You are a procurement email writer for Sarooj Construction Company, Oman. Write professional formal RFQ emails. Return ONLY valid JSON. No markdown fences, no explanation, no backticks."
+        }
+      },
+      "id": "344eccda-3c18-40ac-8334-c0331088dd47",
+      "name": "AI Agent - Generate RFQ Email",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        3568,
+        1584
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.4
+        }
+      },
+      "id": "eaf7f479-91ce-4cb6-a338-11f98621bfb8",
+      "name": "Chat Model - Email Gen",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        3672,
+        1860
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "PpiTCPKVnei6pTtZ",
+          "name": "OpenAI Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Email is now built in Merge Vendors + Build Email Prompt\n// No AI email generation needed — read directly from that node\nconst mergeGroups = $('Merge Vendors + Build Email Prompt').all();\nconst parseData = $('Parse SAP Rows + Filter Status').first().json;\n\nreturn mergeGroups.map((item, i) => {\n  const group = item.json;\n  return {\n    json: {\n      rfq_reference: group.rfq_reference,\n      rfq_type: group.rfq_type,\n      title: group.rfq_title || group.category,\n      category: group.category,\n      pr_number: group.pr_number,\n      pr_numbers: [...new Set((group.items || []).map(it => it.pr_number).filter(Boolean))],\n      items: group.items,\n      vendors: group.vendors,\n      vendor_count: group.vendor_count,\n      ai_notes: group.ai_notes,\n      needs_scope_documents: group.needs_scope_documents,\n      covering_email_subject: group.covering_email_subject,\n      covering_email_body: group.covering_email_body,\n      items_table_html: group.items_table_html,\n      period: group.period,\n      created_by: group.created_by,\n      project_name: group.project_name,\n      project_code: group.project_code,\n      project_location: group.project_location,\n      client: group.client,\n      consultant: group.consultant,\n      sap_export_filename: parseData.filename,\n      procured_items: parseData.procured_items,\n      procured_count: parseData.procured_count\n    },\n    pairedItem: { item: i }\n  };\n});\n"
+      },
+      "id": "a2909d91-d74c-405a-b078-416f50f3ea41",
+      "name": "Assemble RFQ Draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3952,
+        1540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Input: N items with { ...draft, rfq_id } from Supabase - Insert RFQ (Code node).\n// items array is already in $json — no cross-node lookups needed.\nreturn $input.all().map((item, i) => {\n  const rfq = item.json;\n  const rfqId = rfq.rfq_id;\n  const items = rfq.items || [];\n\n  const rows = items.map((itm, j) => ({\n    rfq_id: rfqId,\n    item_number: j + 1,\n    sap_item_number: itm.sap_item_number || null,\n    sap_material_code: itm.sap_material_code || null,\n    pr_number: itm.pr_number || null,\n    description: itm.description,\n    item_details: itm.item_details || null,\n    quantity: itm.quantity,\n    unit: itm.unit || 'Nos',\n    delivery_date: itm.delivery_date || null,\n    specification: itm.item_details || null\n  }));\n\n  // Spread full rfq data forward so downstream nodes still have vendors, etc.\n  return { json: { ...rfq, rows }, pairedItem: { item: i } };\n});"
+      },
+      "id": "37551c13-0770-4d21-aa56-1e2884e17c41",
+      "name": "Prepare RFQ Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4624,
+        1540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Input: N items with { ...rfq_data, item_count } from Insert RFQ Items.\n// vendors array is in $json — no cross-node lookups needed.\n// contacts is a JSONB array — each element has { name, email, mobile, designation }\nreturn $input.all().map((item, i) => {\n  const rfq = item.json;\n  const rfqId = rfq.rfq_id;\n  const vendors = rfq.vendors || [];\n\n  const rows = vendors.map(v => {\n    const contacts = v.contacts || [];\n    const primary = contacts[0] || {};\n    return {\n      rfq_id: rfqId,\n      vendor_id: v.vendor_id,\n      email_to: primary.email || null,\n      contact_person: primary.name || null,\n      matched_category: (v.categories && v.categories.length > 0) ? v.categories[0] : null,\n      status: 'pending',\n      response_received: false,\n      ai_flag: (v.last_response_type === 'unresponsive' || v.status === 'unresponsive')\n        ? 'Vendor was unresponsive in last outreach campaign'\n        : null\n    };\n  });\n\n  return { json: { ...rfq, rows }, pairedItem: { item: i } };\n});"
+      },
+      "id": "2c71f4d5-ca89-4d2b-8b8d-b2f438349ded",
+      "name": "Prepare RFQ Vendors",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5296,
+        1540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nreturn $input.all().map((item, i) => {\n  const rfq = item.json;\n  return {\n    json: {\n      rfq_id: rfq.rfq_id,\n      rfq_reference: rfq.rfq_reference,\n      rfq_type: rfq.rfq_type,\n      title: rfq.title,\n      category: rfq.category,\n      pr_number: rfq.pr_number,\n      covering_email_subject: rfq.covering_email_subject,\n      covering_email_body: rfq.covering_email_body,\n      ai_notes: rfq.ai_notes,\n      needs_scope_documents: rfq.needs_scope_documents,\n      items: rfq.items,\n      vendors: rfq.vendors,\n      vendor_count: rfq.vendor_count,\n      procured_items: rfq.procured_items,\n      procured_count: rfq.procured_count,\n      hitl_items: rfq.hitl_items || [],\n      hitl_count: rfq.hitl_count || 0\n    },\n    pairedItem: { item: i }\n  };\n});\n"
+      },
+      "id": "1c91e44b-9400-4545-825d-72b6b621d7d6",
+      "name": "Build Response Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5968,
+        1540
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, rfqs: $('Build Response Payload').all().map(i => ({ rfq_id: i.json.rfq_id, rfq_reference: i.json.rfq_reference, title: i.json.title, category: i.json.category, rfq_type: i.json.rfq_type, item_count: (i.json.items || []).length, vendor_count: i.json.vendor_count, pr_numbers: [...new Set((i.json.items || []).map(x => x.pr_number).filter(Boolean))] })), pr_numbers: [...new Set($('Build Response Payload').all().flatMap(i => (i.json.items || []).map(x => x.pr_number)).filter(Boolean))] }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "7697fdc9-bb00-46aa-9945-42c3543cab5d",
+      "name": "Respond - Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        6416,
+        1540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst groupData = $('Parse + Group by Category').first().json;\nreturn [{ json: { ...groupData, base_seq_mr: 0, base_seq_sr: 0 } }];\n"
+      },
+      "id": "0d4d1516-2421-4d10-93be-8bf49297d3f3",
+      "name": "Get Ref Bases",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        1148
+      ]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "rfq_groups",
+        "options": {}
+      },
+      "id": "4e903038-ebf8-415f-8f5f-3dc67770b712",
+      "name": "Aggregate All Groups",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        6192,
+        1540
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfqs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "scc_procurement"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "scc_procurement"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ rfq_reference: $json.rfq_reference, rfq_type: $json.rfq_type, title: $json.title, category_detected: [$json.category], status: 'draft', created_by: $json.created_by, pr_numbers: $json.pr_numbers, sap_export_filename: $json.sap_export_filename, project_name: $json.project_name, project_code: $json.project_code, project_location: $json.project_location, client: $json.client, consultant: $json.consultant, covering_email_subject: $json.covering_email_subject, covering_email_body: $json.covering_email_body, ai_notes: $json.ai_notes }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "c4591adb-04eb-49b2-9887-ce0395774ef5",
+      "name": "Supabase - Insert RFQ HTTP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        4176,
+        1540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge Supabase rfq_id back with original draft data\nconst allDrafts = $(\"Assemble RFQ Draft\").all();\nreturn $input.all().map((item, i) => {\n  const resp = item.json;\n  const rfqId = Array.isArray(resp) ? resp[0]?.rfq_id : resp?.rfq_id;\n  const original = (allDrafts[i] || allDrafts[0]).json;\n  return { json: { ...original, rfq_id: rfqId }, pairedItem: { item: i } };\n});"
+      },
+      "id": "2275b80f-5330-46c9-b708-90aa9d45985c",
+      "name": "Merge RFQ Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4400,
+        1540
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfq_items",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "scc_procurement"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "scc_procurement"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.rows) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "b0dc2865-ed15-401e-8a99-376e6a9aec1c",
+      "name": "Supabase - Insert RFQ Items HTTP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        4848,
+        1540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Restore original Prepare RFQ Items data after httpRequest\nconst allOriginals = $(\"Prepare RFQ Items\").all();\nreturn $input.all().map((item, i) => {\n  const original = (allOriginals[i] || allOriginals[0]).json;\n  const { rows: _, ...rest } = original;\n  return { json: { ...rest, item_count: (original.rows || []).length }, pairedItem: { item: i } };\n});"
+      },
+      "id": "6ca2dc1e-9dc1-4cdf-892a-7378802f3afa",
+      "name": "Restore Items Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5072,
+        1540
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfq_vendors",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "scc_procurement"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "scc_procurement"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.rows) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "8572f7ec-7dd6-4c08-be4e-f2aa9a369ea5",
+      "name": "Supabase - Insert RFQ Vendors HTTP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        5520,
+        1540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Restore original Prepare RFQ Vendors data after httpRequest\nconst allOriginals = $(\"Prepare RFQ Vendors\").all();\nreturn $input.all().map((item, i) => {\n  const original = (allOriginals[i] || allOriginals[0]).json;\n  const { rows: _, ...rest } = original;\n  return { json: { ...rest, vendor_count_inserted: (original.rows || []).length }, pairedItem: { item: i } };\n});"
+      },
+      "id": "fa26d284-56d5-4eea-a69e-5a1953782ee6",
+      "name": "Restore Vendors Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5744,
+        1540
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst mergeData = $('Merge Procurement Context').first().json;\nconst groupToCats = mergeData.group_to_cats || {};\n\nreturn $input.all().map((item, i) => {\n  const group = item.json;\n  // group.category is now a procurement group name (from AI / fallback)\n  let mappedCategories = groupToCats[group.category] || null;\n\n  // Safety fallback: if group has no mapped vendor categories, query Building Materials pool\n  if (!mappedCategories || mappedCategories.length === 0) {\n    mappedCategories = groupToCats['Building Materials & Accessories'] || ['Building Materials'];\n  }\n\n  // PostgREST or-filter (cap at 12 to keep URL sane)\n  const cats = mappedCategories.slice(0, 12);\n  const orFilter = '(' + cats.map(c => `categories.cs.{\"${c}\"}`).join(',') + ')';\n\n  return {\n    json: { ...group, mapped_categories: mappedCategories, or_filter: orFilter },\n    pairedItem: { item: i }\n  };\n});\n"
+      },
+      "id": "map-vendor-cats-001",
+      "name": "Map Vendor Categories",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2928,
+        1340
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/vendors",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "vendor_id,company_name,contacts,status,categories"
+            },
+            {
+              "name": "status",
+              "value": "in.(listed,registered)"
+            },
+            {
+              "name": "or",
+              "value": "={{ $json.or_filter }}"
+            },
+            {
+              "name": "order",
+              "value": "company_name.asc"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "scc_procurement"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "query-vendors-http-001",
+      "name": "Query Vendors HTTP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3152,
+        1340
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const allGroups = $('Map Vendor Categories').all();\nconst allVendorItems = $('Query Vendors HTTP').all();\n\nconst vendorsByGroup = {};\nallVendorItems.forEach((item) => {\n  const groupIdx = (item.pairedItem && item.pairedItem.item !== undefined) ? item.pairedItem.item : 0;\n  if (!vendorsByGroup[groupIdx]) vendorsByGroup[groupIdx] = [];\n  if (item.json && item.json.vendor_id) {\n    vendorsByGroup[groupIdx].push(item.json);\n  }\n});\n\nreturn allGroups.map((groupItem, i) => {\n  const original = groupItem.json;\n  const groupVendors = vendorsByGroup[i] || [];\n  return {\n    json: { ...original, vendors: groupVendors, vendor_count: groupVendors.length },\n    pairedItem: { item: i }\n  };\n});"
+      },
+      "id": "merge-vendor-results-001",
+      "name": "Merge Vendor Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3376,
+        1340
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/system_settings?select=setting_key,setting_value&setting_key=in.(rfq_terms_and_conditions)",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "scc_procurement"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "fetch-procurement-context-001",
+      "name": "Fetch T&Cs and DB Categories",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1008,
+        912
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/vendors?select=categories&status=in.(listed,registered)&limit=2000",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "scc_procurement"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "fetch-vendor-categories-001",
+      "name": "Fetch Vendor Categories",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1008,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/item_category_mappings?select=description_pattern,category",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "scc_procurement"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "fetch-item-mappings-001",
+      "name": "Fetch Item Category Mappings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1008,
+        1296
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Merge T&Cs, vendor categories, item mappings, and CATEGORY GROUPS with SAP parse data\nconst parseData = $('Parse SAP Rows + Filter Status').first().json;\n\nlet tcs = '';\ntry {\n  const tcsRows = $('Fetch T&Cs and DB Categories').all();\n  const tcsRow = tcsRows.find(r => r.json.setting_key === 'rfq_terms_and_conditions');\n  tcs = tcsRow ? tcsRow.json.setting_value : '';\n} catch(e) { tcs = ''; }\n\nlet dbCategories = [];\ntry {\n  const catRows = $('Fetch Vendor Categories').all();\n  const allCats = new Set();\n  for (const row of catRows) {\n    const cats = row.json.categories || [];\n    for (const cat of cats) { if (cat && cat.trim()) allCats.add(cat.trim()); }\n  }\n  dbCategories = Array.from(allCats).sort();\n} catch(e) { dbCategories = []; }\n\nlet knownMappings = {};\ntry {\n  const mapRows = $('Fetch Item Category Mappings').all();\n  for (const row of mapRows) {\n    if (row.json.description_pattern && row.json.category) {\n      knownMappings[row.json.description_pattern] = row.json.category;\n    }\n  }\n} catch(e) { knownMappings = {}; }\n\n// NEW: category_groups → procurement grouping lookups\nlet procurementGroups = [];\nlet groupToCats = {};   // { \"Steel & Rebar\": [\"HYD Steel Rebar\", ...] }\nlet catToGroup = {};    // { \"HYD Steel Rebar\": \"Steel & Rebar\" }\ntry {\n  const cgRows = $('Fetch Category Groups').all();\n  const groupSet = new Set();\n  for (const row of cgRows) {\n    const vc = row.json.vendor_category;\n    const pg = row.json.procurement_group;\n    if (!vc || !pg) continue;\n    groupSet.add(pg);\n    catToGroup[vc] = pg;\n    if (!groupToCats[pg]) groupToCats[pg] = [];\n    groupToCats[pg].push(vc);\n  }\n  procurementGroups = Array.from(groupSet).sort();\n} catch(e) { procurementGroups = []; groupToCats = {}; catToGroup = {}; }\n\n// Fallback: if table empty/unreachable, keep a minimal safety list so WF7 never hard-fails\nif (procurementGroups.length === 0) {\n  procurementGroups = ['Building Materials & Accessories'];\n}\n\nreturn [{\n  json: {\n    ...parseData,\n    terms_and_conditions: tcs,\n    db_categories: dbCategories,\n    known_mappings: knownMappings,\n    procurement_groups: procurementGroups,\n    group_to_cats: groupToCats,\n    cat_to_group: catToGroup\n  }\n}];\n"
+      },
+      "id": "merge-procurement-context-001",
+      "name": "Merge Procurement Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1232,
+        1148
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/category_groups?select=vendor_category,procurement_group",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "scc_procurement"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "fetch-category-groups-001",
+      "name": "Fetch Category Groups",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1008,
+        1636
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook - Receive SAP Upload": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Has Error?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Error?": {
+      "main": [
+        [
+          {
+            "node": "Respond - Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Parse SAP Rows + Filter Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse SAP Rows + Filter Status": {
+      "main": [
+        [
+          {
+            "node": "Fetch T&Cs and DB Categories",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Vendor Categories",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Item Category Mappings",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Category Groups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Categorisation Prompt": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Categorise Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Categorise Items": {
+      "main": [
+        [
+          {
+            "node": "Parse + Group by Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse + Group by Category": {
+      "main": [
+        [
+          {
+            "node": "Get Ref Bases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare RFQ Groups": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Get Last RFQ Reference",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Get Last RFQ Reference": {
+      "main": [
+        [
+          {
+            "node": "Generate RFQ Reference",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate RFQ Reference": {
+      "main": [
+        [
+          {
+            "node": "Map Vendor Categories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Vendors + Build Email Prompt": {
+      "main": [
+        [
+          {
+            "node": "Assemble RFQ Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Generate RFQ Email": {
+      "main": [
+        [
+          {
+            "node": "Assemble RFQ Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble RFQ Draft": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Insert RFQ HTTP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare RFQ Items": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Insert RFQ Items HTTP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare RFQ Vendors": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Insert RFQ Vendors HTTP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Response Payload": {
+      "main": [
+        [
+          {
+            "node": "Aggregate All Groups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model - Categorise": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Categorise Items",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model - Email Gen": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Generate RFQ Email",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Ref Bases": {
+      "main": [
+        [
+          {
+            "node": "Prepare RFQ Groups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate All Groups": {
+      "main": [
+        [
+          {
+            "node": "Respond - Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Insert RFQ HTTP": {
+      "main": [
+        [
+          {
+            "node": "Merge RFQ Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge RFQ Data": {
+      "main": [
+        [
+          {
+            "node": "Prepare RFQ Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Insert RFQ Items HTTP": {
+      "main": [
+        [
+          {
+            "node": "Restore Items Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Items Data": {
+      "main": [
+        [
+          {
+            "node": "Prepare RFQ Vendors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Insert RFQ Vendors HTTP": {
+      "main": [
+        [
+          {
+            "node": "Restore Vendors Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Vendors Data": {
+      "main": [
+        [
+          {
+            "node": "Build Response Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Vendor Categories": {
+      "main": [
+        [
+          {
+            "node": "Query Vendors HTTP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Vendors HTTP": {
+      "main": [
+        [
+          {
+            "node": "Merge Vendor Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Vendor Results": {
+      "main": [
+        [
+          {
+            "node": "Merge Vendors + Build Email Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch T&Cs and DB Categories": {
+      "main": [
+        [
+          {
+            "node": "Merge Procurement Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Vendor Categories": {
+      "main": [
+        [
+          {
+            "node": "Merge Procurement Context",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Fetch Item Category Mappings": {
+      "main": [
+        [
+          {
+            "node": "Merge Procurement Context",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge Procurement Context": {
+      "main": [
+        [
+          {
+            "node": "Build Categorisation Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Category Groups": {
+      "main": [
+        [
+          {
+            "node": "Merge Procurement Context",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "timeSavedMode": "fixed"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {
+    "Webhook - Receive SAP Upload": [
+      {
+        "json": {
+          "headers": {
+            "connection": "upgrade",
+            "host": "n8n.zavia-ai.com",
+            "x-real-ip": "5.162.110.221",
+            "x-forwarded-for": "5.162.110.221",
+            "x-forwarded-proto": "https",
+            "content-length": "10709",
+            "sec-ch-ua-platform": "\"Windows\"",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+            "sec-ch-ua": "\"Chromium\";v=\"148\", \"Google Chrome\";v=\"148\", \"Not/A)Brand\";v=\"99\"",
+            "content-type": "application/json",
+            "sec-ch-ua-mobile": "?0",
+            "accept": "*/*",
+            "origin": "https://sarooj-vendor-hub-code.vercel.app",
+            "sec-fetch-site": "cross-site",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-dest": "empty",
+            "referer": "https://sarooj-vendor-hub-code.vercel.app/",
+            "accept-encoding": "gzip, deflate, br, zstd",
+            "accept-language": "en-US,en;q=0.9"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "filename": "Materials Request from SAP.xlsx",
+            "sap_rows": [
+              {
+                "pr_number": "1001008810",
+                "item_number": 10,
+                "material_id": "HAND SHOVEL, HAND SHOVEL - FIBRE HANDLE (2000006790)",
+                "item_details": "HEAVY DUTY",
+                "quantity": 10,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-10"
+              },
+              {
+                "pr_number": "1001008810",
+                "item_number": 20,
+                "material_id": "GI NUT & WASHER 10 MM (1000000137)",
+                "item_details": "",
+                "quantity": 4000,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-10"
+              },
+              {
+                "pr_number": "1001008810",
+                "item_number": 30,
+                "material_id": "UNISTRUT SLOTTED CHANNEL (1000001137)",
+                "item_details": "21mmX41mmX3000mm medium duty, 2mm thick",
+                "quantity": 800,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-10"
+              },
+              {
+                "pr_number": "1001008810",
+                "item_number": 40,
+                "material_id": "HANGER WIRE 3MM- 750MM LENGTH (1000000086)",
+                "item_details": "",
+                "quantity": 500,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-10"
+              },
+              {
+                "pr_number": "1001008810",
+                "item_number": 50,
+                "material_id": "GYPSUM CEILING SUSPENSION CROSS TEE 1200 (1000000103)",
+                "item_details": "Knauf T-24 cross tee 28x24x1200mm Length",
+                "quantity": 650,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-10"
+              },
+              {
+                "pr_number": "1001008810",
+                "item_number": 60,
+                "material_id": "GYPSUM CEILING TILES 60 CM X 60 CM X 12 (1000000099)",
+                "item_details": "",
+                "quantity": 3400,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-10"
+              },
+              {
+                "pr_number": "1001008810",
+                "item_number": 70,
+                "material_id": "ADJUSTABLE CLIP 3MM (1000000091)",
+                "item_details": "",
+                "quantity": 1500,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-10"
+              },
+              {
+                "pr_number": "1001009037",
+                "item_number": 10,
+                "material_id": "PVC PIPE, 25MM DIA, 3M LENGTH FOR TIE RO (4000000091)",
+                "item_details": "",
+                "quantity": 1000,
+                "unit": "",
+                "processing_status": "PO created (B)",
+                "delivery_date": "2026-05-25"
+              },
+              {
+                "pr_number": "1001009037",
+                "item_number": 30,
+                "material_id": "POLYTHENE SHEET, 1000G, 4 X 25 ( 24KG) (2000006269)",
+                "item_details": "MADE QTAR-UNIPLAST",
+                "quantity": 250,
+                "unit": "",
+                "processing_status": "PO created (B)",
+                "delivery_date": "2026-05-25"
+              },
+              {
+                "pr_number": "1001009037",
+                "item_number": 50,
+                "material_id": "BINDING WIRE, BLACK ANNEALED, 16 G (1000001196)",
+                "item_details": "",
+                "quantity": 1500,
+                "unit": "",
+                "processing_status": "PO created (B)",
+                "delivery_date": "2026-05-25"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 10,
+                "material_id": "BRASS NRV 1.5\" (4000003770)",
+                "item_details": "",
+                "quantity": 4,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 20,
+                "material_id": "Diode 3A 1N5408 (2000043198)",
+                "item_details": "",
+                "quantity": 50,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 30,
+                "material_id": "TAFLON TAPE (2000008889)",
+                "item_details": "",
+                "quantity": 100,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 40,
+                "material_id": "HPVC VALVE, BALL VALVE 2' (4000000951)",
+                "item_details": "",
+                "quantity": 5,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-11"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 50,
+                "material_id": "HPVC VALVE, BALL VALVE 1.5' (4000000953)",
+                "item_details": "",
+                "quantity": 5,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 60,
+                "material_id": "HPVC ADAPTOR, MALE ADAPTOR 1.5' (4000000590)",
+                "item_details": "",
+                "quantity": 6,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 70,
+                "material_id": "HPVC ADAPTOR, MALE THREAD ADAPTOR 2 INCH (4000000579)",
+                "item_details": "",
+                "quantity": 6,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 80,
+                "material_id": "WATER FILTER CATRIDGE, THREAD TYPE (2000006280)",
+                "item_details": "",
+                "quantity": 200,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 90,
+                "material_id": "Sanitaryware Flush Tank Fittings General (4000001872)",
+                "item_details": "PVC FLUSH TANK  ONLY FITTINGS",
+                "quantity": 20,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 100,
+                "material_id": "Sanitaryware Flush Tank Fittings General (4000001872)",
+                "item_details": "WC TANK ONLY FITTINGS",
+                "quantity": 20,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 110,
+                "material_id": "1/2 \" ANGLE VALVE HEAVY DUTY CHROME PLAT (4000000021)",
+                "item_details": "",
+                "quantity": 50,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 120,
+                "material_id": "TAP, GARDEN TAP 1/2' (4000001190)",
+                "item_details": "HD",
+                "quantity": 100,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 130,
+                "material_id": "HPVC PIPE, 3' x 6 METER (4000000995)",
+                "item_details": "",
+                "quantity": 5,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 140,
+                "material_id": "HPVC PIPE, 2 ' x 6 METER (4000000996)",
+                "item_details": "",
+                "quantity": 5,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 150,
+                "material_id": "HPVC PIPE, 1.5' x 6 METER (4000000997)",
+                "item_details": "",
+                "quantity": 5,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 160,
+                "material_id": "HPVC Socket 3\" Plain (4000000973)",
+                "item_details": "",
+                "quantity": 10,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 170,
+                "material_id": "HPVC SOCKET  2\" (PLAIN) (4000000978)",
+                "item_details": "",
+                "quantity": 10,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 180,
+                "material_id": "PVC GLUE 500 ML (2000006205)",
+                "item_details": "HD",
+                "quantity": 12,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 190,
+                "material_id": "Air Conditioners  Capacitor  50uF  Gener (3000000775)",
+                "item_details": "",
+                "quantity": 50,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 200,
+                "material_id": "BLACK SCREW, 1 1/2\" (2000007331)",
+                "item_details": "",
+                "quantity": 2,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 210,
+                "material_id": "BLACK SCREW, 3\" (2000007332)",
+                "item_details": "",
+                "quantity": 2,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 220,
+                "material_id": "BLACK SCREW, 2\" (2000007334)",
+                "item_details": "",
+                "quantity": 2,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 230,
+                "material_id": "SELF DRILLING SCREW, 1/2 \" (2000007368)",
+                "item_details": "",
+                "quantity": 1000,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 240,
+                "material_id": "WATER COOLER, 10 GALLON (2000006429)",
+                "item_details": "",
+                "quantity": 20,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009194",
+                "item_number": 250,
+                "material_id": "WATER COOLER, THERMOS 20 LITERS (3000000635)",
+                "item_details": "",
+                "quantity": 20,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009366",
+                "item_number": 10,
+                "material_id": "JUNIOR PILLOW, 40 x 60 CM (3000001623)",
+                "item_details": "",
+                "quantity": 50,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009366",
+                "item_number": 20,
+                "material_id": "BEDSHEET SENIOR, 150 x 260 CM (3000001648)",
+                "item_details": "",
+                "quantity": 30,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009366",
+                "item_number": 30,
+                "material_id": "BEDSHEET JUNIOR, 140 x 230 CM (3000001649)",
+                "item_details": "",
+                "quantity": 50,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009366",
+                "item_number": 40,
+                "material_id": "RO Plant  RO System  400 GPD  Taiwan (4000001246)",
+                "item_details": "WITH FULL SET",
+                "quantity": 2,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009366",
+                "item_number": 50,
+                "material_id": "SS WATER COOLER, 4 TAP, 100 GALLON (3000001879)",
+                "item_details": "",
+                "quantity": 2,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009366",
+                "item_number": 60,
+                "material_id": "WATER PUMP 1.5 HP LUBI (4000000909)",
+                "item_details": "ANY BRAND",
+                "quantity": 2,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009366",
+                "item_number": 70,
+                "material_id": "SPLIT AIR CONDITIONER, 1.5 TON, BRAND: H (3000002203)",
+                "item_details": "HISENSE/OR ANY BRAND",
+                "quantity": 5,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009366",
+                "item_number": 80,
+                "material_id": "WINDOW AC 1.5 TON (3000002200)",
+                "item_details": "",
+                "quantity": 5,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-19"
+              },
+              {
+                "pr_number": "1001009366",
+                "item_number": 90,
+                "material_id": "TRANSPORTATION CHARGES (5000002373)",
+                "item_details": "",
+                "quantity": 1,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-30"
+              },
+              {
+                "pr_number": "1001009449",
+                "item_number": 10,
+                "material_id": "H.T. STRAIGHT BAR, 8MM, 12 MTRS (1000001171)",
+                "item_details": "",
+                "quantity": 41,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-06-05"
+              },
+              {
+                "pr_number": "1001009449",
+                "item_number": 20,
+                "material_id": "H.T. STRAIGHT BAR, 10MM, 12 MTRS (1000001173)",
+                "item_details": "",
+                "quantity": 2,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-06-05"
+              },
+              {
+                "pr_number": "1001009449",
+                "item_number": 30,
+                "material_id": "H.T. STRAIGHT BAR, 12MM, 12 MTRS (1000001174)",
+                "item_details": "",
+                "quantity": 115,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-06-05"
+              },
+              {
+                "pr_number": "1001009449",
+                "item_number": 40,
+                "material_id": "H.T. STRAIGHT BAR, 14MM, 12 MTRS (1000001185)",
+                "item_details": "",
+                "quantity": 59,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-06-05"
+              },
+              {
+                "pr_number": "1001009449",
+                "item_number": 50,
+                "material_id": "H.T. STRAIGHT BAR, 20MM, 12 MTRS (1000001182)",
+                "item_details": "",
+                "quantity": 15,
+                "unit": "",
+                "processing_status": "Not edited (N)",
+                "delivery_date": "2026-05-21"
+              }
+            ],
+            "created_by": "younus@zavia-ai.com",
+            "project_name": null,
+            "project_code": null,
+            "project_location": null,
+            "client": null,
+            "consultant": null
+          },
+          "webhookUrl": "https://n8n.zavia-ai.com/webhook/scc-rfq-generate",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "versionId": "30ac4f5f-1a09-44fc-8caa-fcb09d0924ab",
+  "activeVersionId": "30ac4f5f-1a09-44fc-8caa-fcb09d0924ab",
+  "versionCounter": 240,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-05-26T03:50:15.955Z",
+      "createdAt": "2026-05-26T03:50:15.955Z",
+      "role": "workflow:owner",
+      "workflowId": "UV5UaxZ2wkxLJ8K11DRoI",
+      "projectId": "EPVZnKbPnQZ07y5X",
+      "project": {
+        "updatedAt": "2026-05-08T07:21:35.202Z",
+        "createdAt": "2025-08-13T16:14:02.616Z",
+        "id": "EPVZnKbPnQZ07y5X",
+        "name": "Younus Shafi <younus.shafi@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7",
+        "projectRelations": [
+          {
+            "updatedAt": "2025-08-13T16:14:02.617Z",
+            "createdAt": "2025-08-13T16:14:02.617Z",
+            "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7",
+            "projectId": "EPVZnKbPnQZ07y5X",
+            "user": {
+              "updatedAt": "2026-06-23T16:34:51.000Z",
+              "createdAt": "2025-08-13T16:14:01.773Z",
+              "id": "0aa0680b-0420-48ef-8c58-f6b1041c07b7",
+              "email": "younus.shafi@gmail.com",
+              "firstName": "Younus",
+              "lastName": "Shafi",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-08-14T09:21:53.611Z",
+                "personalization_survey_n8n_version": "1.106.3",
+                "automationGoalDevops": [
+                  "data-syncing"
+                ],
+                "companySize": "<20",
+                "companyType": "digital-agency",
+                "role": "engineering",
+                "reportedSource": "linkedin"
+              },
+              "settings": {
+                "userActivated": true,
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "xkosnwxtvVmxlAkV",
+                "userActivatedAt": 1757096940080,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1776506505432
+                }
+              },
+              "disabled": false,
+              "mfaEnabled": true,
+              "lastActiveAt": "2026-06-22",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-06-02T19:30:40.345Z",
+    "createdAt": "2026-06-02T19:30:40.345Z",
+    "versionId": "30ac4f5f-1a09-44fc-8caa-fcb09d0924ab",
+    "workflowId": "UV5UaxZ2wkxLJ8K11DRoI",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "scc-rfq-generate",
+          "responseMode": "responseNode",
+          "options": {
+            "allowedOrigins": "*"
+          }
+        },
+        "id": "5be6133c-3bf7-42bd-ac69-ce923e57186d",
+        "name": "Webhook - Receive SAP Upload",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          112,
+          1060
+        ],
+        "webhookId": "scc-rfq-generate-webhook"
+      },
+      {
+        "parameters": {
+          "jsCode": "const body = $json.body || {};\nconst missing = [];\nif (!body.sap_rows || body.sap_rows.length === 0) missing.push('sap_rows');\nif (!body.filename) missing.push('filename');\nif (!body.created_by) missing.push('created_by');\nif (missing.length > 0) {\n  return [{ json: { error: true, message: 'Missing required fields: ' + missing.join(', ') } }];\n}\nreturn [{ json: { error: false, ...body } }];"
+        },
+        "id": "43564d0c-5255-4061-b718-08563744f981",
+        "name": "Validate Input",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          336,
+          1060
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "v1",
+                "leftValue": "={{ $json.error }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "c1b30d59-fc96-4c78-9af6-17d48b886067",
+        "name": "Has Error?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          560,
+          1060
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ success: false, message: $json.message }) }}",
+          "options": {
+            "responseCode": 400
+          }
+        },
+        "id": "b7d7bf1d-8e7b-44b1-93cf-50632b1758fd",
+        "name": "Respond - Validation Error",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          784,
+          1060
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\nconst body = $('Webhook - Receive SAP Upload').first().json.body;\nconst rows = body.sap_rows || [];\nconst filename = body.filename || 'unknown.xlsx';\nconst createdBy = body.created_by || 'system';\nconst projectName = body.project_name || null;\nconst projectCode = body.project_code || null;\nconst projectLocation = body.project_location || null;\nconst client = body.client || null;\nconst consultant = body.consultant || null;\n\nfunction cleanDescription(materialId) {\n  if (!materialId) return '';\n  // Strip SAP code in parentheses at end: \"ITEM NAME (1000001234)\" → \"ITEM NAME\"\n  return materialId.replace(/\\s*\\(\\d{10}\\)\\s*$/, '').replace(/\\s*\\([A-Z0-9]{10}\\)\\s*$/, '').trim();\n}\n\nfunction extractSapCode(materialId) {\n  if (!materialId) return null;\n  const match = materialId.match(/\\((\\d{10})\\)\\s*$/);\n  return match ? match[1] : null;\n}\n\nfunction extractBrand(itemDetails) {\n  if (!itemDetails || !itemDetails.trim()) return null;\n  const d = itemDetails.trim();\n  // If item details looks like a brand hint (contains brand name or \"brand:\")\n  if (d.toLowerCase().includes('brand:')) return d.replace(/brand:/i, '').trim();\n  // If it's a short spec that looks like a brand (e.g. \"HISENSE/OR ANY BRAND\", \"Jindal Shadeed\")\n  if (d.length < 60 && /brand|make|manufacturer|model/i.test(d)) return d;\n  return null;\n}\n\nconst activeItems = [];\nconst procuredItems = [];\n\nfor (const row of rows) {\n  const status = (row.processing_status || '').toLowerCase();\n  const cleaned = {\n    pr_number: row.pr_number,\n    item_number: row.item_number,\n    material_id: row.material_id,\n    description: cleanDescription(row.material_id),\n    sap_material_code: extractSapCode(row.material_id),\n    item_details: row.item_details || null,\n    brand_hint: extractBrand(row.item_details),\n    quantity: row.quantity,\n    unit: row.unit || 'pcs',\n    processing_status: row.processing_status,\n    delivery_date: row.delivery_date\n  };\n  if (status.includes('po created') || status.includes('(b)')) {\n    procuredItems.push(cleaned);\n  } else {\n    activeItems.push(cleaned);\n  }\n}\n\nif (activeItems.length === 0) {\n  return [{ json: { error: true, message: 'No active items found. All items may have POs already created.' } }];\n}\n\nreturn [{\n  json: {\n    error: false,\n    filename,\n    created_by: createdBy,\n    project_name: projectName,\n    project_code: projectCode,\n    project_location: projectLocation,\n    client,\n    consultant,\n    total_rows: rows.length,\n    active_items: activeItems,\n    procured_items: procuredItems,\n    active_count: activeItems.length,\n    procured_count: procuredItems.length\n  }\n}];\n"
+        },
+        "id": "95d443d5-635e-4a61-8724-46cb5913db86",
+        "name": "Parse SAP Rows + Filter Status",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          784,
+          1252
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\nconst data = $json;\nconst activeItems = data.active_items || [];\nconst groups = data.procurement_groups || [];\nconst groupList = groups.join(', ');\n\nconst itemsText = activeItems.slice(0, 25).map((item, i) => {\n  return `Item ${i+1}:\n  PR: ${item.pr_number}\n  SAP Item No: ${item.item_number}\n  Description: ${item.description}\n  Item Details: ${item.item_details || 'none'}\n  Quantity: ${item.quantity} ${item.unit || ''}\n  Delivery Date: ${item.delivery_date}`;\n}).join('\\n\\n');\n\nconst prompt = `You are a procurement categorisation assistant for Sarooj Construction Company, Oman.\n\nCategorise each item into one of these procurement groups (use EXACTLY these values):\n${groupList}\n\nThese groups represent the pools of vendors Sarooj sends RFQs to. Choose the single best-fit group for each item based on its description. If an item does not clearly fit any group, use \"Building Materials & Accessories\" as the default.\n\nUse the item description as the primary signal.\n\nReturn ONLY a valid JSON array. No explanation, no markdown, no backticks.\n\nFor each item return:\n{\n  \"item_index\": number (0-based),\n  \"description\": \"item description\",\n  \"category\": \"one group from the list above\",\n  \"confidence\": \"high or low\",\n  \"confidence_reason\": \"only if low, else null\"\n}\n\nItems:\n\n${itemsText}`;\n\nreturn [{ json: { ...data, categorisation_prompt: prompt, unknown_items: activeItems, known_items: [] } }];\n"
+        },
+        "id": "85d1c3b7-45c9-4a29-bc0c-549c24376b76",
+        "name": "Build Categorisation Prompt",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1456,
+          1148
+        ]
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "={{ $json.categorisation_prompt }}",
+          "options": {
+            "systemMessage": "You are a procurement categorisation assistant for Sarooj Construction Company, Oman. Return ONLY valid JSON arrays. No explanation, no markdown fences, no backticks.",
+            "maxIterations": 1
+          }
+        },
+        "id": "38258784-7ffa-48a4-a6c7-64b9fb579d22",
+        "name": "AI Agent - Categorise Items",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 3.1,
+        "position": [
+          1680,
+          1148
+        ]
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4o-mini",
+            "mode": "list",
+            "cachedResultName": "gpt-4o-mini"
+          },
+          "builtInTools": {},
+          "options": {
+            "temperature": 0.1
+          }
+        },
+        "id": "36fb5ab2-958c-4487-a711-83b9d6116e7b",
+        "name": "Chat Model - Categorise",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.3,
+        "position": [
+          1752,
+          1372
+        ],
+        "credentials": {
+          "openAiApi": {
+            "id": "PpiTCPKVnei6pTtZ",
+            "name": "OpenAI Account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "\nconst rawText = $json.output || '[]';\nconst promptData = $('Build Categorisation Prompt').first().json;\nconst unknownItems = promptData.unknown_items || [];\nconst knownItems = promptData.known_items || [];\nconst parseNode = $('Parse SAP Rows + Filter Status').first().json;\nconst mergeNode = $('Merge Procurement Context').first().json;\n\nlet aiCategorised = [];\ntry {\n  const clean = rawText.replace(/```json/g, '').replace(/```/g, '').trim();\n  const match = clean.match(/\\[.*\\]/s);\n  aiCategorised = JSON.parse(match ? match[0] : clean);\n} catch(e) {\n  aiCategorised = unknownItems.map((item, i) => ({\n    item_index: i, category: 'Unknown', confidence: 'low',\n    confidence_reason: 'AI parsing failed: ' + e.message\n  }));\n}\n\nfunction fallbackCategory(description) {\n  const d = (description || '').toLowerCase();\n  if (/shovel|spade|pick|hammer|hand tool/.test(d)) return 'Building Materials & Accessories';\n  if (/unistrut|channel|strut|bracket|hanger wire|suspension/.test(d)) return 'Building Materials & Accessories';\n  if (/gypsum|ceiling tile|plaster|drywall|false ceiling/.test(d)) return 'Building Materials & Accessories';\n  if (/screw|bolt|nut|washer|rivet|fastener|anchor/.test(d)) return 'Fasteners & Fixings';\n  if (/tape|glue|adhesive|sealant|pvc glue/.test(d)) return 'Pipes, Fittings & Valves';\n  if (/pipe|tube|socket|elbow|tee/.test(d)) return 'Pipes, Fittings & Valves';\n  if (/valve|fitting|adaptor|coupling|nrv|tap|faucet/.test(d)) return 'Pipes, Fittings & Valves';\n  if (/wire|cable|conductor|flex/.test(d)) return 'Electrical Materials';\n  if (/switch|breaker|fuse|relay|diode|capacitor|resistor|electrical|electric|panel/.test(d)) return 'Electrical Materials';\n  if (/split ac|window ac|air condition|ac unit/.test(d)) return 'HVAC & Cooling';\n  if (/water cooler|cooler|thermos|dispenser|water heater/.test(d)) return 'Welfare & Camp';\n  if (/pillow|mattress|bed|bedsheet|sheet|blanket|towel|linen/.test(d)) return 'Welfare & Camp';\n  if (/ro plant|ro system|water filter|filter catridge|water treatment/.test(d)) return 'Pipes, Fittings & Valves';\n  if (/pump|motor|compressor/.test(d)) return 'Pumps & Mechanical';\n  if (/rebar|bar|rod|steel bar|deformed|straight bar|ht bar|h\\.t\\./.test(d)) return 'Steel & Rebar';\n  if (/transport|freight|logistics|delivery charge|haulage/.test(d)) return 'Logistics & Services';\n  if (/hvac|air handling|ahu|chiller/.test(d)) return 'HVAC & Cooling';\n  if (/cement|opc|ppc/.test(d)) return 'Cement & Concrete';\n  if (/aggregate|sand|gravel|crusher/.test(d)) return 'Aggregates & Sand';\n  if (/scaffold|formwork|shuttering|plywood/.test(d)) return 'Scaffolding & Formwork';\n  return 'Building Materials & Accessories';\n}\n\nconst allCategorised = [...knownItems];\nfor (let i = 0; i < unknownItems.length; i++) {\n  const aiResult = aiCategorised.find(r => Number(r.item_index) === i) || aiCategorised[i];\n  let category = aiResult ? (aiResult.category || 'Unknown') : 'Unknown';\n  let confidence = aiResult ? (aiResult.confidence || 'low') : 'low';\n  if (category === 'Unknown') {\n    category = fallbackCategory(unknownItems[i].description);\n    confidence = 'medium';\n  }\n  allCategorised.push({\n    ...unknownItems[i], category, confidence,\n    confidence_reason: (aiResult && aiResult.confidence_reason) ? aiResult.confidence_reason : null\n  });\n}\n\nconst hitlItems = allCategorised.filter(item => item.category === 'Unknown');\nconst readyItems = allCategorised.filter(item => item.category !== 'Unknown');\n\n// GROUP BY CATEGORY ONLY — all PRs combined into one RFQ per category\nconst groups = {};\nfor (const item of readyItems) {\n  const key = item.category;\n  if (!groups[key]) {\n    groups[key] = {\n      category: item.category,\n      rfq_type: item.rfq_type || 'materials',\n      needs_scope_documents: false,\n      items: []\n    };\n  }\n  if (item.rfq_type === 'subcontract') groups[key].rfq_type = 'subcontract';\n  groups[key].items.push(item);\n}\n\nconst rfqGroups = Object.values(groups);\n\nreturn [{\n  json: {\n    rfq_groups: rfqGroups,\n    group_count: rfqGroups.length,\n    hitl_items: hitlItems,\n    hitl_count: hitlItems.length,\n    procured_items: parseNode.procured_items,\n    procured_count: parseNode.procured_count,\n    filename: parseNode.filename,\n    created_by: parseNode.created_by,\n    project_name: parseNode.project_name,\n    project_code: parseNode.project_code,\n    project_location: parseNode.project_location,\n    client: parseNode.client,\n    consultant: parseNode.consultant,\n    terms_and_conditions: mergeNode.terms_and_conditions || ''\n  }\n}];\n"
+        },
+        "id": "6b1ea953-71de-46fa-9c8f-5d51d5b0dcd8",
+        "name": "Parse + Group by Category",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2032,
+          1148
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\nconst now = new Date();\nconst yy = String(now.getFullYear()).slice(2);\nconst mm = String(now.getMonth() + 1).padStart(2, '0');\nconst period = yy + mm;\nconst data = $json;\nconst groups = data.rfq_groups || [];\nlet materialCount = 0;\nlet subcontractCount = 0;\n\nreturn groups.map((group, i) => {\n  const isSubcontract = group.rfq_type === 'subcontract';\n  const type_index = isSubcontract ? subcontractCount++ : materialCount++;\n  // Collect all PR numbers from items\n  const prNumbers = [...new Set((group.items || []).map(it => it.pr_number).filter(Boolean))].sort();\n  return {\n    json: {\n      ...group,\n      period,\n      group_index: i,\n      type_index,\n      base_seq_mr: data.base_seq_mr,\n      base_seq_sr: data.base_seq_sr,\n      pr_numbers: prNumbers,\n      created_by: data.created_by,\n      project_name: data.project_name,\n      project_code: data.project_code,\n      project_location: data.project_location,\n      client: data.client,\n      consultant: data.consultant,\n      filename: data.filename,\n      terms_and_conditions: data.terms_and_conditions,\n      procured_items: data.procured_items,\n      procured_count: data.procured_count,\n      hitl_items: data.hitl_items,\n      hitl_count: data.hitl_count\n    }\n  };\n});\n"
+        },
+        "id": "9049199f-1c9d-46bf-bacd-373ef55580d9",
+        "name": "Prepare RFQ Groups",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2480,
+          1148
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfqs",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "select",
+                "value": "rfq_reference"
+              },
+              {
+                "name": "rfq_reference",
+                "value": "={{ `like.${$json.rfq_type === 'materials' ? 'MR' : 'SR'}-${$json.period}-%` }}"
+              },
+              {
+                "name": "order",
+                "value": "rfq_reference.desc"
+              },
+              {
+                "name": "limit",
+                "value": "1"
+              }
+            ]
+          },
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Accept-Profile",
+                "value": "scc_procurement"
+              }
+            ]
+          },
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            }
+          }
+        },
+        "id": "090cbc32-dc28-4dc9-bc50-5f29f51bba28",
+        "name": "Supabase - Get Last RFQ Reference",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          2480,
+          1340
+        ],
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "const groups = $('Prepare RFQ Groups').all();\n// Highest existing sequence for this period+type, read from the DB lookup (robust to empty).\nlet baseMR = 0, baseSR = 0;\nfor (const r of $('Supabase - Get Last RFQ Reference').all()) {\n  const j = r.json || {};\n  const refStr = j.rfq_reference || (Array.isArray(j) && j[0] && j[0].rfq_reference) || null;\n  if (!refStr) continue;\n  const m = String(refStr).match(/^(MR|SR)-\\d+-(\\d+)$/);\n  if (!m) continue;\n  const seq = parseInt(m[2], 10) || 0;\n  if (m[1] === 'MR') baseMR = Math.max(baseMR, seq); else baseSR = Math.max(baseSR, seq);\n}\nreturn groups.map((gr) => {\n  const group = gr.json;\n  const isSubcontract = group.rfq_type === 'subcontract';\n  const prefix = isSubcontract ? 'SR' : 'MR';\n  const base = isSubcontract ? baseSR : baseMR;\n  const nextSeq = base + group.type_index + 1;\n  const reference = prefix + '-' + group.period + '-' + String(nextSeq).padStart(3, '0');\n  const prNumbers = [...new Set((group.items || []).map(i => i.pr_number).filter(Boolean))];\n  return { json: { ...group, rfq_reference: reference, pr_numbers: prNumbers, item_count: group.items.length } };\n});"
+        },
+        "id": "dbad9fc2-b39b-44e0-8efd-b8d9dfdf25c4",
+        "name": "Generate RFQ Reference",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2704,
+          1340
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\nconst allGroups = $('Map Vendor Categories').all();\nconst allVendorItems = $('Query Vendors HTTP').all();\nconst parseData = $('Parse SAP Rows + Filter Status').first().json;\nconst mergeData = $('Merge Procurement Context').first().json;\n\nconst vendorsByGroup = {};\nallVendorItems.forEach((item) => {\n  const groupIdx = (item.pairedItem && item.pairedItem.item !== undefined) ? item.pairedItem.item : 0;\n  if (!vendorsByGroup[groupIdx]) vendorsByGroup[groupIdx] = [];\n  if (item.json && item.json.vendor_id) vendorsByGroup[groupIdx].push(item.json);\n});\n\nreturn allGroups.map((groupItem, i) => {\n  const group = groupItem.json;\n  const vendors = vendorsByGroup[i] || [];\n  // TEST_ALWAYS recipients appended to every RFQ (testing). Limit-proof (post-query). REMOVE BEFORE GO-LIVE.\n  const TEST_RECIPIENTS = [\n    {vendor_id:'04c194da-c27c-43cc-a3d4-5bb9b62cb27e', company_name:'SCC TEST — Alagarsamy Subramanian', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Alagarsamy Subramanian', email:'alagarsamy.subramanian@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n    {vendor_id:'9a430114-0242-45f4-9a7c-d118c834bdf8', company_name:'SCC TEST — Asmahan Al Balushi', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Asmahan Al Balushi', email:'asmahan.albalushi@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n    {vendor_id:'8c50bf10-c79d-4ae2-9e91-c4f731b4cafe', company_name:'SCC TEST — Ather Shaik', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Ather Shaik', email:'ather.shaik@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n    {vendor_id:'a834e748-6919-4c31-8ba6-607a6eb13ccf', company_name:'SCC TEST — Chirag Ail', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Chirag Ail', email:'chirag.ail@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n    {vendor_id:'c56d999c-355d-47d2-90a4-367dde253f75', company_name:'SCC TEST — Haja Naseer', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Haja Naseer', email:'haja.naseer@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n    {vendor_id:'89065893-367f-4a52-938a-7cb560eaa518', company_name:'SCC TEST — Imran M', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Imran M', email:'imran.m@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n    {vendor_id:'d34ee2d4-d6d7-4f04-ada0-5c15fce40b89', company_name:'SCC TEST — Omar Serrano', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Omar Serrano', email:'omar.serrano@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n    {vendor_id:'176061c8-31da-4c4f-939a-2ab11a8267c3', company_name:'SCC TEST — Rabia Vahabudeen', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Rabia Vahabudeen', email:'rabia.vahabudeen@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n    {vendor_id:'68c17797-960d-446e-af5e-3b8e7b00e7f2', company_name:'SCC TEST — Shahid Ashfaque', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Shahid Ashfaque', email:'shahid.ashfaque@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n    {vendor_id:'a2fa7e77-b1b5-49b4-97e1-28b3332b426e', company_name:'SCC TEST — Zamzam Al Rawahi', status:'listed', categories:['TEST_ALWAYS'], contacts:[{name:'Zamzam Al Rawahi', email:'zamzam.alrawahi@sarooj.com', mobile:'', designation:'SCC Test Recipient'}]},\n  ];\n  { const _seen = new Set(vendors.map(x => x.vendor_id)); for (const t of TEST_RECIPIENTS) { if (!_seen.has(t.vendor_id)) { vendors.push(t); _seen.add(t.vendor_id); } } }\n\n  const aiNotes = [];\n  if (vendors.length === 0) aiNotes.push(`No vendors found for category: ${group.category}.`);\n  else if (vendors.length < 3) aiNotes.push(`Only ${vendors.length} vendor(s) found for ${group.category}.`);\n\n  // Get unique PR numbers for this RFQ\n  const prNumbers = [...new Set((group.items || []).map(i => i.pr_number).filter(Boolean))].sort();\n\n  // Build subject line — Option C: first PR + count if multiple\n  let prLabel;\n  if (prNumbers.length === 1) {\n    prLabel = `PR# ${prNumbers[0]}`;\n  } else if (prNumbers.length === 2) {\n    prLabel = `PR# ${prNumbers[0]} & ${prNumbers[1]}`;\n  } else {\n    prLabel = `PR# ${prNumbers[0]} (+${prNumbers.length - 1} more)`;\n  }\n\n  // Today's date\n  const today = new Date();\n  const dd = String(today.getDate()).padStart(2,'0');\n  const mm = String(today.getMonth()+1).padStart(2,'0');\n  const yyyy = today.getFullYear();\n  const dateStr = `${dd}-${mm}-${yyyy}`;\n\n  const emailSubject = `SCC_ENQ_${dateStr}_${group.rfq_reference}, ${prLabel}_${group.category}`;\n\n  // Build one flat table with PR Number as second column\n  // Sort items by PR number then item number\n  const sortedItems = [...(group.items || [])].sort((a, b) => {\n    if (a.pr_number < b.pr_number) return -1;\n    if (a.pr_number > b.pr_number) return 1;\n    return (a.item_number || 0) - (b.item_number || 0);\n  });\n\n  const itemRows = sortedItems.map((itm, j) => {\n    const brand = itm.brand_hint || '';\n    return `<tr>\n      <td style=\"border:1px solid #ccc;padding:5px;text-align:center;\">${j+1}</td>\n      <td style=\"border:1px solid #ccc;padding:5px;text-align:center;font-size:11px;color:#666;\">${itm.pr_number}</td>\n      <td style=\"border:1px solid #ccc;padding:5px;\">${itm.description || itm.material_id}</td>\n      <td style=\"border:1px solid #ccc;padding:5px;text-align:center;\">${itm.quantity}</td>\n      <td style=\"border:1px solid #ccc;padding:5px;text-align:center;\">${itm.unit || 'Nos'}</td>\n      <td style=\"border:1px solid #ccc;padding:5px;\"></td>\n      <td style=\"border:1px solid #ccc;padding:5px;\"></td>\n      <td style=\"border:1px solid #ccc;padding:5px;\">${brand}</td>\n      <td style=\"border:1px solid #ccc;padding:5px;\"></td>\n      <td style=\"border:1px solid #ccc;padding:5px;\"></td>\n    </tr>`;\n  }).join('\\n');\n\n  const itemsTable = `<table style=\"border-collapse:collapse;width:100%;font-size:12px;\">\n  <thead>\n    <tr style=\"background-color:#f5f0c8;\">\n      <th style=\"border:1px solid #ccc;padding:5px;text-align:center;\">S.No</th>\n      <th style=\"border:1px solid #ccc;padding:5px;text-align:center;\">PR Number</th>\n      <th style=\"border:1px solid #ccc;padding:5px;\">Description</th>\n      <th style=\"border:1px solid #ccc;padding:5px;text-align:center;\">Quantity</th>\n      <th style=\"border:1px solid #ccc;padding:5px;text-align:center;\">Unit of Measurement</th>\n      <th style=\"border:1px solid #ccc;padding:5px;text-align:center;\">Unit Rate</th>\n      <th style=\"border:1px solid #ccc;padding:5px;text-align:center;\">Total Rate</th>\n      <th style=\"border:1px solid #ccc;padding:5px;\">Brand Offering By Supplier</th>\n      <th style=\"border:1px solid #ccc;padding:5px;\">Country of Origin</th>\n      <th style=\"border:1px solid #ccc;padding:5px;\">Stock Availability</th>\n    </tr>\n  </thead>\n  <tbody>\n    ${itemRows}\n  </tbody>\n</table>`;\n\n  // T&Cs with placeholders replaced\n  const projectLocation = parseData.project_location || 'Muscat';\n  const tcs = (mergeData.terms_and_conditions || '')\n    .replace(/\\[project_location from upload form\\]/gi, projectLocation)\n    .replace(/\\[project_location\\]/gi, projectLocation)\n    .replace(/\\[deadline set on vendors tab\\]/gi, '[To be confirmed]')\n    .replace(/\\[deadline\\]/gi, '[To be confirmed]');\n\n  const tcsHtml = tcs ? tcs.split('\\n').map(line => line.trim() ? `<p style=\"margin:4px 0;\">${line}</p>` : '').join('') : '';\n\n  const emailBody = `<p>Dear [Contact Person],</p>\n<p>We invite you to submit a quotation for the supply of items as per the following list:</p>\n\n${itemsTable}\n\n<br>\n${tcsHtml}\n\n<p style=\"color:#c00000;font-weight:bold;\">Please reply directly to this email with your quotation. Responses received through any other channel will not be recorded in our system.</p>\n\n<p>Thanks &amp; Regards,<br>\n<strong>[SENDER_NAME]</strong><br>\nProcurement Officer<br>\n<strong>Sarooj Construction Company LLC</strong></p>`;\n\n  const rfqTitle = `${group.category} Procurement`;\n\n  return {\n    json: {\n      ...group,\n      pr_numbers: prNumbers,\n      vendors,\n      vendor_count: vendors.length,\n      ai_notes: aiNotes.join(' | '),\n      items_table_html: itemsTable,\n      covering_email_subject: emailSubject,\n      covering_email_body: emailBody,\n      rfq_title: rfqTitle\n    },\n    pairedItem: { item: i }\n  };\n});\n"
+        },
+        "id": "7c8010f9-776c-459d-93b0-1fa78e4c6747",
+        "name": "Merge Vendors + Build Email Prompt",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3664,
+          1340
+        ]
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "={{ $json.email_prompt }}",
+          "options": {
+            "systemMessage": "You are a procurement email writer for Sarooj Construction Company, Oman. Write professional formal RFQ emails. Return ONLY valid JSON. No markdown fences, no explanation, no backticks."
+          }
+        },
+        "id": "344eccda-3c18-40ac-8334-c0331088dd47",
+        "name": "AI Agent - Generate RFQ Email",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 3.1,
+        "position": [
+          3568,
+          1584
+        ]
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4o-mini",
+            "mode": "list",
+            "cachedResultName": "gpt-4o-mini"
+          },
+          "builtInTools": {},
+          "options": {
+            "temperature": 0.4
+          }
+        },
+        "id": "eaf7f479-91ce-4cb6-a338-11f98621bfb8",
+        "name": "Chat Model - Email Gen",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.3,
+        "position": [
+          3672,
+          1860
+        ],
+        "credentials": {
+          "openAiApi": {
+            "id": "PpiTCPKVnei6pTtZ",
+            "name": "OpenAI Account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "\n// Email is now built in Merge Vendors + Build Email Prompt\n// No AI email generation needed — read directly from that node\nconst mergeGroups = $('Merge Vendors + Build Email Prompt').all();\nconst parseData = $('Parse SAP Rows + Filter Status').first().json;\n\nreturn mergeGroups.map((item, i) => {\n  const group = item.json;\n  return {\n    json: {\n      rfq_reference: group.rfq_reference,\n      rfq_type: group.rfq_type,\n      title: group.rfq_title || group.category,\n      category: group.category,\n      pr_number: group.pr_number,\n      pr_numbers: [...new Set((group.items || []).map(it => it.pr_number).filter(Boolean))],\n      items: group.items,\n      vendors: group.vendors,\n      vendor_count: group.vendor_count,\n      ai_notes: group.ai_notes,\n      needs_scope_documents: group.needs_scope_documents,\n      covering_email_subject: group.covering_email_subject,\n      covering_email_body: group.covering_email_body,\n      items_table_html: group.items_table_html,\n      period: group.period,\n      created_by: group.created_by,\n      project_name: group.project_name,\n      project_code: group.project_code,\n      project_location: group.project_location,\n      client: group.client,\n      consultant: group.consultant,\n      sap_export_filename: parseData.filename,\n      procured_items: parseData.procured_items,\n      procured_count: parseData.procured_count\n    },\n    pairedItem: { item: i }\n  };\n});\n"
+        },
+        "id": "a2909d91-d74c-405a-b078-416f50f3ea41",
+        "name": "Assemble RFQ Draft",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3952,
+          1540
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Input: N items with { ...draft, rfq_id } from Supabase - Insert RFQ (Code node).\n// items array is already in $json — no cross-node lookups needed.\nreturn $input.all().map((item, i) => {\n  const rfq = item.json;\n  const rfqId = rfq.rfq_id;\n  const items = rfq.items || [];\n\n  const rows = items.map((itm, j) => ({\n    rfq_id: rfqId,\n    item_number: j + 1,\n    sap_item_number: itm.sap_item_number || null,\n    sap_material_code: itm.sap_material_code || null,\n    pr_number: itm.pr_number || null,\n    description: itm.description,\n    item_details: itm.item_details || null,\n    quantity: itm.quantity,\n    unit: itm.unit || 'Nos',\n    delivery_date: itm.delivery_date || null,\n    specification: itm.item_details || null\n  }));\n\n  // Spread full rfq data forward so downstream nodes still have vendors, etc.\n  return { json: { ...rfq, rows }, pairedItem: { item: i } };\n});"
+        },
+        "id": "37551c13-0770-4d21-aa56-1e2884e17c41",
+        "name": "Prepare RFQ Items",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4624,
+          1540
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Input: N items with { ...rfq_data, item_count } from Insert RFQ Items.\n// vendors array is in $json — no cross-node lookups needed.\n// contacts is a JSONB array — each element has { name, email, mobile, designation }\nreturn $input.all().map((item, i) => {\n  const rfq = item.json;\n  const rfqId = rfq.rfq_id;\n  const vendors = rfq.vendors || [];\n\n  const rows = vendors.map(v => {\n    const contacts = v.contacts || [];\n    const primary = contacts[0] || {};\n    return {\n      rfq_id: rfqId,\n      vendor_id: v.vendor_id,\n      email_to: primary.email || null,\n      contact_person: primary.name || null,\n      matched_category: (v.categories && v.categories.length > 0) ? v.categories[0] : null,\n      status: 'pending',\n      response_received: false,\n      ai_flag: (v.last_response_type === 'unresponsive' || v.status === 'unresponsive')\n        ? 'Vendor was unresponsive in last outreach campaign'\n        : null\n    };\n  });\n\n  return { json: { ...rfq, rows }, pairedItem: { item: i } };\n});"
+        },
+        "id": "2c71f4d5-ca89-4d2b-8b8d-b2f438349ded",
+        "name": "Prepare RFQ Vendors",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          5296,
+          1540
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\nreturn $input.all().map((item, i) => {\n  const rfq = item.json;\n  return {\n    json: {\n      rfq_id: rfq.rfq_id,\n      rfq_reference: rfq.rfq_reference,\n      rfq_type: rfq.rfq_type,\n      title: rfq.title,\n      category: rfq.category,\n      pr_number: rfq.pr_number,\n      covering_email_subject: rfq.covering_email_subject,\n      covering_email_body: rfq.covering_email_body,\n      ai_notes: rfq.ai_notes,\n      needs_scope_documents: rfq.needs_scope_documents,\n      items: rfq.items,\n      vendors: rfq.vendors,\n      vendor_count: rfq.vendor_count,\n      procured_items: rfq.procured_items,\n      procured_count: rfq.procured_count,\n      hitl_items: rfq.hitl_items || [],\n      hitl_count: rfq.hitl_count || 0\n    },\n    pairedItem: { item: i }\n  };\n});\n"
+        },
+        "id": "1c91e44b-9400-4545-825d-72b6b621d7d6",
+        "name": "Build Response Payload",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          5968,
+          1540
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ success: true, rfqs: $('Build Response Payload').all().map(i => ({ rfq_id: i.json.rfq_id, rfq_reference: i.json.rfq_reference, title: i.json.title, category: i.json.category, rfq_type: i.json.rfq_type, item_count: (i.json.items || []).length, vendor_count: i.json.vendor_count, pr_numbers: [...new Set((i.json.items || []).map(x => x.pr_number).filter(Boolean))] })), pr_numbers: [...new Set($('Build Response Payload').all().flatMap(i => (i.json.items || []).map(x => x.pr_number)).filter(Boolean))] }) }}",
+          "options": {
+            "responseCode": 200
+          }
+        },
+        "id": "7697fdc9-bb00-46aa-9945-42c3543cab5d",
+        "name": "Respond - Success",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          6416,
+          1540
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\nconst groupData = $('Parse + Group by Category').first().json;\nreturn [{ json: { ...groupData, base_seq_mr: 0, base_seq_sr: 0 } }];\n"
+        },
+        "id": "0d4d1516-2421-4d10-93be-8bf49297d3f3",
+        "name": "Get Ref Bases",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2256,
+          1148
+        ]
+      },
+      {
+        "parameters": {
+          "aggregate": "aggregateAllItemData",
+          "destinationFieldName": "rfq_groups",
+          "options": {}
+        },
+        "id": "4e903038-ebf8-415f-8f5f-3dc67770b712",
+        "name": "Aggregate All Groups",
+        "type": "n8n-nodes-base.aggregate",
+        "typeVersion": 1,
+        "position": [
+          6192,
+          1540
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfqs",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "scc_procurement"
+              },
+              {
+                "name": "Accept-Profile",
+                "value": "scc_procurement"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=representation"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ rfq_reference: $json.rfq_reference, rfq_type: $json.rfq_type, title: $json.title, category_detected: [$json.category], status: 'draft', created_by: $json.created_by, pr_numbers: $json.pr_numbers, sap_export_filename: $json.sap_export_filename, project_name: $json.project_name, project_code: $json.project_code, project_location: $json.project_location, client: $json.client, consultant: $json.consultant, covering_email_subject: $json.covering_email_subject, covering_email_body: $json.covering_email_body, ai_notes: $json.ai_notes }) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            }
+          }
+        },
+        "id": "c4591adb-04eb-49b2-9887-ce0395774ef5",
+        "name": "Supabase - Insert RFQ HTTP",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          4176,
+          1540
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Merge Supabase rfq_id back with original draft data\nconst allDrafts = $(\"Assemble RFQ Draft\").all();\nreturn $input.all().map((item, i) => {\n  const resp = item.json;\n  const rfqId = Array.isArray(resp) ? resp[0]?.rfq_id : resp?.rfq_id;\n  const original = (allDrafts[i] || allDrafts[0]).json;\n  return { json: { ...original, rfq_id: rfqId }, pairedItem: { item: i } };\n});"
+        },
+        "id": "2275b80f-5330-46c9-b708-90aa9d45985c",
+        "name": "Merge RFQ Data",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4400,
+          1540
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfq_items",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "scc_procurement"
+              },
+              {
+                "name": "Accept-Profile",
+                "value": "scc_procurement"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.rows) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            }
+          }
+        },
+        "id": "b0dc2865-ed15-401e-8a99-376e6a9aec1c",
+        "name": "Supabase - Insert RFQ Items HTTP",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          4848,
+          1540
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Restore original Prepare RFQ Items data after httpRequest\nconst allOriginals = $(\"Prepare RFQ Items\").all();\nreturn $input.all().map((item, i) => {\n  const original = (allOriginals[i] || allOriginals[0]).json;\n  const { rows: _, ...rest } = original;\n  return { json: { ...rest, item_count: (original.rows || []).length }, pairedItem: { item: i } };\n});"
+        },
+        "id": "6ca2dc1e-9dc1-4cdf-892a-7378802f3afa",
+        "name": "Restore Items Data",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          5072,
+          1540
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfq_vendors",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "scc_procurement"
+              },
+              {
+                "name": "Accept-Profile",
+                "value": "scc_procurement"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.rows) }}",
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            }
+          }
+        },
+        "id": "8572f7ec-7dd6-4c08-be4e-f2aa9a369ea5",
+        "name": "Supabase - Insert RFQ Vendors HTTP",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          5520,
+          1540
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Restore original Prepare RFQ Vendors data after httpRequest\nconst allOriginals = $(\"Prepare RFQ Vendors\").all();\nreturn $input.all().map((item, i) => {\n  const original = (allOriginals[i] || allOriginals[0]).json;\n  const { rows: _, ...rest } = original;\n  return { json: { ...rest, vendor_count_inserted: (original.rows || []).length }, pairedItem: { item: i } };\n});"
+        },
+        "id": "fa26d284-56d5-4eea-a69e-5a1953782ee6",
+        "name": "Restore Vendors Data",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          5744,
+          1540
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\nconst mergeData = $('Merge Procurement Context').first().json;\nconst groupToCats = mergeData.group_to_cats || {};\n\nreturn $input.all().map((item, i) => {\n  const group = item.json;\n  // group.category is now a procurement group name (from AI / fallback)\n  let mappedCategories = groupToCats[group.category] || null;\n\n  // Safety fallback: if group has no mapped vendor categories, query Building Materials pool\n  if (!mappedCategories || mappedCategories.length === 0) {\n    mappedCategories = groupToCats['Building Materials & Accessories'] || ['Building Materials'];\n  }\n\n  // PostgREST or-filter (cap at 12 to keep URL sane)\n  const cats = mappedCategories.slice(0, 12);\n  const orFilter = '(' + cats.map(c => `categories.cs.{\"${c}\"}`).join(',') + ')';\n\n  return {\n    json: { ...group, mapped_categories: mappedCategories, or_filter: orFilter },\n    pairedItem: { item: i }\n  };\n});\n"
+        },
+        "id": "map-vendor-cats-001",
+        "name": "Map Vendor Categories",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2928,
+          1340
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/vendors",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "select",
+                "value": "vendor_id,company_name,contacts,status,categories"
+              },
+              {
+                "name": "status",
+                "value": "in.(listed,registered)"
+              },
+              {
+                "name": "or",
+                "value": "={{ $json.or_filter }}"
+              },
+              {
+                "name": "order",
+                "value": "company_name.asc"
+              },
+              {
+                "name": "limit",
+                "value": "50"
+              }
+            ]
+          },
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Accept-Profile",
+                "value": "scc_procurement"
+              }
+            ]
+          },
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            }
+          }
+        },
+        "id": "query-vendors-http-001",
+        "name": "Query Vendors HTTP",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          3152,
+          1340
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const allGroups = $('Map Vendor Categories').all();\nconst allVendorItems = $('Query Vendors HTTP').all();\n\nconst vendorsByGroup = {};\nallVendorItems.forEach((item) => {\n  const groupIdx = (item.pairedItem && item.pairedItem.item !== undefined) ? item.pairedItem.item : 0;\n  if (!vendorsByGroup[groupIdx]) vendorsByGroup[groupIdx] = [];\n  if (item.json && item.json.vendor_id) {\n    vendorsByGroup[groupIdx].push(item.json);\n  }\n});\n\nreturn allGroups.map((groupItem, i) => {\n  const original = groupItem.json;\n  const groupVendors = vendorsByGroup[i] || [];\n  return {\n    json: { ...original, vendors: groupVendors, vendor_count: groupVendors.length },\n    pairedItem: { item: i }\n  };\n});"
+        },
+        "id": "merge-vendor-results-001",
+        "name": "Merge Vendor Results",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3376,
+          1340
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/system_settings?select=setting_key,setting_value&setting_key=in.(rfq_terms_and_conditions)",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Accept-Profile",
+                "value": "scc_procurement"
+              }
+            ]
+          },
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            }
+          }
+        },
+        "id": "fetch-procurement-context-001",
+        "name": "Fetch T&Cs and DB Categories",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          1008,
+          912
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/vendors?select=categories&status=in.(listed,registered)&limit=2000",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Accept-Profile",
+                "value": "scc_procurement"
+              }
+            ]
+          },
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            }
+          }
+        },
+        "id": "fetch-vendor-categories-001",
+        "name": "Fetch Vendor Categories",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          1008,
+          1104
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/item_category_mappings?select=description_pattern,category",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Accept-Profile",
+                "value": "scc_procurement"
+              }
+            ]
+          },
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            }
+          }
+        },
+        "id": "fetch-item-mappings-001",
+        "name": "Fetch Item Category Mappings",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          1008,
+          1296
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\n// Merge T&Cs, vendor categories, item mappings, and CATEGORY GROUPS with SAP parse data\nconst parseData = $('Parse SAP Rows + Filter Status').first().json;\n\nlet tcs = '';\ntry {\n  const tcsRows = $('Fetch T&Cs and DB Categories').all();\n  const tcsRow = tcsRows.find(r => r.json.setting_key === 'rfq_terms_and_conditions');\n  tcs = tcsRow ? tcsRow.json.setting_value : '';\n} catch(e) { tcs = ''; }\n\nlet dbCategories = [];\ntry {\n  const catRows = $('Fetch Vendor Categories').all();\n  const allCats = new Set();\n  for (const row of catRows) {\n    const cats = row.json.categories || [];\n    for (const cat of cats) { if (cat && cat.trim()) allCats.add(cat.trim()); }\n  }\n  dbCategories = Array.from(allCats).sort();\n} catch(e) { dbCategories = []; }\n\nlet knownMappings = {};\ntry {\n  const mapRows = $('Fetch Item Category Mappings').all();\n  for (const row of mapRows) {\n    if (row.json.description_pattern && row.json.category) {\n      knownMappings[row.json.description_pattern] = row.json.category;\n    }\n  }\n} catch(e) { knownMappings = {}; }\n\n// NEW: category_groups → procurement grouping lookups\nlet procurementGroups = [];\nlet groupToCats = {};   // { \"Steel & Rebar\": [\"HYD Steel Rebar\", ...] }\nlet catToGroup = {};    // { \"HYD Steel Rebar\": \"Steel & Rebar\" }\ntry {\n  const cgRows = $('Fetch Category Groups').all();\n  const groupSet = new Set();\n  for (const row of cgRows) {\n    const vc = row.json.vendor_category;\n    const pg = row.json.procurement_group;\n    if (!vc || !pg) continue;\n    groupSet.add(pg);\n    catToGroup[vc] = pg;\n    if (!groupToCats[pg]) groupToCats[pg] = [];\n    groupToCats[pg].push(vc);\n  }\n  procurementGroups = Array.from(groupSet).sort();\n} catch(e) { procurementGroups = []; groupToCats = {}; catToGroup = {}; }\n\n// Fallback: if table empty/unreachable, keep a minimal safety list so WF7 never hard-fails\nif (procurementGroups.length === 0) {\n  procurementGroups = ['Building Materials & Accessories'];\n}\n\nreturn [{\n  json: {\n    ...parseData,\n    terms_and_conditions: tcs,\n    db_categories: dbCategories,\n    known_mappings: knownMappings,\n    procurement_groups: procurementGroups,\n    group_to_cats: groupToCats,\n    cat_to_group: catToGroup\n  }\n}];\n"
+        },
+        "id": "merge-procurement-context-001",
+        "name": "Merge Procurement Context",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1232,
+          1148
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/category_groups?select=vendor_category,procurement_group",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Accept-Profile",
+                "value": "scc_procurement"
+              }
+            ]
+          },
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            }
+          }
+        },
+        "id": "fetch-category-groups-001",
+        "name": "Fetch Category Groups",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          1008,
+          1636
+        ]
+      }
+    ],
+    "connections": {
+      "Webhook - Receive SAP Upload": {
+        "main": [
+          [
+            {
+              "node": "Validate Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate Input": {
+        "main": [
+          [
+            {
+              "node": "Has Error?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Error?": {
+        "main": [
+          [
+            {
+              "node": "Respond - Validation Error",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Parse SAP Rows + Filter Status",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse SAP Rows + Filter Status": {
+        "main": [
+          [
+            {
+              "node": "Fetch T&Cs and DB Categories",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Fetch Vendor Categories",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Fetch Item Category Mappings",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Fetch Category Groups",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Categorisation Prompt": {
+        "main": [
+          [
+            {
+              "node": "AI Agent - Categorise Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Agent - Categorise Items": {
+        "main": [
+          [
+            {
+              "node": "Parse + Group by Category",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse + Group by Category": {
+        "main": [
+          [
+            {
+              "node": "Get Ref Bases",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare RFQ Groups": {
+        "main": [
+          [
+            {
+              "node": "Supabase - Get Last RFQ Reference",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase - Get Last RFQ Reference": {
+        "main": [
+          [
+            {
+              "node": "Generate RFQ Reference",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Generate RFQ Reference": {
+        "main": [
+          [
+            {
+              "node": "Map Vendor Categories",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Merge Vendors + Build Email Prompt": {
+        "main": [
+          [
+            {
+              "node": "Assemble RFQ Draft",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Agent - Generate RFQ Email": {
+        "main": [
+          [
+            {
+              "node": "Assemble RFQ Draft",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Assemble RFQ Draft": {
+        "main": [
+          [
+            {
+              "node": "Supabase - Insert RFQ HTTP",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare RFQ Items": {
+        "main": [
+          [
+            {
+              "node": "Supabase - Insert RFQ Items HTTP",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare RFQ Vendors": {
+        "main": [
+          [
+            {
+              "node": "Supabase - Insert RFQ Vendors HTTP",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Response Payload": {
+        "main": [
+          [
+            {
+              "node": "Aggregate All Groups",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Chat Model - Categorise": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent - Categorise Items",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Chat Model - Email Gen": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Agent - Generate RFQ Email",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get Ref Bases": {
+        "main": [
+          [
+            {
+              "node": "Prepare RFQ Groups",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Aggregate All Groups": {
+        "main": [
+          [
+            {
+              "node": "Respond - Success",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase - Insert RFQ HTTP": {
+        "main": [
+          [
+            {
+              "node": "Merge RFQ Data",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Merge RFQ Data": {
+        "main": [
+          [
+            {
+              "node": "Prepare RFQ Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase - Insert RFQ Items HTTP": {
+        "main": [
+          [
+            {
+              "node": "Restore Items Data",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Restore Items Data": {
+        "main": [
+          [
+            {
+              "node": "Prepare RFQ Vendors",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase - Insert RFQ Vendors HTTP": {
+        "main": [
+          [
+            {
+              "node": "Restore Vendors Data",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Restore Vendors Data": {
+        "main": [
+          [
+            {
+              "node": "Build Response Payload",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Map Vendor Categories": {
+        "main": [
+          [
+            {
+              "node": "Query Vendors HTTP",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Query Vendors HTTP": {
+        "main": [
+          [
+            {
+              "node": "Merge Vendor Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Merge Vendor Results": {
+        "main": [
+          [
+            {
+              "node": "Merge Vendors + Build Email Prompt",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch T&Cs and DB Categories": {
+        "main": [
+          [
+            {
+              "node": "Merge Procurement Context",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Vendor Categories": {
+        "main": [
+          [
+            {
+              "node": "Merge Procurement Context",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Fetch Item Category Mappings": {
+        "main": [
+          [
+            {
+              "node": "Merge Procurement Context",
+              "type": "main",
+              "index": 2
+            }
+          ]
+        ]
+      },
+      "Merge Procurement Context": {
+        "main": [
+          [
+            {
+              "node": "Build Categorisation Prompt",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Category Groups": {
+        "main": [
+          [
+            {
+              "node": "Merge Procurement Context",
+              "type": "main",
+              "index": 3
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Younus Shafi",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-06-02T19:30:40.420Z",
+        "id": 485,
+        "workflowId": "UV5UaxZ2wkxLJ8K11DRoI",
+        "versionId": "30ac4f5f-1a09-44fc-8caa-fcb09d0924ab",
+        "event": "activated",
+        "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7"
+      },
+      {
+        "createdAt": "2026-06-02T19:30:41.805Z",
+        "id": 487,
+        "workflowId": "UV5UaxZ2wkxLJ8K11DRoI",
+        "versionId": "30ac4f5f-1a09-44fc-8caa-fcb09d0924ab",
+        "event": "activated",
+        "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7"
+      },
+      {
+        "createdAt": "2026-06-13T02:48:51.357Z",
+        "id": 495,
+        "workflowId": "UV5UaxZ2wkxLJ8K11DRoI",
+        "versionId": "30ac4f5f-1a09-44fc-8caa-fcb09d0924ab",
+        "event": "activated",
+        "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7"
+      },
+      {
+        "createdAt": "2026-06-02T19:30:40.954Z",
+        "id": 486,
+        "workflowId": "UV5UaxZ2wkxLJ8K11DRoI",
+        "versionId": "30ac4f5f-1a09-44fc-8caa-fcb09d0924ab",
+        "event": "deactivated",
+        "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7"
+      }
+    ]
+  }
+}

@@ -1,0 +1,813 @@
+{
+  "updatedAt": "2026-06-20T13:55:09.434Z",
+  "createdAt": "2026-06-20T12:44:58.261Z",
+  "id": "RPJ9tnpmsQfVEhhU",
+  "name": "SCC - Outreach Campaign (OUTREACH_TEST gated)",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "58b55596-b50d-4006-bdac-74f906831c04",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "scc-outreach-campaign",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "webhookId": "3086f837-4def-4513-9a50-889e013ec7f8"
+    },
+    {
+      "id": "464cc99b-ad0d-4438-a73c-4e82e2cca389",
+      "name": "Fetch OUTREACH_TEST Vendors",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/vendors",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "scc_procurement"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "vendor_id,company_name,contacts,categories"
+            },
+            {
+              "name": "categories",
+              "value": "cs.{OUTREACH_TEST}"
+            },
+            {
+              "name": "status",
+              "value": "in.(listed,registered)"
+            },
+            {
+              "name": "limit",
+              "value": "20"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "26dd9b26-9f33-4198-9aec-64da89341ebc",
+      "name": "Prepare Recipients",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "\nlet rows = $('Fetch OUTREACH_TEST Vendors').all();\nlet vendors = [];\nfor (const r of rows) { if (Array.isArray(r.json)) vendors.push(...r.json); else vendors.push(r.json); }\nconst out = [];\nfor (const v of vendors) {\n  const contacts = Array.isArray(v.contacts) ? v.contacts : [];\n  const primary = contacts[0] || {};\n  if (!primary.email) continue;\n  const cats = (Array.isArray(v.categories)?v.categories:[]).filter(c => c && c !== 'OUTREACH_TEST');\n  out.push({ json: {\n    vendor_id: v.vendor_id,\n    email: primary.email,\n    company_name: v.company_name || 'Vendor',\n    contact_person: primary.name || 'Procurement Contact',\n    categories: cats.length ? cats : ['construction materials']\n  }});\n}\nreturn out;\n"
+      }
+    },
+    {
+      "id": "941f1c69-847d-4de8-b8f9-488d5863780e",
+      "name": "Loop Recipients",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "ff081001-39b3-4eb4-a0dc-a0ac929fe2be",
+      "name": "GPT-4o Generate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        660,
+        120
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model:'gpt-4o', max_tokens:600, messages:[ {role:'system', content:'You write professional vendor outreach emails for Sarooj Construction Company (Oman). Return ONLY the email body as 2 to 3 short HTML paragraphs using <p> tags. No greeting line, no sign-off, no subject, no markdown fences, no <html> or <body> wrapper.'}, {role:'user', content:`Write a brief, warm, professional vendor re-confirmation message for ${$json.company_name} (contact: ${$json.contact_person}). Ask them to confirm they remain the point of contact for supplying ${($json.categories||[]).join(', ')} to Sarooj Construction Company, and that they may reply to update their details. Under 130 words. HTML <p> paragraphs only.`} ] }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "PpiTCPKVnei6pTtZ",
+          "name": "OpenAI Account"
+        }
+      }
+    },
+    {
+      "id": "e57d5284-fefb-489f-8045-a5344d655c99",
+      "name": "Format Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        120
+      ],
+      "parameters": {
+        "jsCode": "const raw=($json.choices && $json.choices[0] && $json.choices[0].message.content)||'';\nconst body=raw.replace(/```html/gi,'').replace(/```/g,'').trim();\nconst r=$('Loop Recipients').item.json;\nconst name=r.contact_person||'Sir/Madam';\nconst html=`<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#222222;max-width:620px;\">`+\n`<p>Dear ${name},</p>`+body+\n`<p style=\"margin-top:18px;\">Best regards,<br><strong>Procurement Team</strong><br>Sarooj Construction Company LLC</p>`+`</div>`;\nreturn [{json:{email_to:r.email, subject:`Sarooj Construction \\u2014 Vendor Database Update | ${r.company_name}`, html}}];\n"
+      }
+    },
+    {
+      "id": "97b7431d-a94f-4f76-a53a-703c86bf979e",
+      "name": "Gmail Send",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        120
+      ],
+      "parameters": {
+        "sendTo": "={{ $json.email_to }}",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.html }}",
+        "options": {}
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DeLrpWhS3LyOKQjn",
+          "name": "sarooj procurement gmail"
+        }
+      }
+    },
+    {
+      "id": "6bb335ba-1b1c-4c4c-9861-46c5ac58bca3",
+      "name": "Log Outreach",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1260,
+        120
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/vendor_outreach",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "scc_procurement"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ vendor_id: $('Loop Recipients').item.json.vendor_id, email_to: $('Loop Recipients').item.json.email, email_subject: $('Format Email').item.json.subject, email_body: $('Format Email').item.json.html, sent_at: new Date().toISOString(), delivery_status: 'sent', response_received: false }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "74f90e5a-e9a1-4a5f-8e53-8bdcac19bb1e",
+      "name": "Wait 2s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1460,
+        120
+      ],
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      }
+    },
+    {
+      "id": "0d73791e-dcdf-4f2f-97c6-f25b9b975efc",
+      "name": "Build Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -140
+      ],
+      "parameters": {
+        "jsCode": "const n=$('Prepare Recipients').all().length;\nreturn [{json:{success:true, recipients_emailed:n, gate:'OUTREACH_TEST', note:'logged to vendor_outreach'}}];"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Fetch OUTREACH_TEST Vendors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch OUTREACH_TEST Vendors": {
+      "main": [
+        [
+          {
+            "node": "Prepare Recipients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Recipients": {
+      "main": [
+        [
+          {
+            "node": "Loop Recipients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Recipients": {
+      "main": [
+        [
+          {
+            "node": "Build Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GPT-4o Generate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT-4o Generate": {
+      "main": [
+        [
+          {
+            "node": "Format Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Email": {
+      "main": [
+        [
+          {
+            "node": "Gmail Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Send": {
+      "main": [
+        [
+          {
+            "node": "Log Outreach",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Outreach": {
+      "main": [
+        [
+          {
+            "node": "Wait 2s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 2s": {
+      "main": [
+        [
+          {
+            "node": "Loop Recipients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": null,
+  "versionId": "b141e54e-aa4e-4348-944b-63da322aee04",
+  "activeVersionId": "b141e54e-aa4e-4348-944b-63da322aee04",
+  "versionCounter": 15,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-06-20T12:44:58.266Z",
+      "createdAt": "2026-06-20T12:44:58.266Z",
+      "role": "workflow:owner",
+      "workflowId": "RPJ9tnpmsQfVEhhU",
+      "projectId": "EPVZnKbPnQZ07y5X",
+      "project": {
+        "updatedAt": "2026-05-08T07:21:35.202Z",
+        "createdAt": "2025-08-13T16:14:02.616Z",
+        "id": "EPVZnKbPnQZ07y5X",
+        "name": "Younus Shafi <younus.shafi@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7",
+        "projectRelations": [
+          {
+            "updatedAt": "2025-08-13T16:14:02.617Z",
+            "createdAt": "2025-08-13T16:14:02.617Z",
+            "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7",
+            "projectId": "EPVZnKbPnQZ07y5X",
+            "user": {
+              "updatedAt": "2026-06-23T16:34:51.000Z",
+              "createdAt": "2025-08-13T16:14:01.773Z",
+              "id": "0aa0680b-0420-48ef-8c58-f6b1041c07b7",
+              "email": "younus.shafi@gmail.com",
+              "firstName": "Younus",
+              "lastName": "Shafi",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-08-14T09:21:53.611Z",
+                "personalization_survey_n8n_version": "1.106.3",
+                "automationGoalDevops": [
+                  "data-syncing"
+                ],
+                "companySize": "<20",
+                "companyType": "digital-agency",
+                "role": "engineering",
+                "reportedSource": "linkedin"
+              },
+              "settings": {
+                "userActivated": true,
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "xkosnwxtvVmxlAkV",
+                "userActivatedAt": 1757096940080,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1776506505432
+                }
+              },
+              "disabled": false,
+              "mfaEnabled": true,
+              "lastActiveAt": "2026-06-22",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-06-20T13:55:09.437Z",
+    "createdAt": "2026-06-20T13:55:09.437Z",
+    "versionId": "b141e54e-aa4e-4348-944b-63da322aee04",
+    "workflowId": "RPJ9tnpmsQfVEhhU",
+    "nodes": [
+      {
+        "id": "58b55596-b50d-4006-bdac-74f906831c04",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          -200,
+          0
+        ],
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "scc-outreach-campaign",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "webhookId": "3086f837-4def-4513-9a50-889e013ec7f8"
+      },
+      {
+        "id": "464cc99b-ad0d-4438-a73c-4e82e2cca389",
+        "name": "Fetch OUTREACH_TEST Vendors",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          0,
+          0
+        ],
+        "parameters": {
+          "method": "GET",
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/vendors",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Accept-Profile",
+                "value": "scc_procurement"
+              }
+            ]
+          },
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "select",
+                "value": "vendor_id,company_name,contacts,categories"
+              },
+              {
+                "name": "categories",
+                "value": "cs.{OUTREACH_TEST}"
+              },
+              {
+                "name": "status",
+                "value": "in.(listed,registered)"
+              },
+              {
+                "name": "limit",
+                "value": "20"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "26dd9b26-9f33-4198-9aec-64da89341ebc",
+        "name": "Prepare Recipients",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          220,
+          0
+        ],
+        "parameters": {
+          "jsCode": "\nlet rows = $('Fetch OUTREACH_TEST Vendors').all();\nlet vendors = [];\nfor (const r of rows) { if (Array.isArray(r.json)) vendors.push(...r.json); else vendors.push(r.json); }\nconst out = [];\nfor (const v of vendors) {\n  const contacts = Array.isArray(v.contacts) ? v.contacts : [];\n  const primary = contacts[0] || {};\n  if (!primary.email) continue;\n  const cats = (Array.isArray(v.categories)?v.categories:[]).filter(c => c && c !== 'OUTREACH_TEST');\n  out.push({ json: {\n    vendor_id: v.vendor_id,\n    email: primary.email,\n    company_name: v.company_name || 'Vendor',\n    contact_person: primary.name || 'Procurement Contact',\n    categories: cats.length ? cats : ['construction materials']\n  }});\n}\nreturn out;\n"
+        }
+      },
+      {
+        "id": "941f1c69-847d-4de8-b8f9-488d5863780e",
+        "name": "Loop Recipients",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          440,
+          0
+        ],
+        "parameters": {
+          "batchSize": 1,
+          "options": {}
+        }
+      },
+      {
+        "id": "ff081001-39b3-4eb4-a0dc-a0ac929fe2be",
+        "name": "GPT-4o Generate",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          660,
+          120
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.openai.com/v1/chat/completions",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "openAiApi",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ model:'gpt-4o', max_tokens:600, messages:[ {role:'system', content:'You write professional vendor outreach emails for Sarooj Construction Company (Oman). Return ONLY the email body as 2 to 3 short HTML paragraphs using <p> tags. No greeting line, no sign-off, no subject, no markdown fences, no <html> or <body> wrapper.'}, {role:'user', content:`Write a brief, warm, professional vendor re-confirmation message for ${$json.company_name} (contact: ${$json.contact_person}). Ask them to confirm they remain the point of contact for supplying ${($json.categories||[]).join(', ')} to Sarooj Construction Company, and that they may reply to update their details. Under 130 words. HTML <p> paragraphs only.`} ] }) }}",
+          "options": {}
+        },
+        "credentials": {
+          "openAiApi": {
+            "id": "PpiTCPKVnei6pTtZ",
+            "name": "OpenAI Account"
+          }
+        }
+      },
+      {
+        "id": "e57d5284-fefb-489f-8045-a5344d655c99",
+        "name": "Format Email",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          860,
+          120
+        ],
+        "parameters": {
+          "jsCode": "const raw=($json.choices && $json.choices[0] && $json.choices[0].message.content)||'';\nconst body=raw.replace(/```html/gi,'').replace(/```/g,'').trim();\nconst r=$('Loop Recipients').item.json;\nconst name=r.contact_person||'Sir/Madam';\nconst html=`<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#222222;max-width:620px;\">`+\n`<p>Dear ${name},</p>`+body+\n`<p style=\"margin-top:18px;\">Best regards,<br><strong>Procurement Team</strong><br>Sarooj Construction Company LLC</p>`+`</div>`;\nreturn [{json:{email_to:r.email, subject:`Sarooj Construction \\u2014 Vendor Database Update | ${r.company_name}`, html}}];\n"
+        }
+      },
+      {
+        "id": "97b7431d-a94f-4f76-a53a-703c86bf979e",
+        "name": "Gmail Send",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2,
+        "position": [
+          1060,
+          120
+        ],
+        "parameters": {
+          "sendTo": "={{ $json.email_to }}",
+          "subject": "={{ $json.subject }}",
+          "message": "={{ $json.html }}",
+          "options": {}
+        },
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "DeLrpWhS3LyOKQjn",
+            "name": "sarooj procurement gmail"
+          }
+        }
+      },
+      {
+        "id": "6bb335ba-1b1c-4c4c-9861-46c5ac58bca3",
+        "name": "Log Outreach",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          1260,
+          120
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/vendor_outreach",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "scc_procurement"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ vendor_id: $('Loop Recipients').item.json.vendor_id, email_to: $('Loop Recipients').item.json.email, email_subject: $('Format Email').item.json.subject, email_body: $('Format Email').item.json.html, sent_at: new Date().toISOString(), delivery_status: 'sent', response_received: false }) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "74f90e5a-e9a1-4a5f-8e53-8bdcac19bb1e",
+        "name": "Wait 2s",
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1,
+        "position": [
+          1460,
+          120
+        ],
+        "parameters": {
+          "amount": 2,
+          "unit": "seconds"
+        }
+      },
+      {
+        "id": "0d73791e-dcdf-4f2f-97c6-f25b9b975efc",
+        "name": "Build Summary",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          660,
+          -140
+        ],
+        "parameters": {
+          "jsCode": "const n=$('Prepare Recipients').all().length;\nreturn [{json:{success:true, recipients_emailed:n, gate:'OUTREACH_TEST', note:'logged to vendor_outreach'}}];"
+        }
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Fetch OUTREACH_TEST Vendors",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch OUTREACH_TEST Vendors": {
+        "main": [
+          [
+            {
+              "node": "Prepare Recipients",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Recipients": {
+        "main": [
+          [
+            {
+              "node": "Loop Recipients",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop Recipients": {
+        "main": [
+          [
+            {
+              "node": "Build Summary",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "GPT-4o Generate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "GPT-4o Generate": {
+        "main": [
+          [
+            {
+              "node": "Format Email",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format Email": {
+        "main": [
+          [
+            {
+              "node": "Gmail Send",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gmail Send": {
+        "main": [
+          [
+            {
+              "node": "Log Outreach",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Log Outreach": {
+        "main": [
+          [
+            {
+              "node": "Wait 2s",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Wait 2s": {
+        "main": [
+          [
+            {
+              "node": "Loop Recipients",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Younus Shafi",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-06-20T13:55:09.515Z",
+        "id": 698,
+        "workflowId": "RPJ9tnpmsQfVEhhU",
+        "versionId": "b141e54e-aa4e-4348-944b-63da322aee04",
+        "event": "activated",
+        "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7"
+      },
+      {
+        "createdAt": "2026-06-20T13:55:11.177Z",
+        "id": 700,
+        "workflowId": "RPJ9tnpmsQfVEhhU",
+        "versionId": "b141e54e-aa4e-4348-944b-63da322aee04",
+        "event": "activated",
+        "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7"
+      },
+      {
+        "createdAt": "2026-06-20T13:55:10.797Z",
+        "id": 699,
+        "workflowId": "RPJ9tnpmsQfVEhhU",
+        "versionId": "b141e54e-aa4e-4348-944b-63da322aee04",
+        "event": "deactivated",
+        "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7"
+      }
+    ]
+  }
+}

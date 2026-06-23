@@ -1,0 +1,1675 @@
+{
+  "updatedAt": "2026-06-13T02:48:46.392Z",
+  "createdAt": "2026-05-26T04:59:25.352Z",
+  "id": "IDeJjPRijKAUjVXU",
+  "name": "SCC - WF8 RFQ Dispatch",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "scc-rfq-dispatch",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "c4111c5a-5cf5-4026-b795-765e1cc01956",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        208,
+        320
+      ],
+      "webhookId": "scc-rfq-dispatch-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst rfq_id = body.rfq_id;\nconst deadline = body.deadline || null;\n// selected_vendor_ids: absent/null => send to ALL (back-compat). present array => honour exactly.\nconst selected_vendor_ids = Array.isArray(body.selected_vendor_ids) ? body.selected_vendor_ids : null;\nif (!rfq_id) {\n  return [{ json: { error: true, message: 'Missing required field: rfq_id' } }];\n}\nreturn [{ json: { error: false, rfq_id, deadline, selected_vendor_ids } }];"
+      },
+      "id": "31723681-b4d2-4ad5-9e21-5708ce569512",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "271f3c38-d0ab-4e27-964b-d8f11998ec06",
+      "name": "Has Error?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        656,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, message: $json.message }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "2ea3a9b0-254e-4f97-ae02-7fb8dc05f371",
+      "name": "Respond 400",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        880,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfqs",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "rfq_id",
+              "value": "={{ `eq.${$('Validate Input').first().json.rfq_id}` }}"
+            },
+            {
+              "name": "select",
+              "value": "*"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "scc_procurement"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b337917c-8a66-4fab-a787-bb68d756e794",
+      "name": "Fetch RFQ",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfq_items",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "rfq_id",
+              "value": "={{ `eq.${$('Validate Input').first().json.rfq_id}` }}"
+            },
+            {
+              "name": "select",
+              "value": "*"
+            },
+            {
+              "name": "order",
+              "value": "item_number.asc"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "scc_procurement"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "79dc7ea7-78e7-476b-b1c4-fae88742d129",
+      "name": "Fetch RFQ Items",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1104,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfq_vendors",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "rfq_id",
+              "value": "={{ `eq.${$('Validate Input').first().json.rfq_id}` }}"
+            },
+            {
+              "name": "status",
+              "value": "eq.pending"
+            },
+            {
+              "name": "select",
+              "value": "id,rfq_id,vendor_id,email_to,contact_person,status,response_received"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "scc_procurement"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8f658a46-70c3-4a29-81fa-6d24af902c02",
+      "name": "Fetch Vendors",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1328,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $('Fetch RFQ').first().json.rfq_reference + ' — ' + $('Fetch RFQ').first().json.title }}",
+        "driveId": {
+          "__rl": true,
+          "value": "myDrive",
+          "mode": "list"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "15eFZn4gFpI4XmGc0oKlZv0rF_Qqt59Kt",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "17359ef9-0fc1-4baa-aa70-c5eef5bbf83a",
+      "name": "Create Drive Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1552,
+        416
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5zccNVQQi5vGfW2R",
+          "name": "Google Drive Procurement"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfqs",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "rfq_id",
+              "value": "={{ `eq.${$('Validate Input').first().json.rfq_id}` }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "scc_procurement"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ drive_folder_id: $('Create Drive Folder').first().json.id, drive_folder_url: 'https://drive.google.com/drive/folders/' + $('Create Drive Folder').first().json.id }) }}",
+        "options": {}
+      },
+      "id": "d553b19f-f0b1-4790-86ef-2295220ecb84",
+      "name": "Update RFQ Drive",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1776,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "c5896525-c883-4c5a-986a-f43d7ac9b892",
+      "name": "Loop Vendors",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        2000,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "share",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Create Drive Folder').first().json.id }}",
+          "mode": "id"
+        },
+        "permissionsUi": {
+          "permissionsValues": {
+            "role": "reader",
+            "type": "user",
+            "emailAddress": "={{ $('Loop Vendors').item.json.email_to }}"
+          }
+        },
+        "options": {
+          "sendNotificationEmail": false
+        }
+      },
+      "id": "d2f959c3-0008-4ada-96f0-09d827c5aa15",
+      "name": "Share Drive Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2224,
+        120
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5zccNVQQi5vGfW2R",
+          "name": "Google Drive Procurement"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email_to }}",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "b791c022-5947-4c10-b03d-79ba0fe95e05",
+      "name": "Send RFQ Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        2800,
+        120
+      ],
+      "webhookId": "77be3ddc-58a6-4bcc-8034-7cef0fdb4bac",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DeLrpWhS3LyOKQjn",
+          "name": "sarooj procurement gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfq_vendors",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ `eq.${$('Loop Vendors').item.json.id}` }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "scc_procurement"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'sent', sent_at: new Date().toISOString(), personalised_email_body: $('Build Email Body').item.json.body }) }}",
+        "options": {}
+      },
+      "id": "0f67d601-1029-4956-8d34-04aec106000d",
+      "name": "Update Vendor Sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3024,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "unit": "seconds"
+      },
+      "id": "9f2e6908-82dd-4456-b13b-0d2c9c100fc5",
+      "name": "Wait 1s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        3248,
+        436
+      ],
+      "webhookId": "2933061a-86fa-4d94-b712-e857c6db66f4"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfqs",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "rfq_id",
+              "value": "={{ `eq.${$('Validate Input').first().json.rfq_id}` }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "scc_procurement"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'issued', sent_at: new Date().toISOString(), deadline: $('Validate Input').first().json.deadline }) }}",
+        "options": {}
+      },
+      "id": "5ea31004-27e8-469e-af24-f85e5c7b789a",
+      "name": "Update RFQ Sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2224,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, rfq_id: $('Validate Input').first().json.rfq_id }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "df037321-4440-4ec9-8848-03fc75201a24",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2512,
+        416
+      ]
+    },
+    {
+      "id": "build-email-body-001",
+      "name": "Build Email Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2300,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Read vendor row from the LOOP item (current $json is the Drive permission, not the vendor).\nconst v = $('Loop Vendors').item.json;\nconst rfq = $('Fetch RFQ').first().json;\nconst name = v.contact_person || 'Procurement Manager';\nconst sender = rfq.created_by || 'Procurement Officer';\nconst deadline = rfq.deadline || '[To be confirmed]';\nlet body = rfq.covering_email_body || '';\nbody = body.split('[Contact Person]').join(name);\nbody = body.split('[SENDER_NAME]').join(sender);\nbody = body.split('[To be confirmed]').join(deadline);\nreturn { json: { email_to: v.email_to, contact_person: name, body, subject: rfq.covering_email_subject } };"
+      }
+    },
+    {
+      "id": "prepare-vendor-loop-001",
+      "name": "Prepare Vendor Loop",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1856,
+        432
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Emit vendor rows exactly once so Loop Vendors iterates vendors (not the RFQ item).\n// Filter to selected_vendor_ids when the frontend supplies them (checkbox selection).\nconst sel = $('Validate Input').first().json.selected_vendor_ids;\nconst allow = Array.isArray(sel) ? new Set(sel) : null; // null => no filter (send to all)\nconst seen = new Set(); const out = [];\nfor (const v of $('Fetch Vendors').all()) {\n  const id = v.json.id;\n  if (seen.has(id)) continue;\n  if (allow && !allow.has(v.json.vendor_id)) continue; // skip unchecked vendors\n  seen.add(id); out.push({ json: v.json });\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "build-response-001",
+      "name": "Build Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3100,
+        200
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Build the webhook response payload here so Respond node only reads $json\n// (avoids getParentNodes failure when Respond sits after the loop).\nconst rfqId = $('Validate Input').first().json.rfq_id;\nlet folder = null;\ntry { folder = $('Create Drive Folder').first().json.id; } catch(e) {}\nreturn [{ json: { success: true, rfq_id: rfqId,\n  drive_folder_url: folder ? ('https://drive.google.com/drive/folders/' + folder) : null } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Has Error?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Error?": {
+      "main": [
+        [
+          {
+            "node": "Respond 400",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch RFQ": {
+      "main": [
+        [
+          {
+            "node": "Fetch RFQ Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch RFQ Items": {
+      "main": [
+        [
+          {
+            "node": "Fetch Vendors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Vendors": {
+      "main": [
+        [
+          {
+            "node": "Create Drive Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Drive Folder": {
+      "main": [
+        [
+          {
+            "node": "Update RFQ Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update RFQ Drive": {
+      "main": [
+        [
+          {
+            "node": "Prepare Vendor Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Vendors": {
+      "main": [
+        [
+          {
+            "node": "Update RFQ Sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Share Drive Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Share Drive Folder": {
+      "main": [
+        [
+          {
+            "node": "Build Email Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Personalise": {
+      "main": [
+        [
+          {
+            "node": "Send RFQ Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model Personalise": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Personalise",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send RFQ Email": {
+      "main": [
+        [
+          {
+            "node": "Update Vendor Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Vendor Sent": {
+      "main": [
+        [
+          {
+            "node": "Wait 1s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 1s": {
+      "main": [
+        [
+          {
+            "node": "Loop Vendors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update RFQ Sent": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Email Body": {
+      "main": [
+        [
+          {
+            "node": "Send RFQ Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Vendor Loop": {
+      "main": [
+        [
+          {
+            "node": "Loop Vendors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Response": {
+      "main": [
+        []
+      ]
+    },
+    "Respond 200": {
+      "main": [
+        [
+          {
+            "node": "Fetch RFQ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "334fbca0-715d-44ec-b2a2-52ce926f0759",
+  "activeVersionId": "334fbca0-715d-44ec-b2a2-52ce926f0759",
+  "versionCounter": 82,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-05-26T04:59:25.356Z",
+      "createdAt": "2026-05-26T04:59:25.356Z",
+      "role": "workflow:owner",
+      "workflowId": "IDeJjPRijKAUjVXU",
+      "projectId": "EPVZnKbPnQZ07y5X",
+      "project": {
+        "updatedAt": "2026-05-08T07:21:35.202Z",
+        "createdAt": "2025-08-13T16:14:02.616Z",
+        "id": "EPVZnKbPnQZ07y5X",
+        "name": "Younus Shafi <younus.shafi@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7",
+        "projectRelations": [
+          {
+            "updatedAt": "2025-08-13T16:14:02.617Z",
+            "createdAt": "2025-08-13T16:14:02.617Z",
+            "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7",
+            "projectId": "EPVZnKbPnQZ07y5X",
+            "user": {
+              "updatedAt": "2026-06-23T16:34:51.000Z",
+              "createdAt": "2025-08-13T16:14:01.773Z",
+              "id": "0aa0680b-0420-48ef-8c58-f6b1041c07b7",
+              "email": "younus.shafi@gmail.com",
+              "firstName": "Younus",
+              "lastName": "Shafi",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-08-14T09:21:53.611Z",
+                "personalization_survey_n8n_version": "1.106.3",
+                "automationGoalDevops": [
+                  "data-syncing"
+                ],
+                "companySize": "<20",
+                "companyType": "digital-agency",
+                "role": "engineering",
+                "reportedSource": "linkedin"
+              },
+              "settings": {
+                "userActivated": true,
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "xkosnwxtvVmxlAkV",
+                "userActivatedAt": 1757096940080,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1776506505432
+                }
+              },
+              "disabled": false,
+              "mfaEnabled": true,
+              "lastActiveAt": "2026-06-22",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-06-02T18:00:18.779Z",
+    "createdAt": "2026-06-02T18:00:18.779Z",
+    "versionId": "334fbca0-715d-44ec-b2a2-52ce926f0759",
+    "workflowId": "IDeJjPRijKAUjVXU",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "scc-rfq-dispatch",
+          "responseMode": "responseNode",
+          "options": {
+            "allowedOrigins": "*"
+          }
+        },
+        "id": "c4111c5a-5cf5-4026-b795-765e1cc01956",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          208,
+          320
+        ],
+        "webhookId": "scc-rfq-dispatch-webhook"
+      },
+      {
+        "parameters": {
+          "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst rfq_id = body.rfq_id;\nconst deadline = body.deadline || null;\n// selected_vendor_ids: absent/null => send to ALL (back-compat). present array => honour exactly.\nconst selected_vendor_ids = Array.isArray(body.selected_vendor_ids) ? body.selected_vendor_ids : null;\nif (!rfq_id) {\n  return [{ json: { error: true, message: 'Missing required field: rfq_id' } }];\n}\nreturn [{ json: { error: false, rfq_id, deadline, selected_vendor_ids } }];"
+        },
+        "id": "31723681-b4d2-4ad5-9e21-5708ce569512",
+        "name": "Validate Input",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          432,
+          320
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.error }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "271f3c38-d0ab-4e27-964b-d8f11998ec06",
+        "name": "Has Error?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          656,
+          320
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ success: false, message: $json.message }) }}",
+          "options": {
+            "responseCode": 400
+          }
+        },
+        "id": "2ea3a9b0-254e-4f97-ae02-7fb8dc05f371",
+        "name": "Respond 400",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          880,
+          224
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfqs",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "rfq_id",
+                "value": "={{ `eq.${$('Validate Input').first().json.rfq_id}` }}"
+              },
+              {
+                "name": "select",
+                "value": "*"
+              },
+              {
+                "name": "limit",
+                "value": "1"
+              }
+            ]
+          },
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Accept-Profile",
+                "value": "scc_procurement"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "b337917c-8a66-4fab-a787-bb68d756e794",
+        "name": "Fetch RFQ",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          880,
+          416
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfq_items",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "rfq_id",
+                "value": "={{ `eq.${$('Validate Input').first().json.rfq_id}` }}"
+              },
+              {
+                "name": "select",
+                "value": "*"
+              },
+              {
+                "name": "order",
+                "value": "item_number.asc"
+              }
+            ]
+          },
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Accept-Profile",
+                "value": "scc_procurement"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "79dc7ea7-78e7-476b-b1c4-fae88742d129",
+        "name": "Fetch RFQ Items",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1104,
+          416
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfq_vendors",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "rfq_id",
+                "value": "={{ `eq.${$('Validate Input').first().json.rfq_id}` }}"
+              },
+              {
+                "name": "status",
+                "value": "eq.pending"
+              },
+              {
+                "name": "select",
+                "value": "id,rfq_id,vendor_id,email_to,contact_person,status,response_received"
+              }
+            ]
+          },
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Accept-Profile",
+                "value": "scc_procurement"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "8f658a46-70c3-4a29-81fa-6d24af902c02",
+        "name": "Fetch Vendors",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1328,
+          416
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "folder",
+          "name": "={{ $('Fetch RFQ').first().json.rfq_reference + ' — ' + $('Fetch RFQ').first().json.title }}",
+          "driveId": {
+            "__rl": true,
+            "value": "myDrive",
+            "mode": "list"
+          },
+          "folderId": {
+            "__rl": true,
+            "value": "15eFZn4gFpI4XmGc0oKlZv0rF_Qqt59Kt",
+            "mode": "id"
+          },
+          "options": {}
+        },
+        "id": "17359ef9-0fc1-4baa-aa70-c5eef5bbf83a",
+        "name": "Create Drive Folder",
+        "type": "n8n-nodes-base.googleDrive",
+        "typeVersion": 3,
+        "position": [
+          1552,
+          416
+        ],
+        "credentials": {
+          "googleDriveOAuth2Api": {
+            "id": "5zccNVQQi5vGfW2R",
+            "name": "Google Drive Procurement"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "PATCH",
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfqs",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "rfq_id",
+                "value": "={{ `eq.${$('Validate Input').first().json.rfq_id}` }}"
+              }
+            ]
+          },
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "scc_procurement"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=representation"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ drive_folder_id: $('Create Drive Folder').first().json.id, drive_folder_url: 'https://drive.google.com/drive/folders/' + $('Create Drive Folder').first().json.id }) }}",
+          "options": {}
+        },
+        "id": "d553b19f-f0b1-4790-86ef-2295220ecb84",
+        "name": "Update RFQ Drive",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1776,
+          416
+        ]
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "id": "c5896525-c883-4c5a-986a-f43d7ac9b892",
+        "name": "Loop Vendors",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          2000,
+          416
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "share",
+          "fileId": {
+            "__rl": true,
+            "value": "={{ $('Create Drive Folder').first().json.id }}",
+            "mode": "id"
+          },
+          "permissionsUi": {
+            "permissionsValues": {
+              "role": "reader",
+              "type": "user",
+              "emailAddress": "={{ $('Loop Vendors').item.json.email_to }}"
+            }
+          },
+          "options": {
+            "sendNotificationEmail": false
+          }
+        },
+        "id": "d2f959c3-0008-4ada-96f0-09d827c5aa15",
+        "name": "Share Drive Folder",
+        "type": "n8n-nodes-base.googleDrive",
+        "typeVersion": 3,
+        "position": [
+          2224,
+          120
+        ],
+        "credentials": {
+          "googleDriveOAuth2Api": {
+            "id": "5zccNVQQi5vGfW2R",
+            "name": "Google Drive Procurement"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sendTo": "={{ $json.email_to }}",
+          "subject": "={{ $json.subject }}",
+          "message": "={{ $json.body }}",
+          "options": {}
+        },
+        "id": "b791c022-5947-4c10-b03d-79ba0fe95e05",
+        "name": "Send RFQ Email",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2,
+        "position": [
+          2800,
+          120
+        ],
+        "webhookId": "77be3ddc-58a6-4bcc-8034-7cef0fdb4bac",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "DeLrpWhS3LyOKQjn",
+            "name": "sarooj procurement gmail"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "PATCH",
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfq_vendors",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "id",
+                "value": "={{ `eq.${$('Loop Vendors').item.json.id}` }}"
+              }
+            ]
+          },
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "scc_procurement"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=representation"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ status: 'sent', sent_at: new Date().toISOString(), personalised_email_body: $('Build Email Body').item.json.body }) }}",
+          "options": {}
+        },
+        "id": "0f67d601-1029-4956-8d34-04aec106000d",
+        "name": "Update Vendor Sent",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          3024,
+          120
+        ]
+      },
+      {
+        "parameters": {
+          "unit": "seconds"
+        },
+        "id": "9f2e6908-82dd-4456-b13b-0d2c9c100fc5",
+        "name": "Wait 1s",
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1,
+        "position": [
+          3248,
+          436
+        ],
+        "webhookId": "2933061a-86fa-4d94-b712-e857c6db66f4"
+      },
+      {
+        "parameters": {
+          "method": "PATCH",
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfqs",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "rfq_id",
+                "value": "={{ `eq.${$('Validate Input').first().json.rfq_id}` }}"
+              }
+            ]
+          },
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "scc_procurement"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=representation"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ status: 'issued', sent_at: new Date().toISOString(), deadline: $('Validate Input').first().json.deadline }) }}",
+          "options": {}
+        },
+        "id": "5ea31004-27e8-469e-af24-f85e5c7b789a",
+        "name": "Update RFQ Sent",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2224,
+          416
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ success: true, rfq_id: $('Validate Input').first().json.rfq_id }) }}",
+          "options": {
+            "responseCode": 200
+          }
+        },
+        "id": "df037321-4440-4ec9-8848-03fc75201a24",
+        "name": "Respond 200",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          2512,
+          416
+        ]
+      },
+      {
+        "id": "build-email-body-001",
+        "name": "Build Email Body",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2300,
+          300
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "// Read vendor row from the LOOP item (current $json is the Drive permission, not the vendor).\nconst v = $('Loop Vendors').item.json;\nconst rfq = $('Fetch RFQ').first().json;\nconst name = v.contact_person || 'Procurement Manager';\nconst sender = rfq.created_by || 'Procurement Officer';\nconst deadline = rfq.deadline || '[To be confirmed]';\nlet body = rfq.covering_email_body || '';\nbody = body.split('[Contact Person]').join(name);\nbody = body.split('[SENDER_NAME]').join(sender);\nbody = body.split('[To be confirmed]').join(deadline);\nreturn { json: { email_to: v.email_to, contact_person: name, body, subject: rfq.covering_email_subject } };"
+        }
+      },
+      {
+        "id": "prepare-vendor-loop-001",
+        "name": "Prepare Vendor Loop",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1856,
+          432
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "// Emit vendor rows exactly once so Loop Vendors iterates vendors (not the RFQ item).\n// Filter to selected_vendor_ids when the frontend supplies them (checkbox selection).\nconst sel = $('Validate Input').first().json.selected_vendor_ids;\nconst allow = Array.isArray(sel) ? new Set(sel) : null; // null => no filter (send to all)\nconst seen = new Set(); const out = [];\nfor (const v of $('Fetch Vendors').all()) {\n  const id = v.json.id;\n  if (seen.has(id)) continue;\n  if (allow && !allow.has(v.json.vendor_id)) continue; // skip unchecked vendors\n  seen.add(id); out.push({ json: v.json });\n}\nreturn out;"
+        }
+      },
+      {
+        "id": "build-response-001",
+        "name": "Build Response",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3100,
+          200
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "// Build the webhook response payload here so Respond node only reads $json\n// (avoids getParentNodes failure when Respond sits after the loop).\nconst rfqId = $('Validate Input').first().json.rfq_id;\nlet folder = null;\ntry { folder = $('Create Drive Folder').first().json.id; } catch(e) {}\nreturn [{ json: { success: true, rfq_id: rfqId,\n  drive_folder_url: folder ? ('https://drive.google.com/drive/folders/' + folder) : null } }];"
+        }
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Validate Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate Input": {
+        "main": [
+          [
+            {
+              "node": "Has Error?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Error?": {
+        "main": [
+          [
+            {
+              "node": "Respond 400",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond 200",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch RFQ": {
+        "main": [
+          [
+            {
+              "node": "Fetch RFQ Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch RFQ Items": {
+        "main": [
+          [
+            {
+              "node": "Fetch Vendors",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Vendors": {
+        "main": [
+          [
+            {
+              "node": "Create Drive Folder",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create Drive Folder": {
+        "main": [
+          [
+            {
+              "node": "Update RFQ Drive",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Update RFQ Drive": {
+        "main": [
+          [
+            {
+              "node": "Prepare Vendor Loop",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop Vendors": {
+        "main": [
+          [
+            {
+              "node": "Update RFQ Sent",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Share Drive Folder",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Share Drive Folder": {
+        "main": [
+          [
+            {
+              "node": "Build Email Body",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Personalise": {
+        "main": [
+          [
+            {
+              "node": "Send RFQ Email",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Chat Model Personalise": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Personalise",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send RFQ Email": {
+        "main": [
+          [
+            {
+              "node": "Update Vendor Sent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Update Vendor Sent": {
+        "main": [
+          [
+            {
+              "node": "Wait 1s",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Wait 1s": {
+        "main": [
+          [
+            {
+              "node": "Loop Vendors",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Update RFQ Sent": {
+        "main": [
+          [
+            {
+              "node": "Build Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Email Body": {
+        "main": [
+          [
+            {
+              "node": "Send RFQ Email",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Vendor Loop": {
+        "main": [
+          [
+            {
+              "node": "Loop Vendors",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Response": {
+        "main": [
+          []
+        ]
+      },
+      "Respond 200": {
+        "main": [
+          [
+            {
+              "node": "Fetch RFQ",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Younus Shafi",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-06-02T18:00:18.862Z",
+        "id": 476,
+        "workflowId": "IDeJjPRijKAUjVXU",
+        "versionId": "334fbca0-715d-44ec-b2a2-52ce926f0759",
+        "event": "activated",
+        "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7"
+      },
+      {
+        "createdAt": "2026-06-02T18:00:20.559Z",
+        "id": 478,
+        "workflowId": "IDeJjPRijKAUjVXU",
+        "versionId": "334fbca0-715d-44ec-b2a2-52ce926f0759",
+        "event": "activated",
+        "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7"
+      },
+      {
+        "createdAt": "2026-06-13T02:48:46.494Z",
+        "id": 494,
+        "workflowId": "IDeJjPRijKAUjVXU",
+        "versionId": "334fbca0-715d-44ec-b2a2-52ce926f0759",
+        "event": "activated",
+        "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7"
+      },
+      {
+        "createdAt": "2026-06-02T18:00:19.878Z",
+        "id": 477,
+        "workflowId": "IDeJjPRijKAUjVXU",
+        "versionId": "334fbca0-715d-44ec-b2a2-52ce926f0759",
+        "event": "deactivated",
+        "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7"
+      }
+    ]
+  }
+}
