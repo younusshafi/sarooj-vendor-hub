@@ -15,6 +15,7 @@ import {
 import { supabase } from "@/integrations/supabase-external/client";
 import { formatDate } from "@/lib/format";
 import { excludeTestBatch, splitRecipients, groupByCategory, wasSent } from "@/lib/rfq-vendors";
+import { BidLinksPanel } from "@/components/bid-links-panel";
 
 export const Route = createFileRoute("/_app/rfq/$rfqId/")({
   component: RFQDetailPage,
@@ -550,6 +551,9 @@ function VendorsTabPanel({
           </span>
         )}
       </div>
+
+      {/* Vendor bid links (issued) — manual send until n8n dispatch email is automated */}
+      {!isDraft && <BidLinksPanel rfqId={rfqId} rfqReference={rfq.rfq_reference} />}
 
       {/* Vendor list — grouped by category */}
       {vendorsLoading && (

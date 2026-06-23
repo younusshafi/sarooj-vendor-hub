@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,7 @@ import { RfqEditableFields } from "@/components/rfq-editable-fields";
 import { RfqVendorList, type SelectedVendor } from "@/components/rfq-vendor-list";
 import { RfqEmailEditor } from "@/components/rfq-email-editor";
 import { RfqDispatchPanel } from "@/components/rfq-dispatch-panel";
+import { BidLinksPanel } from "@/components/bid-links-panel";
 import { BoqUploadStep } from "@/components/frame/BoqUploadStep";
 import { FrameGrid } from "@/components/frame/FrameGrid";
 import { FrameView } from "@/components/frame/FrameView";
@@ -598,12 +599,24 @@ function RfqPreviewPage() {
           <h1 className="font-display text-2xl text-foreground">{header.rfq_reference}</h1>
           <p className="mt-1 text-lg text-foreground">{header.subject_works}</p>
         </div>
-        <Badge
-          variant={header.status === "issued" ? "default" : "secondary"}
-          className="text-xs uppercase"
-        >
-          {header.status}
-        </Badge>
+        <div className="flex flex-col items-end gap-2">
+          <Badge
+            variant={header.status === "issued" ? "default" : "secondary"}
+            className="text-xs uppercase"
+          >
+            {header.status}
+          </Badge>
+          {header.status !== "draft" && (
+            <Link
+              to="/rfq/$rfqId/comparison"
+              params={{ rfqId }}
+              className="text-sm font-medium"
+              style={{ color: "var(--accent)" }}
+            >
+              Compare &amp; Award bids →
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="flex gap-1 border-b border-border">
@@ -670,6 +683,9 @@ function RfqPreviewPage() {
 
       {activeTab === "vendors" && (
         <div className="space-y-6">
+          {header.status !== "draft" && (
+            <BidLinksPanel rfqId={rfqId} rfqReference={header.rfq_reference} />
+          )}
           <RfqVendorList
             rfqId={rfqId}
             status={header.status}

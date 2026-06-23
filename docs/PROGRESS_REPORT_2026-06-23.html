@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Sarooj Procurement AI — Progress Report</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 16mm 15mm; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: "Segoe UI", Calibri, Arial, sans-serif;
+    color: #20302b; line-height: 1.5; font-size: 11.2pt; margin: 0;
+  }
+  .band {
+    background: #0D3D2E; color: #fff; padding: 18px 22px; border-radius: 8px;
+    display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 22px;
+  }
+  .band .co { font-size: 17pt; font-weight: 700; letter-spacing: .2px; }
+  .band .sub { font-size: 9.5pt; color: #C8DDD7; }
+  h1 { font-size: 20pt; color: #0D3D2E; margin: 0 0 4px; }
+  .meta { color: #5b6b66; font-size: 9.5pt; margin-bottom: 18px; }
+  .meta span { margin-right: 18px; }
+  h2 {
+    font-size: 13.5pt; color: #0D5C3A; margin: 26px 0 8px;
+    border-bottom: 2px solid #C8DDD7; padding-bottom: 4px;
+  }
+  h3 { font-size: 11.5pt; color: #0D7A5A; margin: 16px 0 4px; }
+  p { margin: 7px 0; }
+  ul { margin: 6px 0 10px; padding-left: 20px; }
+  li { margin: 3px 0; }
+  strong { color: #143a2c; }
+  code {
+    background: #eef4f1; color: #0D5C3A; padding: 1px 5px; border-radius: 4px;
+    font-family: Consolas, monospace; font-size: 9.5pt;
+  }
+  .summary {
+    background: #F4F8F6; border: 1px solid #C8DDD7; border-left: 4px solid #0D7A5A;
+    border-radius: 6px; padding: 12px 16px; margin: 14px 0 4px;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 14px; font-size: 10.2pt; }
+  th, td { border: 1px solid #C8DDD7; padding: 6px 9px; text-align: left; vertical-align: top; }
+  th { background: #E0F2EA; color: #0D3D2E; font-weight: 600; }
+  tr { page-break-inside: avoid; }
+  h2, h3 { page-break-after: avoid; }
+  .pending td:nth-child(3) { font-weight: 600; color: #7A5200; }
+  .footer { margin-top: 26px; padding-top: 10px; border-top: 1px solid #C8DDD7; color: #5b6b66; font-size: 9.5pt; }
+  .bottomline { background:#0D3D2E; color:#fff; border-radius:8px; padding:14px 18px; margin-top:18px; }
+  .bottomline strong { color:#E0F2EA; }
+</style>
+</head>
+<body>
+
+  <div class="band">
+    <div class="co">Sarooj Construction Company</div>
+    <div class="sub">Procurement AI Platform</div>
+  </div>
+
+  <h1>Procurement AI — Progress Report</h1>
+  <div class="meta">
+    <span><strong>Period:</strong> 22–23 June 2026</span>
+    <span><strong>Prepared by:</strong> Engineering</span>
+    <span><strong>Audience:</strong> Procurement team</span>
+  </div>
+
+  <div class="summary">
+    <strong>Executive summary.</strong> In this cycle we (1) merged the separate Subcontractor RFQ tool
+    into the main procurement app so everything lives in one place, (2) made several day-to-day fixes
+    to the RFQ and bid-comparison screens, and (3) built and connected a <strong>new end-to-end
+    bidding and award workflow</strong> that lets vendors submit priced quotations through a secure web
+    link, lets the procurement officer equalize and award <strong>line by line</strong>, and routes the
+    result to the <strong>Procurement Head (Rabia) for final approval</strong>, after which it locks.
+    The new workflow is <strong>built and connected to the live database</strong>. The only remaining
+    piece is the <strong>email automation</strong> (sending vendors their link and emailing Rabia for
+    approval), which sits with the backend/automation operator. Until that is switched on, the links
+    work but must be shared manually.
+  </div>
+
+  <h2>1. One unified application (Materials + Subcontractor)</h2>
+  <p>The standalone Subcontractor RFQ app has been folded into the main app. You now use a
+  <strong>single system</strong> for both Materials (MR) and Subcontractor (SR) RFQs:</p>
+  <ul>
+    <li>One sidebar, one dashboard, one RFQ tracker listing both types.</li>
+    <li>Subcontractor RFQs keep their own create and detail screens within the same app.</li>
+    <li><strong>No change to the existing Materials flows</strong> — they work exactly as before.</li>
+  </ul>
+  <p>A small clean-up: on the Subcontractor RFQ screen, the <strong>“Frame” tab is renamed
+  “BoQ Upload”</strong>, and the action button is now <strong>“Lock &amp; Build BoQ”</strong> (clearer
+  language for the same step). Once an SR RFQ is <strong>issued</strong>, its Overview details and
+  covering email become <strong>read-only</strong> to prevent accidental edits after dispatch.</p>
+  <p><em>Note: the old standalone Subcontractor app can be decommissioned once you’ve confirmed
+  everything works in the unified app.</em></p>
+
+  <h2>2. RFQ &amp; vendor screen improvements</h2>
+  <ul>
+    <li><strong>Vendor tab now shows the real recipients.</strong> Previously, after an RFQ was issued
+    the Vendors tab listed the <em>entire</em> matched vendor pool. It now shows <strong>only the
+    vendors actually sent the RFQ</strong> (“Sent to N vendors”), with a <strong>“Show all matched”</strong>
+    toggle for the wider pool. This matches what actually went out and removes confusion. (Drafts still
+    show the full selectable list as before.)</li>
+  </ul>
+
+  <h2>3. Bid comparison improvement</h2>
+  <ul>
+    <li><strong>Lowest bid is now highlighted in green</strong> instead of the previous pink/crimson.
+    Green reads correctly as “best price”; the old colour looked like a warning.</li>
+  </ul>
+
+  <h2>4. New: deterministic bidding, line-by-line award, and approval</h2>
+  <p>This is the major addition. It replaces error-prone AI reading of emailed quotes with
+  <strong>structured, vendor-entered data</strong>, and adds the award and sign-off steps procurement
+  asked for.</p>
+
+  <h3>a) Vendors submit quotations via a secure link</h3>
+  <ul>
+    <li>Each invited vendor receives their <strong>own single-use web link</strong>. They open it (no
+    login), see the <strong>material list</strong>, and type their <strong>unit rates, brand/make,
+    quantity offered, and a remark/exclusion per line</strong>, plus commercial terms (payment, lead
+    time, validity, VAT).</li>
+    <li>They can leave lines blank (“no quote”), and <strong>revise and re-submit until the
+    deadline</strong>; it then locks.</li>
+    <li>On submit, the data lands <strong>directly in the system</strong> and flows straight into the
+    comparison — no manual entry, no AI guesswork.</li>
+    <li><strong>The link is the only way to quote</strong>, which keeps the data clean and comparable.</li>
+  </ul>
+
+  <h3>b) Officer equalization (fair, like-for-like comparison)</h3>
+  <ul>
+    <li>When a vendor’s remark says they <strong>exclude part of the scope</strong> (e.g. “we won’t do
+    X”), the officer can add an <strong>“equalization” value</strong> — a budgeted cost for the missing
+    scope — so that vendor’s line is compared <strong>fairly</strong> against vendors who included it.</li>
+    <li>The vendor’s original quote is <strong>never changed</strong>; the equalization is the officer’s
+    judgement, with a required note. Rankings (and the green “lowest”) use the <strong>equalized</strong>
+    figure.</li>
+  </ul>
+
+  <h3>c) Line-by-line award</h3>
+  <ul>
+    <li>The officer awards <strong>each line to a vendor</strong>, defaulting to the lowest equalized
+    price. A 20-line RFQ can be split across several vendors (e.g. 5 lines each to three vendors).</li>
+    <li>If a line is <strong>not</strong> awarded to the lowest, a <strong>reason is required</strong>.</li>
+    <li>A <strong>split summary</strong> shows each vendor’s awarded lines and totals — the officer’s
+    worksheet for raising POs.</li>
+  </ul>
+
+  <h3>d) Two-step approval (Officer → Procurement Head)</h3>
+  <ul>
+    <li>When ready, the officer clicks <strong>“Submit for approval.”</strong> This generates a
+    <strong>single-use review link for Rabia</strong>.</li>
+    <li>Rabia opens the link, sees the <strong>proposed award</strong> (per-line, equalized, with reasons
+    and totals), and either <strong>Approves &amp; locks</strong> or <strong>Returns for revision</strong>
+    with comments.</li>
+    <li>On approval, the comparison and awards are <strong>locked at the database level</strong> — no
+    further edits. If returned, the officer sees the comments and can revise and resubmit.</li>
+  </ul>
+  <p><strong>Scope note:</strong> raising the actual <strong>Purchase Orders remains a manual step by the
+  officer</strong> for now (PO generation was intentionally left out of this phase). The
+  <strong>Subcontractor (SR) version</strong> of this bidding/award/approval flow is <strong>planned
+  next</strong> and needs a couple of SR-specific decisions before it’s built.</p>
+
+  <h2>5. Data sanity check (21 June upload — “7 PRs but 5 showed”)</h2>
+  <p>We investigated the report that a material-sheet upload said ~7 PRs but the dashboard appeared to
+  show fewer. <strong>Result: no data was lost.</strong> All 7 PRs from the 21 June upload are correctly
+  stored and visible on the <strong>PR Tracker</strong>. The “fewer” appearance came from the dashboard’s
+  <strong>“Recent RFQs (latest 5)”</strong> widget, which deliberately shows only the 5 newest. Two
+  reminders: the dashboard “PRs tracked” figure is a <strong>running total across all dates</strong>, and
+  <strong>one RFQ can span multiple PRs</strong> (and vice-versa), so RFQ count and PR count are not the
+  same number. <em>(Optional future tweak: add a “View all” link / “showing 5 of N” label.)</em></p>
+
+  <h2>6. What’s pending (needed before go-live)</h2>
+  <table class="pending">
+    <thead><tr><th>Item</th><th>Owner</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Put the vendor bid <strong>link into the dispatch email</strong> (link-only)</td><td>Automation operator (n8n)</td><td>Pending</td></tr>
+      <tr><td><strong>Vendor confirmation email</strong> on submit</td><td>Automation operator</td><td>Pending</td></tr>
+      <tr><td><strong>Email Rabia</strong> the approval link + <strong>notify officer</strong> on approve/return</td><td>Automation operator</td><td>Pending</td></tr>
+      <tr><td>Turn off the old email→AI quote reading for these RFQs</td><td>Automation operator</td><td>Pending</td></tr>
+      <tr><td>Confirm production deployment is live</td><td>Hosting (Vercel)</td><td>Verify</td></tr>
+    </tbody>
+  </table>
+  <p>Until the emails are switched on, the links <strong>work</strong> but the officer must <strong>copy
+  and send them manually</strong> (the app shows the link to copy).</p>
+
+  <h2>7. How to try it (once deployed/verified)</h2>
+  <ul>
+    <li>Open an issued Materials RFQ with bids → <strong>Compare bids</strong>.</li>
+    <li>Use <strong>Per-line award &amp; equalization</strong>: adjust any excluded-scope line, award
+    each line, <strong>Save</strong>.</li>
+    <li><strong>Submit for approval</strong> → copy the review link → open it as “Rabia” →
+    <strong>Approve &amp; lock</strong> or <strong>Return</strong>.</li>
+    <li>Vendor experience: open a bid link → fill the material list → <strong>Submit</strong>.</li>
+  </ul>
+
+  <h2>8. Notes for awareness</h2>
+  <ul>
+    <li>The new features are <strong>connected to the live database</strong>; the underlying data tables
+    and rules were added without affecting any existing data or flows.</li>
+    <li>A couple of items are flagged for the <strong>backend/IT operator</strong>: the new database
+    objects now exist in the live system, and the database currently runs with broad access settings —
+    worth a security review as the platform grows.</li>
+  </ul>
+
+  <div class="bottomline">
+    <strong>Bottom line.</strong> Materials procurement now has a complete digital path from vendor
+    quotation → fair comparison → line-by-line award → Procurement Head approval → locked record, with
+    deterministic data instead of AI extraction. It is built and database-connected; it goes fully
+    self-serve for vendors the moment the email automation is switched on. The Subcontractor version is
+    the next step.
+  </div>
+
+  <div class="footer">
+    Sarooj Construction Company — Procurement AI Platform · Internal progress report · 23 June 2026
+  </div>
+
+</body>
+</html>
