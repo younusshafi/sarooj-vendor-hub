@@ -7,6 +7,8 @@ import { useAuth } from "@/integrations/supabase-external/auth";
 import { toast } from "sonner";
 import { exportComparisonSheet } from "@/utils/exportComparison";
 import { ComparisonAwardPanel } from "@/components/comparison-award-panel";
+import { loadComparisonEval } from "@/lib/comparison-eval";
+import { submitForApproval } from "@/lib/comparison-approval";
 
 export const Route = createFileRoute("/_app/rfq/$rfqId/comparison")({
   component: ComparisonViewPage,
@@ -43,6 +45,25 @@ function paymentTermsChip(term: string | null) {
   );
 }
 
+function ApprovalStatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; bg: string; fg: string }> = {
+    draft: { label: "Draft", bg: "#E5EAE8", fg: "#0D3D2E" },
+    finalised: { label: "Finalised", bg: "#E0F2EA", fg: "#0D5C3A" },
+    pending_approval: { label: "Pending approval", bg: "#FDF3E0", fg: "#7A5200" },
+    returned: { label: "Returned", bg: "#FEE2E2", fg: "#991B1B" },
+    approved: { label: "Approved — locked", bg: "#E0F2EA", fg: "#0D5C3A" },
+  };
+  const c = map[status] ?? map.draft;
+  return (
+    <span
+      className="rounded-full px-3 py-1 text-xs font-semibold"
+      style={{ backgroundColor: c.bg, color: c.fg }}
+    >
+      {c.label}
+    </span>
+  );
+}
+
 function ComparisonViewPage() {
   const { rfqId } = Route.useParams();
   const { user } = useAuth();
@@ -50,6 +71,7 @@ function ComparisonViewPage() {
   const [showReasoning, setShowReasoning] = useState(false);
   const [generatingAI, setGeneratingAI] = useState(false);
   const [savingDecision, setSavingDecision] = useState(false);
+  const [submittingApproval, setSubmittingApproval] = useState(false);
 
   // Decision form state
   const [approvedColumn, setApprovedColumn] = useState("");
@@ -193,6 +215,29 @@ function ComparisonViewPage() {
       toast.error(err.message || "Failed to save decision");
     } finally {
       setSavingDecision(false);
+    }
+  };
+
+  const handleSubmitForApproval = async () => {
+    if (!comparison?.comparison_id) return;
+    const itemCount = rfqItems?.length ?? 0;
+    const evalData = await loadComparisonEval(comparison.comparison_id);
+    if (evalData.awards.length < itemCount) {
+      toast.error(
+        `Award every line and Save the evaluation first (${evalData.awards.length}/${itemCount} awarded).`,
+      );
+      return;
+    }
+    setSubmittingApproval(true);
+    try {
+      const res = await submitForApproval(comparison.comparison_id, user?.email ?? "");
+      if (!res.ok) throw new Error(res.error || "Submit failed");
+      toast.success("Submitted to Rabia for approval");
+      refetchComparison();
+    } catch (err: any) {
+      toast.error(err.message || "Submit failed");
+    } finally {
+      setSubmittingApproval(false);
     }
   };
 
@@ -675,7 +720,64 @@ function ComparisonViewPage() {
           comparisonId={comparison.comparison_id}
           rfqItems={rfqItems!}
           bids={bids!}
+          locked={comparison.status === "approved"}
         />
+      )}
+
+      {/* Approval (D) — officer → Rabia */}
+      {comparison?.comparison_id && (
+        <div className="rounded-xl border border-border bg-card p-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Approval
+            </h2>
+            <ApprovalStatusBadge status={comparison.status} />
+          </div>
+
+          {comparison.status === "returned" && comparison.review_notes && (
+            <div
+              className="mt-3 rounded-lg px-3 py-2 text-sm"
+              style={{ backgroundColor: "#FDF3E0", color: "#7A5200" }}
+            >
+              <strong>Returned by approver:</strong> {comparison.review_notes}
+            </div>
+          )}
+
+          {comparison.status === "approved" ? (
+            <p className="mt-3 text-sm" style={{ color: "#0D5C3A" }}>
+              Approved by {comparison.approved_by}
+              {comparison.approval_date ? ` on ${comparison.approval_date}` : ""}. This comparison
+              is locked.
+              {comparison.review_notes ? ` Note: ${comparison.review_notes}` : ""}
+            </p>
+          ) : comparison.status === "pending_approval" ? (
+            <div className="mt-3 space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Awaiting approval from Rabia. Share this single-use review link if needed:
+              </p>
+              <input
+                readOnly
+                onFocus={(e) => e.currentTarget.select()}
+                value={`${window.location.origin}/comparison-review/${comparison.review_token}`}
+                className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-xs outline-none"
+              />
+            </div>
+          ) : (
+            <div className="mt-3">
+              <button
+                onClick={handleSubmitForApproval}
+                disabled={submittingApproval}
+                className="rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                style={{ backgroundColor: "var(--accent)" }}
+              >
+                {submittingApproval ? "Submitting…" : "Submit for approval"}
+              </button>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Award every line and Save the evaluation above first.
+              </p>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Decision capture card */}

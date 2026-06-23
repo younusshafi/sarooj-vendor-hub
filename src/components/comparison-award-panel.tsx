@@ -27,10 +27,12 @@ export function ComparisonAwardPanel({
   comparisonId,
   rfqItems,
   bids,
+  locked = false,
 }: {
   comparisonId: string;
   rfqItems: any[];
   bids: any[];
+  locked?: boolean;
 }) {
   const [eqs, setEqs] = useState<Record<string, EqEntry>>({});
   const [awards, setAwards] = useState<Record<string, { vendor_id: string; reason: string }>>({});
@@ -187,15 +189,24 @@ export function ComparisonAwardPanel({
         <h3 className="font-display text-lg" style={{ color: "#1A3A5C" }}>
           Per-line award & equalization
         </h3>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-          style={{ backgroundColor: "var(--accent)" }}
-        >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Save evaluation
-        </button>
+        {locked ? (
+          <span
+            className="rounded-full px-3 py-1 text-xs font-semibold"
+            style={{ backgroundColor: "#E0F2EA", color: "#0D5C3A" }}
+          >
+            Approved — locked
+          </span>
+        ) : (
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            style={{ backgroundColor: "var(--accent)" }}
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Save evaluation
+          </button>
+        )}
       </div>
       <p className="mb-4 text-xs text-muted-foreground">
         Lowest <span style={{ color: GREEN_FG }}>equalized</span> amount is highlighted. Add an
@@ -256,19 +267,21 @@ export function ComparisonAwardPanel({
                                 </span>
                               )}
                             </span>
-                            <button
-                              onClick={() =>
-                                setEditing({
-                                  itemId: row.item.item_id,
-                                  vendorId: c.vendorId,
-                                  name: c.name,
-                                })
-                              }
-                              className="text-muted-foreground hover:text-foreground"
-                              title="Adjust / equalize"
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </button>
+                            {!locked && (
+                              <button
+                                onClick={() =>
+                                  setEditing({
+                                    itemId: row.item.item_id,
+                                    vendorId: c.vendorId,
+                                    name: c.name,
+                                  })
+                                }
+                                className="text-muted-foreground hover:text-foreground"
+                                title="Adjust / equalize"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </button>
+                            )}
                           </div>
                         )}
                       </td>
@@ -277,8 +290,9 @@ export function ComparisonAwardPanel({
                   <td className="px-2 py-2">
                     <select
                       value={row.awardedVendor}
+                      disabled={locked}
                       onChange={(e) => setAward(row.item.item_id, e.target.value)}
-                      className="rounded-md border border-border bg-white px-2 py-1 text-xs outline-none"
+                      className="rounded-md border border-border bg-white px-2 py-1 text-xs outline-none disabled:opacity-60"
                     >
                       <option value="">— none —</option>
                       {row.cells
@@ -292,9 +306,10 @@ export function ComparisonAwardPanel({
                     {nonLowest && (
                       <input
                         value={awards[row.item.item_id]?.reason ?? ""}
+                        disabled={locked}
                         onChange={(e) => setReason(row.item.item_id, e.target.value)}
                         placeholder="Reason (required)"
-                        className="mt-1 w-40 rounded-md border border-amber-400 bg-white px-2 py-1 text-xs outline-none"
+                        className="mt-1 w-40 rounded-md border border-amber-400 bg-white px-2 py-1 text-xs outline-none disabled:opacity-60"
                       />
                     )}
                   </td>

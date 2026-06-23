@@ -1,0 +1,21 @@
+-- APPLIED to project fimfybfgjrbkcylmyekz (SCC), schema scc_procurement, 2026-06-23
+-- via Supabase management. Migrations: s3_comparison_approval +
+-- s3_widen_comparisons_status_check.
+--
+-- Adds the officer -> Rabia approval workflow + DB lock-on-approved.
+--   * comparisons.review_token (unique, partial), comparisons.review_notes
+--   * status check widened: draft|finalised|pending_approval|returned|approved
+--   * RPCs (SECURITY DEFINER, granted anon+authenticated):
+--       comparison_submit_for_approval(uuid, text) -> mints review_token, status=pending_approval
+--       comparison_get_by_token(text)              -> full review payload while pending_approval
+--       comparison_decide_by_token(text,text,text) -> approve (lock) | return; clears review_token
+--   * triggers trg_eq_lock / trg_aw_lock on comparison_equalizations / comparison_awards:
+--       block all writes when the parent comparison.status='approved' (lock enforced at DB).
+--
+-- Verified end-to-end via anon client: submit/get/approve/return, lock blocks writes,
+-- used token -> found:false, then restored test comparison to draft.
+--
+-- PENDING (n8n / operator): email Rabia the /comparison-review/<review_token> link on submit;
+-- notify the officer on approve/return. (FE currently shows the link to copy as a fallback.)
+--
+-- Full function bodies live in the Supabase migration history / dashboard.
