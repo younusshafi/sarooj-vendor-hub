@@ -239,10 +239,31 @@ function RecentRfqsTable({ kind }: { kind: "materials" | "subcontractor" }) {
       return data as RfqRow[];
     },
   });
+  const totalCount = useQuery({
+    queryKey: ["recent-rfqs-count", kind],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("rfqs")
+        .select("rfq_id", { count: "exact", head: true })
+        .eq("rfq_type", kind);
+      return count ?? 0;
+    },
+  });
   const label = kind === "materials" ? "Materials" : "Subcontractor";
+  const total = totalCount.data ?? 0;
   return (
     <div>
-      <h3 className="mb-3 font-display text-lg text-foreground">Recent {label} RFQs (latest 5)</h3>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="font-display text-lg text-foreground">Recent {label} RFQs</h3>
+        <Link
+          to="/rfq"
+          search={{ type: kind }}
+          className="text-sm font-medium"
+          style={{ color: "var(--accent)" }}
+        >
+          Showing latest {Math.min(5, total)} of {total} · View all →
+        </Link>
+      </div>
       <div className="overflow-hidden rounded-xl border border-border bg-card">
         <table className="w-full text-sm">
           <thead style={{ backgroundColor: "var(--table-header)" }}>

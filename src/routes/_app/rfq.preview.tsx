@@ -161,7 +161,7 @@ function RFQPreviewPage() {
   const [body, setBody] = useState("");
   const [termsText, setTermsText] = useState("");
   const [deadline, setDeadline] = useState("");
-  const [previewHtml, setPreviewHtml] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState(true);
   const [vendorList, setVendorList] = useState<RfqVendorRow[]>([]);
 
   // Selection state — restore from sessionStorage if available, otherwise empty
@@ -309,10 +309,9 @@ function RFQPreviewPage() {
         categories: string[] | null;
       }) => {
         const firstContact = Array.isArray(v.contacts) ? v.contacts[0] : null;
-        const firstEmail =
-          Array.isArray(v.contacts)
-            ? (v.contacts.find((c) => c.email)?.email ?? null)
-            : null;
+        const firstEmail = Array.isArray(v.contacts)
+          ? (v.contacts.find((c) => c.email)?.email ?? null)
+          : null;
         return {
           vendor_id: v.vendor_id,
           company_name: v.company_name,
@@ -334,9 +333,7 @@ function RFQPreviewPage() {
       return;
     }
     if (!v.email) {
-      toast.warning(
-        `${v.company_name} has no email address on file — add one before sending.`,
-      );
+      toast.warning(`${v.company_name} has no email address on file — add one before sending.`);
     }
     // Add to rfq_vendors in Supabase
     const { data, error } = await supabase
@@ -590,7 +587,6 @@ function RFQPreviewPage() {
                 />
               </label>
             </div>
-
           </div>
 
           {/* Right column — 40% */}
@@ -767,9 +763,7 @@ function RFQPreviewPage() {
                 {vendorResults.length > 0 && (
                   <div className="absolute z-10 mt-1 w-full rounded-md border border-border bg-white shadow-lg max-h-72 overflow-y-auto">
                     {vendorResults.map((v) => {
-                      const alreadyAdded = vendorList.some(
-                        (vl) => vl.vendor_id === v.vendor_id,
-                      );
+                      const alreadyAdded = vendorList.some((vl) => vl.vendor_id === v.vendor_id);
                       return (
                         <button
                           key={v.vendor_id}
@@ -781,12 +775,18 @@ function RFQPreviewPage() {
                             <div className="flex items-center gap-2">
                               <span className="font-medium truncate">{v.company_name}</span>
                               {alreadyAdded && (
-                                <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: "#E0F2EA", color: "#0D5C3A" }}>
+                                <span
+                                  className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                                  style={{ backgroundColor: "#E0F2EA", color: "#0D5C3A" }}
+                                >
                                   Added
                                 </span>
                               )}
                               {!v.email && !alreadyAdded && (
-                                <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: "#FDF3E0", color: "#7A5200" }}>
+                                <span
+                                  className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                                  style={{ backgroundColor: "#FDF3E0", color: "#7A5200" }}
+                                >
                                   No email
                                 </span>
                               )}
@@ -846,6 +846,18 @@ function RFQPreviewPage() {
               Send this RFQ to {selectedCount} vendor
               {selectedCount !== 1 ? "s" : ""}? Deadline: {deadline || "not set"}.
             </p>
+            <ul className="mt-3 max-h-48 space-y-1 overflow-y-auto rounded-md border border-border bg-secondary/40 p-2 text-sm">
+              {vendorList
+                .filter((v) => selectedVendorIds.has(v.vendor_id))
+                .map((v) => (
+                  <li key={v.id} className="flex items-center justify-between gap-2">
+                    <span className="truncate font-medium" style={{ color: "#1A3A5C" }}>
+                      {v.vendors?.company_name || "Unknown Vendor"}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{v.email_to}</span>
+                  </li>
+                ))}
+            </ul>
             <div className="mt-4 flex gap-3">
               <button
                 onClick={() => setShowConfirm(false)}

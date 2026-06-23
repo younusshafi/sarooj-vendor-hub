@@ -9,7 +9,7 @@ interface DocumentUploadProps {
   onChange: (file: File | null) => void;
 }
 
-const MAX_SIZE = 10 * 1024 * 1024;
+const MAX_SIZE = 60 * 1024 * 1024;
 const ACCEPT = ".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png";
 
 function formatBytes(bytes: number) {
@@ -26,7 +26,7 @@ export function DocumentUpload({ label, required, file, onChange }: DocumentUplo
   const handleFile = (f: File | null) => {
     if (!f) return onChange(null);
     if (f.size > MAX_SIZE) {
-      setError("File exceeds 10MB limit.");
+      setError("File exceeds 60MB limit.");
       return;
     }
     setError(null);
