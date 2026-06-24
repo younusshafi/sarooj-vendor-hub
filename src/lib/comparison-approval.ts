@@ -60,7 +60,7 @@ export type ComparisonReviewData =
 
 export interface DecideResult {
   ok: boolean;
-  decision?: "approve" | "return";
+  decision?: "approve" | "return" | "revoke";
   error?: string;
 }
 
@@ -84,7 +84,7 @@ export async function getComparisonByToken(token: string): Promise<ComparisonRev
 
 export async function decideComparison(
   token: string,
-  decision: "approve" | "return",
+  decision: "approve" | "return" | "revoke",
   notes: string,
 ): Promise<DecideResult> {
   const { data, error } = await supabase.rpc("comparison_decide_by_token", {

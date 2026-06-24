@@ -51,7 +51,8 @@ function ApprovalStatusBadge({ status }: { status: string }) {
     finalised: { label: "Finalised", bg: "#E0F2EA", fg: "#0D5C3A" },
     pending_approval: { label: "Pending approval", bg: "#FDF3E0", fg: "#7A5200" },
     returned: { label: "Returned", bg: "#FEE2E2", fg: "#991B1B" },
-    approved: { label: "Approved — locked", bg: "#E0F2EA", fg: "#0D5C3A" },
+    approved: { label: "Approved — PO pending", bg: "#FDF3E0", fg: "#7A5200" },
+    po_issued: { label: "PO issued — closed", bg: "#E0F2EA", fg: "#0D5C3A" },
   };
   const c = map[status] ?? map.draft;
   return (
@@ -72,6 +73,8 @@ function ComparisonViewPage() {
   const [generatingAI, setGeneratingAI] = useState(false);
   const [savingDecision, setSavingDecision] = useState(false);
   const [submittingApproval, setSubmittingApproval] = useState(false);
+  const [poNumber, setPoNumber] = useState("");
+  const [issuingPo, setIssuingPo] = useState(false);
 
   // Decision form state
   const [approvedColumn, setApprovedColumn] = useState("");
@@ -238,6 +241,31 @@ function ComparisonViewPage() {
       toast.error(err.message || "Submit failed");
     } finally {
       setSubmittingApproval(false);
+    }
+  };
+
+  const handleIssuePo = async () => {
+    if (!comparison?.comparison_id) return;
+    if (!poNumber.trim()) {
+      toast.error("Enter the PO number first");
+      return;
+    }
+    setIssuingPo(true);
+    try {
+      const { data, error } = await supabase.rpc("comparison_issue_po", {
+        p_comparison_id: comparison.comparison_id,
+        p_po_number: poNumber.trim(),
+        p_actor: user?.email ?? "",
+      });
+      if (error) throw error;
+      const res = data as { ok?: boolean; error?: string } | null;
+      if (!res?.ok) throw new Error(res?.error || "Failed to issue PO");
+      toast.success("PO recorded — comparison closed");
+      refetchComparison();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to issue PO");
+    } finally {
+      setIssuingPo(false);
     }
   };
 
@@ -720,7 +748,7 @@ function ComparisonViewPage() {
           comparisonId={comparison.comparison_id}
           rfqItems={rfqItems!}
           bids={bids!}
-          locked={comparison.status === "approved"}
+          locked={["approved", "po_issued"].includes(comparison.status)}
         />
       )}
 
@@ -743,13 +771,46 @@ function ComparisonViewPage() {
             </div>
           )}
 
-          {comparison.status === "approved" ? (
+          {comparison.status === "po_issued" ? (
             <p className="mt-3 text-sm" style={{ color: "#0D5C3A" }}>
-              Approved by {comparison.approved_by}
-              {comparison.approval_date ? ` on ${comparison.approval_date}` : ""}. This comparison
-              is locked.
-              {comparison.review_notes ? ` Note: ${comparison.review_notes}` : ""}
+              <strong>PO {comparison.po_number}</strong> issued
+              {comparison.po_issued_by ? ` by ${comparison.po_issued_by}` : ""}
+              {comparison.po_issued_at
+                ? ` on ${new Date(comparison.po_issued_at).toLocaleDateString("en-GB")}`
+                : ""}
+              . This comparison is closed and locked.
             </p>
+          ) : comparison.status === "approved" ? (
+            <div className="mt-3 space-y-3">
+              <p className="text-sm" style={{ color: "#0D5C3A" }}>
+                Approved by {comparison.approved_by}
+                {comparison.approval_date ? ` on ${comparison.approval_date}` : ""} — awaiting PO.
+                The award is locked. The approver can still revoke until the PO is issued.
+                {comparison.review_notes ? ` Note: ${comparison.review_notes}` : ""}
+              </p>
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="text-xs font-medium text-muted-foreground">
+                  PO number
+                  <input
+                    value={poNumber}
+                    onChange={(e) => setPoNumber(e.target.value)}
+                    placeholder="e.g. PO-2026-001"
+                    className="mt-1 block w-56 rounded-md border border-border bg-white px-3 py-2 text-sm outline-none"
+                  />
+                </label>
+                <button
+                  onClick={handleIssuePo}
+                  disabled={issuingPo || !poNumber.trim()}
+                  className="rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  style={{ backgroundColor: "var(--accent)" }}
+                >
+                  {issuingPo ? "Saving…" : "Mark PO Issued"}
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Recording the PO closes the comparison permanently — no further revocation.
+              </p>
+            </div>
           ) : comparison.status === "pending_approval" ? (
             <div className="mt-3 space-y-2">
               <p className="text-sm text-muted-foreground">

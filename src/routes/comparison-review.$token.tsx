@@ -21,7 +21,7 @@ function ReviewPage() {
   const [loadError, setLoadError] = useState(false);
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<"approve" | "return" | null>(null);
+  const [done, setDone] = useState<"approve" | "return" | "revoke" | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,10 +72,10 @@ function ReviewPage() {
     return { rows, split, grand };
   }, [data]);
 
-  const decide = async (decision: "approve" | "return") => {
+  const decide = async (decision: "approve" | "return" | "revoke") => {
     setErr(null);
-    if (decision === "return" && !notes.trim()) {
-      setErr("Please add a note explaining what to revise.");
+    if ((decision === "return" || decision === "revoke") && !notes.trim()) {
+      setErr("Please add a note explaining the reason.");
       return;
     }
     setBusy(true);
@@ -121,10 +121,21 @@ function ReviewPage() {
         )}
 
         {done && (
-          <Card icon="ok" title={done === "approve" ? "Approved" : "Returned to officer"}>
+          <Card
+            icon="ok"
+            title={
+              done === "approve"
+                ? "Approved"
+                : done === "revoke"
+                  ? "Approval revoked"
+                  : "Returned to officer"
+            }
+          >
             {done === "approve"
-              ? "The comparison is approved and locked. Thank you."
-              : "Your comments have been sent back to the procurement officer."}
+              ? "The comparison is approved and awaiting the PO. You can revoke from this link until the PO is issued."
+              : done === "revoke"
+                ? "Your approval has been revoked and sent back to the procurement officer."
+                : "Your comments have been sent back to the procurement officer."}
           </Card>
         )}
 
@@ -212,9 +223,17 @@ function ReviewPage() {
 
             {/* Decision panel */}
             <div className="mt-6 rounded-xl border border-border bg-card p-6">
+              {data.status === "approved" && (
+                <p className="mb-3 text-sm" style={{ color: "#0D5C3A" }}>
+                  You approved this comparison — it is awaiting the PO. You can still{" "}
+                  <strong>revoke</strong> it until the officer issues the PO.
+                </p>
+              )}
               <label className="text-sm font-medium text-foreground">
-                Comments {""}
-                <span className="text-muted-foreground">(required to return)</span>
+                Comments{" "}
+                <span className="text-muted-foreground">
+                  ({data.status === "approved" ? "required to revoke" : "required to return"})
+                </span>
               </label>
               <textarea
                 value={notes}
@@ -227,24 +246,38 @@ function ReviewPage() {
                   <AlertCircle className="h-4 w-4" /> {err}
                 </p>
               )}
-              <div className="mt-4 flex gap-3">
-                <button
-                  onClick={() => decide("return")}
-                  disabled={busy}
-                  className="rounded-md border border-border px-5 py-2.5 text-sm font-semibold disabled:opacity-50"
-                >
-                  Return for revision
-                </button>
-                <button
-                  onClick={() => decide("approve")}
-                  disabled={busy}
-                  className="inline-flex items-center gap-2 rounded-md px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-                  style={{ backgroundColor: "var(--accent)" }}
-                >
-                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Approve & lock
-                </button>
-              </div>
+              {data.status === "approved" ? (
+                <div className="mt-4">
+                  <button
+                    onClick={() => decide("revoke")}
+                    disabled={busy}
+                    className="inline-flex items-center gap-2 rounded-md px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                    style={{ backgroundColor: "#991B1B" }}
+                  >
+                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Revoke approval
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4 flex gap-3">
+                  <button
+                    onClick={() => decide("return")}
+                    disabled={busy}
+                    className="rounded-md border border-border px-5 py-2.5 text-sm font-semibold disabled:opacity-50"
+                  >
+                    Return for revision
+                  </button>
+                  <button
+                    onClick={() => decide("approve")}
+                    disabled={busy}
+                    className="inline-flex items-center gap-2 rounded-md px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                    style={{ backgroundColor: "var(--accent)" }}
+                  >
+                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Approve & lock
+                  </button>
+                </div>
+              )}
             </div>
           </>
         )}

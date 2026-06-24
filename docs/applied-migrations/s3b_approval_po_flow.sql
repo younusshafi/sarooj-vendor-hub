@@ -1,0 +1,20 @@
+-- APPLIED to project fimfybfgjrbkcylmyekz (SCC), schema scc_procurement, 2026-06-24.
+-- Approval extension: Approved → PO Pending → PO Issued, with revoke-until-PO.
+--
+-- comparisons: + po_number, po_issued_at, po_issued_by; status check widened to add 'po_issued'.
+-- tg_block_when_approved: now locks eval tables when status in ('approved','po_issued').
+-- comparison_get_by_token: returns found while status in ('pending_approval','approved')
+--   (so the approver's link stays live to revoke after approval).
+-- comparison_decide_by_token: 'approve' (from pending) KEEPS review_token so she can revoke;
+--   'return' (from pending) and 'revoke' (from approved) → 'returned' and clear token.
+-- comparison_issue_po(comparison_id, po_number, actor): only from 'approved' → 'po_issued',
+--   sets PO fields, clears review_token (no further revocation). Granted to authenticated.
+--
+-- State machine:
+--   draft → pending_approval → approved (PO pending) → po_issued (closed)
+--                    ↘ returned ↙ (return from pending, or revoke from approved)
+--
+-- Verified end-to-end via anon client: approve keeps link live; revoke → returned/dead;
+-- approve → issue PO → po_issued + link dead; re-issue blocked; restored test comparison.
+--
+-- Full function bodies are in the Supabase migration history.
