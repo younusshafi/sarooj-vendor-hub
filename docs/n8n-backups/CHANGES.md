@@ -49,6 +49,22 @@ Fix: the `Validate Fields` node now always sets
 `registration_url = 'https://procurement.scc.zavia-ai.com/register'`.
 Backup: `WF6_Invite_REVnviNEV0ly3kgd_2026-06-24.json`. PUT 200, active.
 
+## 2026-06-24 — WF7 test recipients → config-driven (Phase 3)
+
+**WF7 — SCC WF7 RFQ Agent** (`UV5UaxZ2wkxLJ8K11DRoI`). Removed the 10 hardcoded
+`TEST_ALWAYS` recipients from code; they're now read from config:
+1. `Fetch T&Cs and DB Categories` node — query extended to
+   `setting_key=in.(rfq_terms_and_conditions,dispatch_test_mode,dispatch_test_recipients)`.
+2. `Merge Vendors + Build Email Prompt` node — the hardcoded `TEST_RECIPIENTS` array is
+   replaced by logic that reads `$('Fetch T&Cs and DB Categories').all()`, and appends
+   recipients **only when `dispatch_test_mode = 'on'`**, parsed from `dispatch_test_recipients`.
+Backup: `WF7_RFQ_Agent_UV5UaxZ2wkxLJ8K11DRoI_2026-06-23.json`.
+
+Verified (short of a live generation): PUT 200, active; T&Cs is a proven ancestor of the merge
+node; existing T&Cs consumers `.find()` by key so are unaffected; the extended fetch returns 3
+rows; merge logic yields 10 recipients when ON / 0 when OFF; no `@sarooj` emails remain in code.
+**Final confirmation needs one test SAP-upload → generate run** (side effects — user-triggered).
+
 ## Not changed (intentionally)
 - **WF7** test-recipient scaffold (10 `TEST_ALWAYS` SCC team emails) — left as-is for now;
   this is what keeps test dispatches landing on the team. See the "better approach"
