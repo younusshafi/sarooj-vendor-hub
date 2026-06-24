@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase-external/client";
 import { useAuth } from "@/integrations/supabase-external/auth";
@@ -185,6 +185,83 @@ function SettingNumberField({
   );
 }
 
+function TestModePanel({ userEmail }: { userEmail: string }) {
+  const qc = useQueryClient();
+  const { data: mode, isLoading } = useSetting("dispatch_test_mode");
+  const { data: adminRaw } = useSetting("admin_emails");
+  const [busy, setBusy] = useState(false);
+
+  const isOn = (mode ?? "on") === "on";
+  let admins: string[] = [];
+  try {
+    admins = adminRaw ? (JSON.parse(adminRaw) as string[]) : [];
+  } catch {
+    admins = [];
+  }
+  const isAdmin = admins.map((a) => a.toLowerCase()).includes(userEmail.toLowerCase());
+
+  const toggle = async () => {
+    const next = !isOn;
+    const msg = next
+      ? "Turn Test Mode ON?\n\nRFQ dispatch will be sent ONLY to the test recipients — no real vendors will be emailed."
+      : "Turn Test Mode OFF — GO LIVE?\n\nReal vendors WILL receive RFQ emails from now on. Are you sure?";
+    if (!window.confirm(msg)) return;
+    setBusy(true);
+    const { data, error } = await supabase.rpc("set_dispatch_test_mode", { p_on: next });
+    setBusy(false);
+    const res = data as { ok?: boolean; error?: string } | null;
+    if (error || !res?.ok) {
+      toast.error(error?.message || res?.error || "Failed to change test mode");
+      return;
+    }
+    toast.success(`Test mode turned ${next ? "ON" : "OFF"}`);
+    qc.invalidateQueries({ queryKey: ["system-setting", "dispatch_test_mode"] });
+  };
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-6">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold" style={{ color: "#1A3A5C" }}>
+          Dispatch Test Mode
+        </h2>
+        {!isLoading && (
+          <span
+            className="rounded-full px-3 py-1 text-xs font-semibold"
+            style={
+              isOn
+                ? { backgroundColor: "#FDF3E0", color: "#7A5200" }
+                : { backgroundColor: "#E0F2EA", color: "#0D5C3A" }
+            }
+          >
+            {isOn ? "TEST — test recipients only" : "LIVE — real vendors emailed"}
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        When ON, RFQ dispatch emails go only to the configured test recipients (no real vendors).
+        Turning it OFF makes the system live. Only administrators can change this.
+      </p>
+      {isAdmin ? (
+        <div className="mt-4">
+          <button
+            onClick={toggle}
+            disabled={busy || isLoading}
+            className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            style={{ backgroundColor: isOn ? "#991B1B" : "var(--accent)" }}
+          >
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+            {isOn ? "Turn OFF — go live" : "Turn ON — test mode"}
+          </button>
+        </div>
+      ) : (
+        <p className="mt-4 text-xs text-muted-foreground">
+          Only an administrator can change this setting.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function SettingsPage() {
   const { user } = useAuth();
   const userEmail = user?.email ?? "";
@@ -200,6 +277,8 @@ function SettingsPage() {
         </div>
         <div className="mt-1 text-sm text-foreground">{userEmail}</div>
       </div>
+
+      <TestModePanel userEmail={userEmail} />
 
       <div className="rounded-xl border border-border bg-card p-6">
         <div className="mb-6 flex items-center gap-3">
