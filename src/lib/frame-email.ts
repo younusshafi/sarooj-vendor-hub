@@ -76,11 +76,29 @@ export function injectScheduleIntoBody(currentBody: string, items: FrameItem[]):
     );
   }
 
-  // No markers — insert before closing </body> or at end
-  // Try to insert before the T&Cs / sign-off paragraph (look for "Thanks" or "Regards")
-  const signoffIdx = currentBody.search(/Thanks\s*(&|&amp;)\s*Regards/i);
+  // No markers — insert ABOVE the signature/sign-off block.
+  // Detect the earliest sign-off marker among common variants (incl. the
+  // [SENDER_NAME] signature placeholder used in the covering email template).
+  const signoffPatterns = [
+    /\[SENDER_NAME\]/i,
+    /\bThanks\s*(&|&amp;)?\s*Regards\b/i,
+    /\b(Best|Kind|Warm)\s+Regards\b/i,
+    /\bRegards\b/i,
+    /\bSincerely\b/i,
+    /\bYours\s+(faithfully|truly|sincerely)\b/i,
+    /Procurement\s+(Department|Officer|Manager)/i,
+  ];
+  let signoffIdx = -1;
+  for (const re of signoffPatterns) {
+    const m = currentBody.search(re);
+    if (m >= 0 && (signoffIdx < 0 || m < signoffIdx)) signoffIdx = m;
+  }
   if (signoffIdx >= 0) {
-    return currentBody.slice(0, signoffIdx) + markedBlock + "\n\n" + currentBody.slice(signoffIdx);
+    // Back up to the start of the paragraph containing the sign-off so we
+    // insert before the whole block rather than splitting an HTML tag.
+    const pIdx = currentBody.lastIndexOf("<p", signoffIdx);
+    const insertAt = pIdx >= 0 ? pIdx : signoffIdx;
+    return currentBody.slice(0, insertAt) + markedBlock + "\n\n" + currentBody.slice(insertAt);
   }
 
   // Fallback: append at end

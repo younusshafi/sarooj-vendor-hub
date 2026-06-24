@@ -40,6 +40,15 @@ Backup: `WF10_Response_Monitor_EsLoQthHxlRBzA1E_2026-06-24.json`. Same rule appl
 bid-form RPC `bid_submit_by_token` and the frontend bid form / comparison display (3 dp).
 Verified: tie-out holds; a high-qty example showed the old rule drifting 0.278 OMR, now removed.
 
+## 2026-06-24 — WF6 invite registration URL (defect fix)
+
+**WF6 — SCC Vendor Invite Pipeline** (`REVnviNEV0ly3kgd`): the AI prompt said
+"Include this registration URL: {{ $json.registration_url }}", but that field was a
+caller-supplied input that was empty/retired — so invite emails had no working link.
+Fix: the `Validate Fields` node now always sets
+`registration_url = 'https://procurement.scc.zavia-ai.com/register'`.
+Backup: `WF6_Invite_REVnviNEV0ly3kgd_2026-06-24.json`. PUT 200, active.
+
 ## Not changed (intentionally)
 - **WF7** test-recipient scaffold (10 `TEST_ALWAYS` SCC team emails) — left as-is for now;
   this is what keeps test dispatches landing on the team. See the "better approach"
