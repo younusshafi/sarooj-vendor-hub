@@ -25,6 +25,21 @@ email body was simulated against a real RFQ + token and renders a correct clicka
 team) to visually confirm the received email's link — to be triggered by the officer via the
 app's Send flow.
 
+## 2026-06-24 — VAT rounding rule (WF10)
+
+**WF10 — SCC WF10 Response Monitor** (`EsLoQthHxlRBzA1E`), `Calculate Totals` node:
+changed from **round-per-line-then-sum** to **full-precision through the subtotal, round
+only the finals (3 dp)**, with the grand total tying exactly to subtotal + VAT:
+```js
+subtotalEx += exTotalOmr;                 // full precision (was += round3(exTotalOmr))
+const subtotal_ex_vat_omr = round3(subtotalEx);
+const vat_amount_omr      = round3(subtotal_ex_vat_omr * 0.05);
+const total_inc_vat_omr   = round3(subtotal_ex_vat_omr + vat_amount_omr); // ties out
+```
+Backup: `WF10_Response_Monitor_EsLoQthHxlRBzA1E_2026-06-24.json`. Same rule applied to the
+bid-form RPC `bid_submit_by_token` and the frontend bid form / comparison display (3 dp).
+Verified: tie-out holds; a high-qty example showed the old rule drifting 0.278 OMR, now removed.
+
 ## Not changed (intentionally)
 - **WF7** test-recipient scaffold (10 `TEST_ALWAYS` SCC team emails) — left as-is for now;
   this is what keeps test dispatches landing on the team. See the "better approach"

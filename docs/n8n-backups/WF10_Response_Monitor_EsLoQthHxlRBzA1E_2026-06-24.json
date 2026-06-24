@@ -1,0 +1,3235 @@
+{
+  "updatedAt": "2026-06-20T13:05:58.233Z",
+  "createdAt": "2026-05-26T05:08:11.666Z",
+  "id": "EsLoQthHxlRBzA1E",
+  "name": "SCC - WF10 Response Monitor",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 1,
+              "unit": "minutes"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "q": "label:INBOX is:unread"
+        },
+        "options": {
+          "dataPropertyAttachmentsPrefixName": "attachment_",
+          "downloadAttachments": true
+        }
+      },
+      "id": "d1fdfeb4-861c-409e-a345-4e1404d22db7",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1,
+      "position": [
+        448,
+        716
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DeLrpWhS3LyOKQjn",
+          "name": "sarooj procurement gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = $input.first().json;\n// Handle both Gmail Trigger (lowercase, parsed) and Gmail get-message (Capitalized headers)\nfunction header(nm){try{const hs=(msg.payload&&msg.payload.headers)||[];const h=hs.find(x=>(x.name||'').toLowerCase()===nm.toLowerCase());return h?h.value:'';}catch(e){return '';}}\nconst subject = msg.subject || msg.Subject || header('Subject') || '';\n// from can be: {value:[{address}]} (trigger) OR 'Name <addr>' string (get-message From)\nfunction parseFrom(f){\n  if(!f) return '';\n  if(typeof f === 'object' && f.value && f.value[0]) return f.value[0].address || '';\n  const s = String(f);\n  const m = s.match(/<([^>]+)>/);\n  return m ? m[1] : s.trim();\n}\nconst from_addr = parseFrom(msg.from || msg.From || header('From'));\nconst msg_id = msg.id || '';\n// body: trigger has .text; get-message often only .snippet at top, full text in payload parts\nfunction decode(d){ try { return Buffer.from(d,'base64').toString('utf-8'); } catch(e){ return ''; } }\nfunction walk(p,acc){ if(!p) return; const mt=p.mimeType||''; if(p.body&&p.body.data&&mt.indexOf('text/')===0){acc.push(decode(p.body.data));} if(p.parts){for(const c of p.parts)walk(c,acc);} }\nlet body = msg.text || msg.textAsHtml || '';\nif(!body && msg.payload){ const acc=[]; walk(msg.payload,acc); body=acc.join('\\n'); }\nif(!body) body = msg.snippet || '';\nbody = String(body).replace(/<style[\\s\\S]*?<\\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/\\s+/g,' ').trim();\nconst snippet = msg.snippet || body.slice(0,200);\nconst atts = msg.attachments || [];\nconst has_attachments = Array.isArray(atts) && atts.length>0;\nconst filenames = has_attachments ? atts.map(a=>a.filename||a.name).filter(Boolean) : [];\nreturn [{ json: { subject, from_addr, msg_id, body, snippet, has_attachments, filenames } }];"
+      },
+      "id": "0d5e1979-fd06-40b5-8436-74fc6c7501ed",
+      "name": "Extract Email Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Is this email an RFQ bid response from a vendor?\\n'+ 'Subject: ' + $json.subject + '\\n'+ 'From: ' + $json.from_addr + '\\n'+ 'Body snippet: ' + $json.snippet.substring(0,500) + '\\n'+ 'Has attachments: ' + $json.has_attachments + '\\n'+ 'Return JSON: {\"is_rfq_response\":boolean,\"rfq_reference\":\"MR-XXXX-XXX or null\",\"vendor_email\":\"email\",\"has_attachments\":boolean,\"confidence\":\"high/medium/low\"}' }}",
+        "options": {
+          "systemMessage": "You classify procurement emails. Return ONLY valid JSON, no explanation."
+        }
+      },
+      "id": "430ada53-577e-4070-804d-8d0422185ff2",
+      "name": "AI Classify Email",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1120,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "de0cd5e0-da3d-49f0-9651-3737c5d0d746",
+      "name": "Chat Model Classify",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1192,
+        384
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "PpiTCPKVnei6pTtZ",
+          "name": "OpenAI Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.output || '{}';\nconst clean = raw.replace(/```json|```/g, '').trim();\nlet result = {};\ntry { result = JSON.parse(clean); } catch(e) { result = { is_rfq_response: false }; }\nreturn [{ json: result }];"
+      },
+      "id": "f67afd33-f824-4a18-b552-465af18a144e",
+      "name": "Parse Classification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.is_rfq_response }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f1869513-18e3-4d67-a0e7-fbeffee8dfe0",
+      "name": "Is RFQ Response?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "markAsRead",
+        "messageId": "={{ $('Extract Email Fields').first().json.msg_id }}"
+      },
+      "id": "1f4ebcf9-c8cf-4a9c-a514-0c8fb1a020c6",
+      "name": "Mark Not RFQ Read",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        160
+      ],
+      "webhookId": "731992e7-78b0-4d3b-9427-9f78cb3a54c2",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DeLrpWhS3LyOKQjn",
+          "name": "sarooj procurement gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfqs",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "rfq_reference",
+              "value": "={{ `eq.${$('Parse Classification').first().json.rfq_reference}` }}"
+            },
+            {
+              "name": "select",
+              "value": "rfq_id,rfq_type,title,drive_folder_id,drive_folder_url,rfq_reference"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "scc_procurement"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "45399fc2-039b-4cb8-9a00-2269f007c7b0",
+      "name": "Fetch RFQ by Reference",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rfqs = $input.all();\nif (!rfqs || rfqs.length === 0 || !rfqs[0].json || !rfqs[0].json.rfq_id) {\n  return [{ json: { found: false, rfq_id: null } }];\n}\nreturn [{ json: { found: true, ...rfqs[0].json } }];"
+      },
+      "id": "e940afed-6843-42f9-8dcf-5cb2f32f2603",
+      "name": "Check RFQ Found",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2144,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.found }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9f268e81-91bb-4bb7-b453-9841f926a1b7",
+      "name": "RFQ Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2368,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "younus@zavia-ai.com",
+        "subject": "={{ '[TEST] [RFQ Monitor] Unknown reference: ' + $('Parse Classification').first().json.rfq_reference }}",
+        "message": "={{ '<p>Received a vendor email that could not be matched to an RFQ. Reference: ' + $('Parse Classification').first().json.rfq_reference + '</p><p>From: ' + $('Extract Email Fields').first().json.from_addr + '</p><p>Subject: ' + $('Extract Email Fields').first().json.subject + '</p>' }}",
+        "options": {}
+      },
+      "id": "aa14d6da-6655-4bc2-b176-39eacc947948",
+      "name": "Notify Rabia RFQ Not Found",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        2592,
+        352
+      ],
+      "webhookId": "996cdabc-7e85-4254-b3e4-87ad88bf0648",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DeLrpWhS3LyOKQjn",
+          "name": "sarooj procurement gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "markAsRead",
+        "messageId": "={{ $('Extract Email Fields').first().json.msg_id }}"
+      },
+      "id": "80ee5e90-bea1-4fe0-a472-c2eff3bc2459",
+      "name": "Mark RFQ NotFound Read",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        2816,
+        352
+      ],
+      "webhookId": "c3530678-c927-4f2b-a125-45e5a71049b6",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DeLrpWhS3LyOKQjn",
+          "name": "sarooj procurement gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfq_vendors",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "rfq_id",
+              "value": "={{ `eq.${$('Check RFQ Found').first().json.rfq_id}` }}"
+            },
+            {
+              "name": "email_to",
+              "value": "={{ `eq.${$('Extract Email Fields').first().json.from_addr}` }}"
+            },
+            {
+              "name": "select",
+              "value": "*"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "scc_procurement"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3446b25b-cc79-4b89-a534-90124d5a8476",
+      "name": "Fetch RFQ Vendor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2592,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const vendors = $input.all();\nif (!vendors || vendors.length === 0 || !vendors[0].json || !vendors[0].json.id) {\n  return [{ json: { found: false } }];\n}\nreturn [{ json: { found: true, ...vendors[0].json } }];"
+      },
+      "id": "0c360b9b-e681-45dd-bf3b-52bbb04f7317",
+      "name": "Check Vendor Found",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2816,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.found }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "88b982ea-4e29-4671-a56e-a92c4a9f1987",
+      "name": "Vendor Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3040,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "younus@zavia-ai.com",
+        "subject": "={{ '[TEST] [RFQ Monitor] Unknown vendor for ' + $('Check RFQ Found').first().json.rfq_reference }}",
+        "message": "={{ '<p>Vendor email ' + $('Parse Classification').first().json.vendor_email + ' responded to RFQ ' + $('Check RFQ Found').first().json.rfq_reference + ' but is not listed as a vendor for this RFQ.</p>' }}",
+        "options": {}
+      },
+      "id": "deffb98a-221f-4aee-9bf2-3358ff9a7270",
+      "name": "Notify Rabia Vendor Not Found",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        3264,
+        380
+      ],
+      "webhookId": "b3edd54d-1143-45a6-93a6-a1385dfa798d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DeLrpWhS3LyOKQjn",
+          "name": "sarooj procurement gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "markAsRead",
+        "messageId": "={{ $('Extract Email Fields').first().json.msg_id }}"
+      },
+      "id": "bef359ff-7971-4fec-947e-34b466db3794",
+      "name": "Mark Vendor NotFound Read",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        3488,
+        544
+      ],
+      "webhookId": "9b953418-8605-4230-a87e-c9e98a9c56e5",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DeLrpWhS3LyOKQjn",
+          "name": "sarooj procurement gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $('Check RFQ Found').first().json.rfq_type }}",
+              "rightValue": "materials",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c2ea7361-5b47-4590-a214-b1ff2f117080",
+      "name": "Is Materials RFQ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3264,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfq_items",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "rfq_id",
+              "value": "={{ `eq.${$('Check RFQ Found').first().json.rfq_id}` }}"
+            },
+            {
+              "name": "select",
+              "value": "item_id,item_number,sap_item_number,description,sap_material_code,quantity,unit"
+            },
+            {
+              "name": "order",
+              "value": "item_number.asc"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "scc_procurement"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "29e35891-530c-41a2-97da-0c4e7588129d",
+      "name": "Fetch RFQ Items",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3488,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Extract bid data from this vendor email and match each price to the correct RFQ item.\n\nRFQ Items (match unit_price to these by description; use their item_id as rfq_item_id):\n{{ JSON.stringify($('Fetch RFQ Items').all().map(i => ({ item_id: i.json.item_id, description: i.json.description, quantity: i.json.quantity }))) }}\n\nVendor email body:\n{{ $('Extract Email Fields').first().json.body }}\n\nSubject: {{ $('Extract Email Fields').first().json.subject }}\n\nReturn ONLY valid JSON (no markdown fences):\n{\"quotation_reference\":\"string or null\",\"quotation_date\":\"YYYY-MM-DD or null\",\"currency\":\"OMR\",\"vat_treatment\":\"inclusive/exclusive/not_stated\",\"payment_structure\":\"credit_days/on_delivery/pdc/advance/tbd\",\"payment_method\":\"cash/bank_transfer/cheque/pdc/tbd (e.g. 'cash on delivery' => payment_method cash + payment_structure on_delivery)\",\"credit_days\":null,\"pdc_days\":null,\"delivery_lead_time_days\":null,\"validity_days\":null,\"manufacturer_brand\":\"string or null\",\"general_notes\":\"string or null\",\"items\":[{\"rfq_item_id\":\"the item_id from RFQ Items above\",\"sap_item_number\":10,\"description\":\"str\",\"unit_price\":0,\"currency\":\"OMR\",\"confidence\":\"high/medium/low\",\"notes\":null}],\"items_not_found\":[],\"overall_confidence\":\"high/medium/low\",\"extraction_notes\":\"str\"}",
+        "options": {
+          "systemMessage": "You extract structured bid data from vendor emails for Sarooj Construction Company, Oman. Return ONLY valid JSON. No markdown, no explanation, no backticks."
+        }
+      },
+      "id": "3f8493c7-8371-4b78-b2b2-b5b059064449",
+      "name": "AI Extract Bid Data",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        3712,
+        632
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "30115209-62be-447b-866e-e31e21495f24",
+      "name": "Chat Model Extract",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        3784,
+        856
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "PpiTCPKVnei6pTtZ",
+          "name": "OpenAI Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.output || '{}';\nconst clean = raw.replace(/```json|```/g, '').trim();\nlet extracted = {};\ntry { extracted = JSON.parse(clean); } catch(e) { extracted = {}; }\n\nconst RATES = { USD: 0.385, AED: 0.105, SAR: 0.103, OMR: 1 };\nconst round3 = (n) => Math.round((n + Number.EPSILON) * 1000) / 1000;\n\nconst treatment = (extracted.vat_treatment || 'not_stated').toLowerCase();\nconst isInclusive = treatment === 'inclusive';\n\nconst rfqItems = $('Fetch RFQ Items').all().map(i => i.json);\nlet subtotalEx = 0;\nlet rawQuotedTotal = 0;\n\nconst bid_items = (extracted.items || []).map(item => {\n  const rfqItem = rfqItems.find(r => r.item_id === item.rfq_item_id) || {};\n  const qty = parseFloat(rfqItem.quantity) || 1;\n  const rate = RATES[item.currency || extracted.currency || 'OMR'] || 1;\n  const quotedUnitOmr = (parseFloat(item.unit_price) || 0) * rate;\n  const exUnitOmr = round3(isInclusive ? quotedUnitOmr / 1.05 : quotedUnitOmr);\n  const exTotalOmr = round3(exUnitOmr * qty);\n  subtotalEx += exTotalOmr;\n  rawQuotedTotal += round3(quotedUnitOmr * qty);\n  return { rfq_item_id: item.rfq_item_id, sap_item_number: item.sap_item_number,\n    description: item.description, unit_price: item.unit_price,\n    currency: item.currency || extracted.currency || 'OMR',\n    unit_price_omr: exUnitOmr, total_price_omr: exTotalOmr,\n    ai_confidence: item.confidence || 'medium',\n    ai_confidence_reason: item.confidence_reason, notes: item.notes };\n});\n\nconst subtotal_ex_vat_omr = round3(subtotalEx);\nconst total_inc_vat_omr = round3(subtotal_ex_vat_omr * 1.05);\nconst vat_amount_omr = round3(total_inc_vat_omr - subtotal_ex_vat_omr);\nconst initial_quote_price_omr = round3(rawQuotedTotal);\n\nreturn [{ json: { extracted, bid_items,\n  subtotal_ex_vat_omr, vat_amount_omr, total_inc_vat_omr, initial_quote_price_omr } }];"
+      },
+      "id": "ba31400b-cb80-47ff-9a85-37fefef5ade6",
+      "name": "Calculate Totals",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4064,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/bids",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "scc_procurement"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "scc_procurement"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ rfq_id: $('Check RFQ Found').first().json.rfq_id, vendor_name: ($('Check Vendor Found').first().json.contact_person || $('Extract Email Fields').first().json.from_addr || 'Unknown Vendor'), rfq_vendor_id: $('Check Vendor Found').first().json.id, vendor_id: $('Check Vendor Found').first().json.vendor_id, status: 'ai_extracted_pending_review', original_email_id: $('Extract Email Fields').first().json.msg_id, original_email_body: $('Extract Email Fields').first().json.body, quotation_reference: $json.extracted.quotation_reference, quotation_date: $json.extracted.quotation_date, currency: $json.extracted.currency || 'OMR', vat_treatment: $json.extracted.vat_treatment, payment_structure: $json.extracted.payment_structure, payment_method: $json.extracted.payment_method, credit_days: $json.extracted.credit_days, delivery_lead_time_days: $json.extracted.delivery_lead_time_days, validity_days: $json.extracted.validity_days, notes: $json.extracted.general_notes, initial_quote_price_omr: $json.initial_quote_price_omr, subtotal_ex_vat_omr: $json.subtotal_ex_vat_omr, vat_amount_omr: $json.vat_amount_omr, total_inc_vat_omr: $json.total_inc_vat_omr, ai_extraction_confidence: $json.extracted.overall_confidence, ai_extraction_notes: $json.extracted.extraction_notes }) }}",
+        "options": {}
+      },
+      "id": "1af47f59-5bb9-4a5c-a049-55a542de1bb1",
+      "name": "POST Bid",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4288,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/bid_items",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "scc_procurement"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "scc_procurement"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Calculate Totals').first().json.bid_items.map(item => ({ bid_id: $('POST Bid').first().json.bid_id, rfq_item_id: item.rfq_item_id, sap_item_number: item.sap_item_number, description: item.description, original_unit_price: item.unit_price, original_currency: item.currency, unit_price_omr: item.unit_price_omr, total_price_omr: item.total_price_omr, ai_confidence: item.ai_confidence, ai_confidence_reason: item.notes }))) }}",
+        "options": {}
+      },
+      "id": "807a9f92-e60c-4a65-a214-cd77823bb336",
+      "name": "POST Bid Items",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4512,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfq_vendors",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ `eq.${$('Check Vendor Found').first().json.id}` }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "scc_procurement"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ response_received: true, response_at: new Date().toISOString(), status: 'responded' }) }}",
+        "options": {}
+      },
+      "id": "0d1dab11-f7f7-4f67-b703-738b9a934dab",
+      "name": "PATCH Vendor Responded M",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4736,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Check Vendor Found').first().json.email_to }}",
+        "subject": "={{ 'Thank you — ' + $('Check RFQ Found').first().json.rfq_reference + ' Response Received' }}",
+        "message": "={{ '<p>Dear ' + ($('Check Vendor Found').first().json.contact_person || 'Procurement Manager') + ',</p><p>Thank you for your quotation for ' + $('Check RFQ Found').first().json.rfq_reference + '. We have received your submission and will review it shortly.</p><p>Best regards,<br>Procurement Team<br>Sarooj Construction Company</p>' }}",
+        "options": {}
+      },
+      "id": "72d97629-ed74-409d-94d7-83ae39599636",
+      "name": "Acknowledge Vendor M",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        4960,
+        736
+      ],
+      "webhookId": "e7bf40a8-e20a-41ec-a5cc-409e9ca7a45a",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DeLrpWhS3LyOKQjn",
+          "name": "sarooj procurement gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "younus@zavia-ai.com",
+        "subject": "={{ '[TEST] [RFQ Response] Bid received for ' + $('Check RFQ Found').first().json.rfq_reference }}",
+        "message": "={{ '<p>A vendor has submitted a bid for ' + $('Check RFQ Found').first().json.rfq_reference + ' (' + $('Check RFQ Found').first().json.title + ').</p><p>AI extracted ' + ($('Calculate Totals').first().json.bid_items || []).length + ' item prices. Total (OMR): ' + $('Calculate Totals').first().json.total_inc_vat_omr + '. Confidence: ' + $('Calculate Totals').first().json.extracted.overall_confidence + '.</p><p>Review at: https://sarooj-vendor-hub.vercel.app/rfq/' + $('Check RFQ Found').first().json.rfq_id + '</p>' }}",
+        "options": {}
+      },
+      "id": "7d79e643-540a-496b-bb1d-a649ac00f7fa",
+      "name": "Notify Rabia M",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        5184,
+        736
+      ],
+      "webhookId": "0e0bde3a-319e-43a9-9f66-dc7da9578341",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DeLrpWhS3LyOKQjn",
+          "name": "sarooj procurement gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "markAsRead",
+        "messageId": "={{ $('Extract Email Fields').first().json.msg_id }}"
+      },
+      "id": "1f6fd4c9-1668-4036-adb8-f683574d7072",
+      "name": "Mark Read M",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        5408,
+        1160
+      ],
+      "webhookId": "a3acb0a9-5a22-4fbe-afa9-9ed72b0d7d0f",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DeLrpWhS3LyOKQjn",
+          "name": "sarooj procurement gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $('Parse Classification').first().json.vendor_email.split('@')[0] + ' — Response' }}",
+        "driveId": {
+          "__rl": true,
+          "value": "myDrive",
+          "mode": "list"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Check RFQ Found').first().json.drive_folder_id || '15eFZn4gFpI4XmGc0oKlZv0rF_Qqt59Kt' }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "ee590818-f1a7-4608-99f2-2f177c36ad6e",
+      "name": "Create Response Subfolder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        3488,
+        1136
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5zccNVQQi5vGfW2R",
+          "name": "Google Drive Procurement"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "= Classify each response attachment filename into one of: priced_boq, technical_submission, covering_letter, other. Return ONLY a JSON array, e.g. [{\"filename\":\"example.pdf\",\"type\":\"priced_boq\"}].",
+        "options": {
+          "systemMessage": "You classify document filenames for procurement. Return ONLY a JSON array, no explanation."
+        }
+      },
+      "id": "77ffac5f-cc06-4835-80da-8cb5ae5034c5",
+      "name": "AI Classify Attachments",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        3712,
+        1032
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "7b2616e8-95ed-412d-bb03-32795ebb00c6",
+      "name": "Chat Model Attachments",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        3784,
+        1256
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "PpiTCPKVnei6pTtZ",
+          "name": "OpenAI Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfq_vendors",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ `eq.${$('Check Vendor Found').first().json.id}` }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "scc_procurement"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ response_received: true, response_at: new Date().toISOString(), status: 'responded', response_drive_url: 'https://drive.google.com/drive/folders/' + $('Create Response Subfolder').first().json.id }) }}",
+        "options": {}
+      },
+      "id": "77b13028-b646-49cf-8580-918cf6346760",
+      "name": "PATCH Vendor Responded S",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4064,
+        1136
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Check Vendor Found').first().json.email_to }}",
+        "subject": "={{ 'Thank you — ' + $('Check RFQ Found').first().json.rfq_reference + ' Submission Received' }}",
+        "message": "={{ '<p>Dear ' + ($('Check Vendor Found').first().json.contact_person || 'Procurement Manager') + ',</p><p>Thank you for your submission for ' + $('Check RFQ Found').first().json.rfq_reference + '. Your documents have been received and are under review.</p><p>Best regards,<br>Procurement Team<br>Sarooj Construction Company</p>' }}",
+        "options": {}
+      },
+      "id": "26eb652b-0ec3-43da-9ebb-04241081e857",
+      "name": "Acknowledge Vendor S",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        4288,
+        1136
+      ],
+      "webhookId": "da45ef82-3fcb-4fc4-9288-72f060af02f4",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DeLrpWhS3LyOKQjn",
+          "name": "sarooj procurement gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "younus@zavia-ai.com",
+        "subject": "={{ '[TEST] [Subcontract Response] Submission for ' + $('Check RFQ Found').first().json.rfq_reference }}",
+        "message": "={{ '<p>Vendor ' + $('Parse Classification').first().json.vendor_email + ' submitted documents for ' + $('Check RFQ Found').first().json.rfq_reference + '.</p><p>Documents filed to: https://drive.google.com/drive/folders/' + $('Create Response Subfolder').first().json.id + '</p>' }}",
+        "options": {}
+      },
+      "id": "9b8140c2-2a17-4077-8cf6-47dc2545f396",
+      "name": "Notify Rabia S",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        4512,
+        1136
+      ],
+      "webhookId": "2e39eaf3-4880-41fb-8dbe-d607dd23f08f",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DeLrpWhS3LyOKQjn",
+          "name": "sarooj procurement gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "markAsRead",
+        "messageId": "={{ $('Extract Email Fields').first().json.msg_id }}"
+      },
+      "id": "be967adf-5307-4d2c-b989-4d103d6db233",
+      "name": "Mark Read S",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        4736,
+        1136
+      ],
+      "webhookId": "05801b3e-2efe-4323-870b-5be43af7710a",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DeLrpWhS3LyOKQjn",
+          "name": "sarooj procurement gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "scc-wf10-test",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "wf10-test-webhook-001",
+      "name": "Test Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        524
+      ],
+      "webhookId": "scc-wf10-test"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "messageId": "={{ $json.msg_id }}",
+        "simple": false
+      },
+      "id": "wf10-get-email-001",
+      "name": "Get Email By ID",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        448,
+        524
+      ],
+      "webhookId": "cc079a57-f5de-40d9-9887-fa8b5eed8cfb",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DeLrpWhS3LyOKQjn",
+          "name": "sarooj procurement gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "wf10-loop-emails-001",
+      "name": "Loop Emails",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        672,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $input.first().json.body || $input.first().json;\nconst ids = b.msg_ids || (b.msg_id ? [b.msg_id] : []);\nreturn ids.map(id => ({ json: { msg_id: id } }));"
+      },
+      "id": "wf10-split-ids-001",
+      "name": "Split IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        524
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const subfolderId = $('Create Response Subfolder').first().json.id;\nconst items = $('Loop Emails').all();\nconst out=[];\nfor (const it of items){ const bin=it.binary||{};\n  for (const key of Object.keys(bin)){ const b=bin[key];\n    out.push({ json:{ filename: b.fileName || key, subfolder_id: subfolderId }, binary:{ data: b } }); } }\nreturn out;"
+      },
+      "id": "collectatt",
+      "name": "Collect Attachments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3776,
+        1432
+      ]
+    },
+    {
+      "parameters": {
+        "name": "={{ $json.filename }}",
+        "driveId": {
+          "__rl": true,
+          "value": "myDrive",
+          "mode": "list"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.subfolder_id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "saveatt",
+      "name": "Save Attachment to Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        4064,
+        1432
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5zccNVQQi5vGfW2R",
+          "name": "Google Drive Procurement"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Loop Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Email Fields": {
+      "main": [
+        [
+          {
+            "node": "AI Classify Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Classify Email": {
+      "main": [
+        [
+          {
+            "node": "Parse Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model Classify": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Classify Email",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Classification": {
+      "main": [
+        [
+          {
+            "node": "Is RFQ Response?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is RFQ Response?": {
+      "main": [
+        [
+          {
+            "node": "Fetch RFQ by Reference",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Not RFQ Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch RFQ by Reference": {
+      "main": [
+        [
+          {
+            "node": "Check RFQ Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check RFQ Found": {
+      "main": [
+        [
+          {
+            "node": "RFQ Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RFQ Found?": {
+      "main": [
+        [
+          {
+            "node": "Fetch RFQ Vendor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Rabia RFQ Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Rabia RFQ Not Found": {
+      "main": [
+        [
+          {
+            "node": "Mark RFQ NotFound Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch RFQ Vendor": {
+      "main": [
+        [
+          {
+            "node": "Check Vendor Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Vendor Found": {
+      "main": [
+        [
+          {
+            "node": "Vendor Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vendor Found?": {
+      "main": [
+        [
+          {
+            "node": "Is Materials RFQ?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Rabia Vendor Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Rabia Vendor Not Found": {
+      "main": [
+        [
+          {
+            "node": "Mark Vendor NotFound Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Materials RFQ?": {
+      "main": [
+        [
+          {
+            "node": "Fetch RFQ Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Response Subfolder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch RFQ Items": {
+      "main": [
+        [
+          {
+            "node": "AI Extract Bid Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Extract Bid Data": {
+      "main": [
+        [
+          {
+            "node": "Calculate Totals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model Extract": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Extract Bid Data",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Totals": {
+      "main": [
+        [
+          {
+            "node": "POST Bid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Bid": {
+      "main": [
+        [
+          {
+            "node": "POST Bid Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Bid Items": {
+      "main": [
+        [
+          {
+            "node": "PATCH Vendor Responded M",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PATCH Vendor Responded M": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge Vendor M",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acknowledge Vendor M": {
+      "main": [
+        [
+          {
+            "node": "Notify Rabia M",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Rabia M": {
+      "main": [
+        [
+          {
+            "node": "Mark Read M",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Response Subfolder": {
+      "main": [
+        [
+          {
+            "node": "AI Classify Attachments",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Collect Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Classify Attachments": {
+      "main": [
+        [
+          {
+            "node": "PATCH Vendor Responded S",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model Attachments": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Classify Attachments",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PATCH Vendor Responded S": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge Vendor S",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acknowledge Vendor S": {
+      "main": [
+        [
+          {
+            "node": "Notify Rabia S",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Rabia S": {
+      "main": [
+        [
+          {
+            "node": "Mark Read S",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Webhook": {
+      "main": [
+        [
+          {
+            "node": "Split IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Email By ID": {
+      "main": [
+        [
+          {
+            "node": "Loop Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Emails": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Extract Email Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Not RFQ Read": {
+      "main": [
+        [
+          {
+            "node": "Loop Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark RFQ NotFound Read": {
+      "main": [
+        [
+          {
+            "node": "Loop Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Vendor NotFound Read": {
+      "main": [
+        [
+          {
+            "node": "Loop Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Read M": {
+      "main": [
+        [
+          {
+            "node": "Loop Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Read S": {
+      "main": [
+        [
+          {
+            "node": "Loop Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split IDs": {
+      "main": [
+        [
+          {
+            "node": "Get Email By ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Attachments": {
+      "main": [
+        [
+          {
+            "node": "Save Attachment to Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed"
+  },
+  "staticData": {
+    "node:Gmail Trigger": {
+      "lastTimeChecked": 1782259385,
+      "possibleDuplicates": [
+        "19ef6f004a97e943"
+      ]
+    }
+  },
+  "meta": null,
+  "pinData": {},
+  "versionId": "a3edd1c6-d317-4fb7-8523-2c178aa39176",
+  "activeVersionId": "a3edd1c6-d317-4fb7-8523-2c178aa39176",
+  "versionCounter": 215,
+  "triggerCount": 2,
+  "shared": [
+    {
+      "updatedAt": "2026-05-26T05:08:11.669Z",
+      "createdAt": "2026-05-26T05:08:11.669Z",
+      "role": "workflow:owner",
+      "workflowId": "EsLoQthHxlRBzA1E",
+      "projectId": "EPVZnKbPnQZ07y5X",
+      "project": {
+        "updatedAt": "2026-05-08T07:21:35.202Z",
+        "createdAt": "2025-08-13T16:14:02.616Z",
+        "id": "EPVZnKbPnQZ07y5X",
+        "name": "Younus Shafi <younus.shafi@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7",
+        "projectRelations": [
+          {
+            "updatedAt": "2025-08-13T16:14:02.617Z",
+            "createdAt": "2025-08-13T16:14:02.617Z",
+            "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7",
+            "projectId": "EPVZnKbPnQZ07y5X",
+            "user": {
+              "updatedAt": "2026-06-24T16:23:28.000Z",
+              "createdAt": "2025-08-13T16:14:01.773Z",
+              "id": "0aa0680b-0420-48ef-8c58-f6b1041c07b7",
+              "email": "younus.shafi@gmail.com",
+              "firstName": "Younus",
+              "lastName": "Shafi",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-08-14T09:21:53.611Z",
+                "personalization_survey_n8n_version": "1.106.3",
+                "automationGoalDevops": [
+                  "data-syncing"
+                ],
+                "companySize": "<20",
+                "companyType": "digital-agency",
+                "role": "engineering",
+                "reportedSource": "linkedin"
+              },
+              "settings": {
+                "userActivated": true,
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "xkosnwxtvVmxlAkV",
+                "userActivatedAt": 1757096940080,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1776506505432
+                }
+              },
+              "disabled": false,
+              "mfaEnabled": true,
+              "lastActiveAt": "2026-06-23",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-06-20T13:05:52.841Z",
+    "createdAt": "2026-06-20T13:05:52.841Z",
+    "versionId": "a3edd1c6-d317-4fb7-8523-2c178aa39176",
+    "workflowId": "EsLoQthHxlRBzA1E",
+    "nodes": [
+      {
+        "parameters": {
+          "pollTimes": {
+            "item": [
+              {
+                "mode": "everyX",
+                "value": 1,
+                "unit": "minutes"
+              }
+            ]
+          },
+          "simple": false,
+          "filters": {
+            "q": "label:INBOX is:unread"
+          },
+          "options": {
+            "dataPropertyAttachmentsPrefixName": "attachment_",
+            "downloadAttachments": true
+          }
+        },
+        "id": "d1fdfeb4-861c-409e-a345-4e1404d22db7",
+        "name": "Gmail Trigger",
+        "type": "n8n-nodes-base.gmailTrigger",
+        "typeVersion": 1,
+        "position": [
+          448,
+          716
+        ],
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "DeLrpWhS3LyOKQjn",
+            "name": "sarooj procurement gmail"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const msg = $input.first().json;\n// Handle both Gmail Trigger (lowercase, parsed) and Gmail get-message (Capitalized headers)\nfunction header(nm){try{const hs=(msg.payload&&msg.payload.headers)||[];const h=hs.find(x=>(x.name||'').toLowerCase()===nm.toLowerCase());return h?h.value:'';}catch(e){return '';}}\nconst subject = msg.subject || msg.Subject || header('Subject') || '';\n// from can be: {value:[{address}]} (trigger) OR 'Name <addr>' string (get-message From)\nfunction parseFrom(f){\n  if(!f) return '';\n  if(typeof f === 'object' && f.value && f.value[0]) return f.value[0].address || '';\n  const s = String(f);\n  const m = s.match(/<([^>]+)>/);\n  return m ? m[1] : s.trim();\n}\nconst from_addr = parseFrom(msg.from || msg.From || header('From'));\nconst msg_id = msg.id || '';\n// body: trigger has .text; get-message often only .snippet at top, full text in payload parts\nfunction decode(d){ try { return Buffer.from(d,'base64').toString('utf-8'); } catch(e){ return ''; } }\nfunction walk(p,acc){ if(!p) return; const mt=p.mimeType||''; if(p.body&&p.body.data&&mt.indexOf('text/')===0){acc.push(decode(p.body.data));} if(p.parts){for(const c of p.parts)walk(c,acc);} }\nlet body = msg.text || msg.textAsHtml || '';\nif(!body && msg.payload){ const acc=[]; walk(msg.payload,acc); body=acc.join('\\n'); }\nif(!body) body = msg.snippet || '';\nbody = String(body).replace(/<style[\\s\\S]*?<\\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/\\s+/g,' ').trim();\nconst snippet = msg.snippet || body.slice(0,200);\nconst atts = msg.attachments || [];\nconst has_attachments = Array.isArray(atts) && atts.length>0;\nconst filenames = has_attachments ? atts.map(a=>a.filename||a.name).filter(Boolean) : [];\nreturn [{ json: { subject, from_addr, msg_id, body, snippet, has_attachments, filenames } }];"
+        },
+        "id": "0d5e1979-fd06-40b5-8436-74fc6c7501ed",
+        "name": "Extract Email Fields",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          896,
+          160
+        ]
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "={{ 'Is this email an RFQ bid response from a vendor?\\n'+ 'Subject: ' + $json.subject + '\\n'+ 'From: ' + $json.from_addr + '\\n'+ 'Body snippet: ' + $json.snippet.substring(0,500) + '\\n'+ 'Has attachments: ' + $json.has_attachments + '\\n'+ 'Return JSON: {\"is_rfq_response\":boolean,\"rfq_reference\":\"MR-XXXX-XXX or null\",\"vendor_email\":\"email\",\"has_attachments\":boolean,\"confidence\":\"high/medium/low\"}' }}",
+          "options": {
+            "systemMessage": "You classify procurement emails. Return ONLY valid JSON, no explanation."
+          }
+        },
+        "id": "430ada53-577e-4070-804d-8d0422185ff2",
+        "name": "AI Classify Email",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 3.1,
+        "position": [
+          1120,
+          160
+        ]
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4o-mini",
+            "mode": "list",
+            "cachedResultName": "gpt-4o-mini"
+          },
+          "builtInTools": {},
+          "options": {
+            "temperature": 0.1
+          }
+        },
+        "id": "de0cd5e0-da3d-49f0-9651-3737c5d0d746",
+        "name": "Chat Model Classify",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.3,
+        "position": [
+          1192,
+          384
+        ],
+        "credentials": {
+          "openAiApi": {
+            "id": "PpiTCPKVnei6pTtZ",
+            "name": "OpenAI Account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const raw = $input.first().json.output || '{}';\nconst clean = raw.replace(/```json|```/g, '').trim();\nlet result = {};\ntry { result = JSON.parse(clean); } catch(e) { result = { is_rfq_response: false }; }\nreturn [{ json: result }];"
+        },
+        "id": "f67afd33-f824-4a18-b552-465af18a144e",
+        "name": "Parse Classification",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1472,
+          160
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.is_rfq_response }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "f1869513-18e3-4d67-a0e7-fbeffee8dfe0",
+        "name": "Is RFQ Response?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1696,
+          160
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "markAsRead",
+          "messageId": "={{ $('Extract Email Fields').first().json.msg_id }}"
+        },
+        "id": "1f4ebcf9-c8cf-4a9c-a514-0c8fb1a020c6",
+        "name": "Mark Not RFQ Read",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2,
+        "position": [
+          1920,
+          160
+        ],
+        "webhookId": "731992e7-78b0-4d3b-9427-9f78cb3a54c2",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "DeLrpWhS3LyOKQjn",
+            "name": "sarooj procurement gmail"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfqs",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "rfq_reference",
+                "value": "={{ `eq.${$('Parse Classification').first().json.rfq_reference}` }}"
+              },
+              {
+                "name": "select",
+                "value": "rfq_id,rfq_type,title,drive_folder_id,drive_folder_url,rfq_reference"
+              }
+            ]
+          },
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Accept-Profile",
+                "value": "scc_procurement"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "45399fc2-039b-4cb8-9a00-2269f007c7b0",
+        "name": "Fetch RFQ by Reference",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1920,
+          352
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const rfqs = $input.all();\nif (!rfqs || rfqs.length === 0 || !rfqs[0].json || !rfqs[0].json.rfq_id) {\n  return [{ json: { found: false, rfq_id: null } }];\n}\nreturn [{ json: { found: true, ...rfqs[0].json } }];"
+        },
+        "id": "e940afed-6843-42f9-8dcf-5cb2f32f2603",
+        "name": "Check RFQ Found",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2144,
+          352
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.found }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "9f268e81-91bb-4bb7-b453-9841f926a1b7",
+        "name": "RFQ Found?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          2368,
+          352
+        ]
+      },
+      {
+        "parameters": {
+          "sendTo": "younus@zavia-ai.com",
+          "subject": "={{ '[TEST] [RFQ Monitor] Unknown reference: ' + $('Parse Classification').first().json.rfq_reference }}",
+          "message": "={{ '<p>Received a vendor email that could not be matched to an RFQ. Reference: ' + $('Parse Classification').first().json.rfq_reference + '</p><p>From: ' + $('Extract Email Fields').first().json.from_addr + '</p><p>Subject: ' + $('Extract Email Fields').first().json.subject + '</p>' }}",
+          "options": {}
+        },
+        "id": "aa14d6da-6655-4bc2-b176-39eacc947948",
+        "name": "Notify Rabia RFQ Not Found",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2,
+        "position": [
+          2592,
+          352
+        ],
+        "webhookId": "996cdabc-7e85-4254-b3e4-87ad88bf0648",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "DeLrpWhS3LyOKQjn",
+            "name": "sarooj procurement gmail"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "markAsRead",
+          "messageId": "={{ $('Extract Email Fields').first().json.msg_id }}"
+        },
+        "id": "80ee5e90-bea1-4fe0-a472-c2eff3bc2459",
+        "name": "Mark RFQ NotFound Read",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2,
+        "position": [
+          2816,
+          352
+        ],
+        "webhookId": "c3530678-c927-4f2b-a125-45e5a71049b6",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "DeLrpWhS3LyOKQjn",
+            "name": "sarooj procurement gmail"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfq_vendors",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "rfq_id",
+                "value": "={{ `eq.${$('Check RFQ Found').first().json.rfq_id}` }}"
+              },
+              {
+                "name": "email_to",
+                "value": "={{ `eq.${$('Extract Email Fields').first().json.from_addr}` }}"
+              },
+              {
+                "name": "select",
+                "value": "*"
+              }
+            ]
+          },
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Accept-Profile",
+                "value": "scc_procurement"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "3446b25b-cc79-4b89-a534-90124d5a8476",
+        "name": "Fetch RFQ Vendor",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2592,
+          544
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const vendors = $input.all();\nif (!vendors || vendors.length === 0 || !vendors[0].json || !vendors[0].json.id) {\n  return [{ json: { found: false } }];\n}\nreturn [{ json: { found: true, ...vendors[0].json } }];"
+        },
+        "id": "0c360b9b-e681-45dd-bf3b-52bbb04f7317",
+        "name": "Check Vendor Found",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2816,
+          544
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.found }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "88b982ea-4e29-4671-a56e-a92c4a9f1987",
+        "name": "Vendor Found?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          3040,
+          544
+        ]
+      },
+      {
+        "parameters": {
+          "sendTo": "younus@zavia-ai.com",
+          "subject": "={{ '[TEST] [RFQ Monitor] Unknown vendor for ' + $('Check RFQ Found').first().json.rfq_reference }}",
+          "message": "={{ '<p>Vendor email ' + $('Parse Classification').first().json.vendor_email + ' responded to RFQ ' + $('Check RFQ Found').first().json.rfq_reference + ' but is not listed as a vendor for this RFQ.</p>' }}",
+          "options": {}
+        },
+        "id": "deffb98a-221f-4aee-9bf2-3358ff9a7270",
+        "name": "Notify Rabia Vendor Not Found",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2,
+        "position": [
+          3264,
+          380
+        ],
+        "webhookId": "b3edd54d-1143-45a6-93a6-a1385dfa798d",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "DeLrpWhS3LyOKQjn",
+            "name": "sarooj procurement gmail"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "markAsRead",
+          "messageId": "={{ $('Extract Email Fields').first().json.msg_id }}"
+        },
+        "id": "bef359ff-7971-4fec-947e-34b466db3794",
+        "name": "Mark Vendor NotFound Read",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2,
+        "position": [
+          3488,
+          544
+        ],
+        "webhookId": "9b953418-8605-4230-a87e-c9e98a9c56e5",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "DeLrpWhS3LyOKQjn",
+            "name": "sarooj procurement gmail"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $('Check RFQ Found').first().json.rfq_type }}",
+                "rightValue": "materials",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "c2ea7361-5b47-4590-a214-b1ff2f117080",
+        "name": "Is Materials RFQ?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          3264,
+          736
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfq_items",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "rfq_id",
+                "value": "={{ `eq.${$('Check RFQ Found').first().json.rfq_id}` }}"
+              },
+              {
+                "name": "select",
+                "value": "item_id,item_number,sap_item_number,description,sap_material_code,quantity,unit"
+              },
+              {
+                "name": "order",
+                "value": "item_number.asc"
+              }
+            ]
+          },
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Accept-Profile",
+                "value": "scc_procurement"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "29e35891-530c-41a2-97da-0c4e7588129d",
+        "name": "Fetch RFQ Items",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          3488,
+          736
+        ]
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "=Extract bid data from this vendor email and match each price to the correct RFQ item.\n\nRFQ Items (match unit_price to these by description; use their item_id as rfq_item_id):\n{{ JSON.stringify($('Fetch RFQ Items').all().map(i => ({ item_id: i.json.item_id, description: i.json.description, quantity: i.json.quantity }))) }}\n\nVendor email body:\n{{ $('Extract Email Fields').first().json.body }}\n\nSubject: {{ $('Extract Email Fields').first().json.subject }}\n\nReturn ONLY valid JSON (no markdown fences):\n{\"quotation_reference\":\"string or null\",\"quotation_date\":\"YYYY-MM-DD or null\",\"currency\":\"OMR\",\"vat_treatment\":\"inclusive/exclusive/not_stated\",\"payment_structure\":\"credit_days/on_delivery/pdc/advance/tbd\",\"payment_method\":\"cash/bank_transfer/cheque/pdc/tbd (e.g. 'cash on delivery' => payment_method cash + payment_structure on_delivery)\",\"credit_days\":null,\"pdc_days\":null,\"delivery_lead_time_days\":null,\"validity_days\":null,\"manufacturer_brand\":\"string or null\",\"general_notes\":\"string or null\",\"items\":[{\"rfq_item_id\":\"the item_id from RFQ Items above\",\"sap_item_number\":10,\"description\":\"str\",\"unit_price\":0,\"currency\":\"OMR\",\"confidence\":\"high/medium/low\",\"notes\":null}],\"items_not_found\":[],\"overall_confidence\":\"high/medium/low\",\"extraction_notes\":\"str\"}",
+          "options": {
+            "systemMessage": "You extract structured bid data from vendor emails for Sarooj Construction Company, Oman. Return ONLY valid JSON. No markdown, no explanation, no backticks."
+          }
+        },
+        "id": "3f8493c7-8371-4b78-b2b2-b5b059064449",
+        "name": "AI Extract Bid Data",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 3.1,
+        "position": [
+          3712,
+          632
+        ]
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4o-mini",
+            "mode": "list",
+            "cachedResultName": "gpt-4o-mini"
+          },
+          "builtInTools": {},
+          "options": {
+            "temperature": 0.1
+          }
+        },
+        "id": "30115209-62be-447b-866e-e31e21495f24",
+        "name": "Chat Model Extract",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.3,
+        "position": [
+          3784,
+          856
+        ],
+        "credentials": {
+          "openAiApi": {
+            "id": "PpiTCPKVnei6pTtZ",
+            "name": "OpenAI Account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const raw = $input.first().json.output || '{}';\nconst clean = raw.replace(/```json|```/g, '').trim();\nlet extracted = {};\ntry { extracted = JSON.parse(clean); } catch(e) { extracted = {}; }\n\nconst RATES = { USD: 0.385, AED: 0.105, SAR: 0.103, OMR: 1 };\nconst round3 = (n) => Math.round((n + Number.EPSILON) * 1000) / 1000;\n\nconst treatment = (extracted.vat_treatment || 'not_stated').toLowerCase();\nconst isInclusive = treatment === 'inclusive';\n\nconst rfqItems = $('Fetch RFQ Items').all().map(i => i.json);\nlet subtotalEx = 0;\nlet rawQuotedTotal = 0;\n\nconst bid_items = (extracted.items || []).map(item => {\n  const rfqItem = rfqItems.find(r => r.item_id === item.rfq_item_id) || {};\n  const qty = parseFloat(rfqItem.quantity) || 1;\n  const rate = RATES[item.currency || extracted.currency || 'OMR'] || 1;\n  const quotedUnitOmr = (parseFloat(item.unit_price) || 0) * rate;\n  const exUnitOmr = round3(isInclusive ? quotedUnitOmr / 1.05 : quotedUnitOmr);\n  const exTotalOmr = round3(exUnitOmr * qty);\n  subtotalEx += exTotalOmr;\n  rawQuotedTotal += round3(quotedUnitOmr * qty);\n  return { rfq_item_id: item.rfq_item_id, sap_item_number: item.sap_item_number,\n    description: item.description, unit_price: item.unit_price,\n    currency: item.currency || extracted.currency || 'OMR',\n    unit_price_omr: exUnitOmr, total_price_omr: exTotalOmr,\n    ai_confidence: item.confidence || 'medium',\n    ai_confidence_reason: item.confidence_reason, notes: item.notes };\n});\n\nconst subtotal_ex_vat_omr = round3(subtotalEx);\nconst total_inc_vat_omr = round3(subtotal_ex_vat_omr * 1.05);\nconst vat_amount_omr = round3(total_inc_vat_omr - subtotal_ex_vat_omr);\nconst initial_quote_price_omr = round3(rawQuotedTotal);\n\nreturn [{ json: { extracted, bid_items,\n  subtotal_ex_vat_omr, vat_amount_omr, total_inc_vat_omr, initial_quote_price_omr } }];"
+        },
+        "id": "ba31400b-cb80-47ff-9a85-37fefef5ade6",
+        "name": "Calculate Totals",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4064,
+          736
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/bids",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "scc_procurement"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=representation"
+              },
+              {
+                "name": "Accept-Profile",
+                "value": "scc_procurement"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ rfq_id: $('Check RFQ Found').first().json.rfq_id, vendor_name: ($('Check Vendor Found').first().json.contact_person || $('Extract Email Fields').first().json.from_addr || 'Unknown Vendor'), rfq_vendor_id: $('Check Vendor Found').first().json.id, vendor_id: $('Check Vendor Found').first().json.vendor_id, status: 'ai_extracted_pending_review', original_email_id: $('Extract Email Fields').first().json.msg_id, original_email_body: $('Extract Email Fields').first().json.body, quotation_reference: $json.extracted.quotation_reference, quotation_date: $json.extracted.quotation_date, currency: $json.extracted.currency || 'OMR', vat_treatment: $json.extracted.vat_treatment, payment_structure: $json.extracted.payment_structure, payment_method: $json.extracted.payment_method, credit_days: $json.extracted.credit_days, delivery_lead_time_days: $json.extracted.delivery_lead_time_days, validity_days: $json.extracted.validity_days, notes: $json.extracted.general_notes, initial_quote_price_omr: $json.initial_quote_price_omr, subtotal_ex_vat_omr: $json.subtotal_ex_vat_omr, vat_amount_omr: $json.vat_amount_omr, total_inc_vat_omr: $json.total_inc_vat_omr, ai_extraction_confidence: $json.extracted.overall_confidence, ai_extraction_notes: $json.extracted.extraction_notes }) }}",
+          "options": {}
+        },
+        "id": "1af47f59-5bb9-4a5c-a049-55a542de1bb1",
+        "name": "POST Bid",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          4288,
+          736
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/bid_items",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "scc_procurement"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              },
+              {
+                "name": "Accept-Profile",
+                "value": "scc_procurement"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Calculate Totals').first().json.bid_items.map(item => ({ bid_id: $('POST Bid').first().json.bid_id, rfq_item_id: item.rfq_item_id, sap_item_number: item.sap_item_number, description: item.description, original_unit_price: item.unit_price, original_currency: item.currency, unit_price_omr: item.unit_price_omr, total_price_omr: item.total_price_omr, ai_confidence: item.ai_confidence, ai_confidence_reason: item.notes }))) }}",
+          "options": {}
+        },
+        "id": "807a9f92-e60c-4a65-a214-cd77823bb336",
+        "name": "POST Bid Items",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          4512,
+          736
+        ]
+      },
+      {
+        "parameters": {
+          "method": "PATCH",
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfq_vendors",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "id",
+                "value": "={{ `eq.${$('Check Vendor Found').first().json.id}` }}"
+              }
+            ]
+          },
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "scc_procurement"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=representation"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ response_received: true, response_at: new Date().toISOString(), status: 'responded' }) }}",
+          "options": {}
+        },
+        "id": "0d1dab11-f7f7-4f67-b703-738b9a934dab",
+        "name": "PATCH Vendor Responded M",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          4736,
+          736
+        ]
+      },
+      {
+        "parameters": {
+          "sendTo": "={{ $('Check Vendor Found').first().json.email_to }}",
+          "subject": "={{ 'Thank you — ' + $('Check RFQ Found').first().json.rfq_reference + ' Response Received' }}",
+          "message": "={{ '<p>Dear ' + ($('Check Vendor Found').first().json.contact_person || 'Procurement Manager') + ',</p><p>Thank you for your quotation for ' + $('Check RFQ Found').first().json.rfq_reference + '. We have received your submission and will review it shortly.</p><p>Best regards,<br>Procurement Team<br>Sarooj Construction Company</p>' }}",
+          "options": {}
+        },
+        "id": "72d97629-ed74-409d-94d7-83ae39599636",
+        "name": "Acknowledge Vendor M",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2,
+        "position": [
+          4960,
+          736
+        ],
+        "webhookId": "e7bf40a8-e20a-41ec-a5cc-409e9ca7a45a",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "DeLrpWhS3LyOKQjn",
+            "name": "sarooj procurement gmail"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sendTo": "younus@zavia-ai.com",
+          "subject": "={{ '[TEST] [RFQ Response] Bid received for ' + $('Check RFQ Found').first().json.rfq_reference }}",
+          "message": "={{ '<p>A vendor has submitted a bid for ' + $('Check RFQ Found').first().json.rfq_reference + ' (' + $('Check RFQ Found').first().json.title + ').</p><p>AI extracted ' + ($('Calculate Totals').first().json.bid_items || []).length + ' item prices. Total (OMR): ' + $('Calculate Totals').first().json.total_inc_vat_omr + '. Confidence: ' + $('Calculate Totals').first().json.extracted.overall_confidence + '.</p><p>Review at: https://sarooj-vendor-hub.vercel.app/rfq/' + $('Check RFQ Found').first().json.rfq_id + '</p>' }}",
+          "options": {}
+        },
+        "id": "7d79e643-540a-496b-bb1d-a649ac00f7fa",
+        "name": "Notify Rabia M",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2,
+        "position": [
+          5184,
+          736
+        ],
+        "webhookId": "0e0bde3a-319e-43a9-9f66-dc7da9578341",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "DeLrpWhS3LyOKQjn",
+            "name": "sarooj procurement gmail"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "markAsRead",
+          "messageId": "={{ $('Extract Email Fields').first().json.msg_id }}"
+        },
+        "id": "1f6fd4c9-1668-4036-adb8-f683574d7072",
+        "name": "Mark Read M",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2,
+        "position": [
+          5408,
+          1160
+        ],
+        "webhookId": "a3acb0a9-5a22-4fbe-afa9-9ed72b0d7d0f",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "DeLrpWhS3LyOKQjn",
+            "name": "sarooj procurement gmail"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "resource": "folder",
+          "name": "={{ $('Parse Classification').first().json.vendor_email.split('@')[0] + ' — Response' }}",
+          "driveId": {
+            "__rl": true,
+            "value": "myDrive",
+            "mode": "list"
+          },
+          "folderId": {
+            "__rl": true,
+            "value": "={{ $('Check RFQ Found').first().json.drive_folder_id || '15eFZn4gFpI4XmGc0oKlZv0rF_Qqt59Kt' }}",
+            "mode": "id"
+          },
+          "options": {}
+        },
+        "id": "ee590818-f1a7-4608-99f2-2f177c36ad6e",
+        "name": "Create Response Subfolder",
+        "type": "n8n-nodes-base.googleDrive",
+        "typeVersion": 3,
+        "position": [
+          3488,
+          1136
+        ],
+        "credentials": {
+          "googleDriveOAuth2Api": {
+            "id": "5zccNVQQi5vGfW2R",
+            "name": "Google Drive Procurement"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "= Classify each response attachment filename into one of: priced_boq, technical_submission, covering_letter, other. Return ONLY a JSON array, e.g. [{\"filename\":\"example.pdf\",\"type\":\"priced_boq\"}].",
+          "options": {
+            "systemMessage": "You classify document filenames for procurement. Return ONLY a JSON array, no explanation."
+          }
+        },
+        "id": "77ffac5f-cc06-4835-80da-8cb5ae5034c5",
+        "name": "AI Classify Attachments",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 3.1,
+        "position": [
+          3712,
+          1032
+        ]
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "value": "gpt-4o-mini",
+            "mode": "list",
+            "cachedResultName": "gpt-4o-mini"
+          },
+          "builtInTools": {},
+          "options": {
+            "temperature": 0.1
+          }
+        },
+        "id": "7b2616e8-95ed-412d-bb03-32795ebb00c6",
+        "name": "Chat Model Attachments",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.3,
+        "position": [
+          3784,
+          1256
+        ],
+        "credentials": {
+          "openAiApi": {
+            "id": "PpiTCPKVnei6pTtZ",
+            "name": "OpenAI Account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "PATCH",
+          "url": "https://fimfybfgjrbkcylmyekz.supabase.co/rest/v1/rfq_vendors",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "id",
+                "value": "={{ `eq.${$('Check Vendor Found').first().json.id}` }}"
+              }
+            ]
+          },
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpbWZ5YmZnanJia2N5bG15ZWt6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTk1MjQsImV4cCI6MjA5NDY5NTUyNH0.F85OZSHUJAaHFmg1FlPfMfUrDMK4f_6WslRLo_5Wv0Q"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "scc_procurement"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=representation"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ response_received: true, response_at: new Date().toISOString(), status: 'responded', response_drive_url: 'https://drive.google.com/drive/folders/' + $('Create Response Subfolder').first().json.id }) }}",
+          "options": {}
+        },
+        "id": "77b13028-b646-49cf-8580-918cf6346760",
+        "name": "PATCH Vendor Responded S",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          4064,
+          1136
+        ]
+      },
+      {
+        "parameters": {
+          "sendTo": "={{ $('Check Vendor Found').first().json.email_to }}",
+          "subject": "={{ 'Thank you — ' + $('Check RFQ Found').first().json.rfq_reference + ' Submission Received' }}",
+          "message": "={{ '<p>Dear ' + ($('Check Vendor Found').first().json.contact_person || 'Procurement Manager') + ',</p><p>Thank you for your submission for ' + $('Check RFQ Found').first().json.rfq_reference + '. Your documents have been received and are under review.</p><p>Best regards,<br>Procurement Team<br>Sarooj Construction Company</p>' }}",
+          "options": {}
+        },
+        "id": "26eb652b-0ec3-43da-9ebb-04241081e857",
+        "name": "Acknowledge Vendor S",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2,
+        "position": [
+          4288,
+          1136
+        ],
+        "webhookId": "da45ef82-3fcb-4fc4-9288-72f060af02f4",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "DeLrpWhS3LyOKQjn",
+            "name": "sarooj procurement gmail"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "sendTo": "younus@zavia-ai.com",
+          "subject": "={{ '[TEST] [Subcontract Response] Submission for ' + $('Check RFQ Found').first().json.rfq_reference }}",
+          "message": "={{ '<p>Vendor ' + $('Parse Classification').first().json.vendor_email + ' submitted documents for ' + $('Check RFQ Found').first().json.rfq_reference + '.</p><p>Documents filed to: https://drive.google.com/drive/folders/' + $('Create Response Subfolder').first().json.id + '</p>' }}",
+          "options": {}
+        },
+        "id": "9b8140c2-2a17-4077-8cf6-47dc2545f396",
+        "name": "Notify Rabia S",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2,
+        "position": [
+          4512,
+          1136
+        ],
+        "webhookId": "2e39eaf3-4880-41fb-8dbe-d607dd23f08f",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "DeLrpWhS3LyOKQjn",
+            "name": "sarooj procurement gmail"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "markAsRead",
+          "messageId": "={{ $('Extract Email Fields').first().json.msg_id }}"
+        },
+        "id": "be967adf-5307-4d2c-b989-4d103d6db233",
+        "name": "Mark Read S",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2,
+        "position": [
+          4736,
+          1136
+        ],
+        "webhookId": "05801b3e-2efe-4323-870b-5be43af7710a",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "DeLrpWhS3LyOKQjn",
+            "name": "sarooj procurement gmail"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "scc-wf10-test",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "id": "wf10-test-webhook-001",
+        "name": "Test Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          524
+        ],
+        "webhookId": "scc-wf10-test"
+      },
+      {
+        "parameters": {
+          "operation": "get",
+          "messageId": "={{ $json.msg_id }}",
+          "simple": false
+        },
+        "id": "wf10-get-email-001",
+        "name": "Get Email By ID",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2,
+        "position": [
+          448,
+          524
+        ],
+        "webhookId": "cc079a57-f5de-40d9-9887-fa8b5eed8cfb",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "DeLrpWhS3LyOKQjn",
+            "name": "sarooj procurement gmail"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "id": "wf10-loop-emails-001",
+        "name": "Loop Emails",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          672,
+          620
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const b = $input.first().json.body || $input.first().json;\nconst ids = b.msg_ids || (b.msg_id ? [b.msg_id] : []);\nreturn ids.map(id => ({ json: { msg_id: id } }));"
+        },
+        "id": "wf10-split-ids-001",
+        "name": "Split IDs",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          524
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const subfolderId = $('Create Response Subfolder').first().json.id;\nconst items = $('Loop Emails').all();\nconst out=[];\nfor (const it of items){ const bin=it.binary||{};\n  for (const key of Object.keys(bin)){ const b=bin[key];\n    out.push({ json:{ filename: b.fileName || key, subfolder_id: subfolderId }, binary:{ data: b } }); } }\nreturn out;"
+        },
+        "id": "collectatt",
+        "name": "Collect Attachments",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3776,
+          1432
+        ]
+      },
+      {
+        "parameters": {
+          "name": "={{ $json.filename }}",
+          "driveId": {
+            "__rl": true,
+            "value": "myDrive",
+            "mode": "list"
+          },
+          "folderId": {
+            "__rl": true,
+            "value": "={{ $json.subfolder_id }}",
+            "mode": "id"
+          },
+          "options": {}
+        },
+        "id": "saveatt",
+        "name": "Save Attachment to Drive",
+        "type": "n8n-nodes-base.googleDrive",
+        "typeVersion": 3,
+        "position": [
+          4064,
+          1432
+        ],
+        "alwaysOutputData": true,
+        "credentials": {
+          "googleDriveOAuth2Api": {
+            "id": "5zccNVQQi5vGfW2R",
+            "name": "Google Drive Procurement"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Gmail Trigger": {
+        "main": [
+          [
+            {
+              "node": "Loop Emails",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extract Email Fields": {
+        "main": [
+          [
+            {
+              "node": "AI Classify Email",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Classify Email": {
+        "main": [
+          [
+            {
+              "node": "Parse Classification",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Chat Model Classify": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Classify Email",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse Classification": {
+        "main": [
+          [
+            {
+              "node": "Is RFQ Response?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is RFQ Response?": {
+        "main": [
+          [
+            {
+              "node": "Fetch RFQ by Reference",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Mark Not RFQ Read",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch RFQ by Reference": {
+        "main": [
+          [
+            {
+              "node": "Check RFQ Found",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check RFQ Found": {
+        "main": [
+          [
+            {
+              "node": "RFQ Found?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "RFQ Found?": {
+        "main": [
+          [
+            {
+              "node": "Fetch RFQ Vendor",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Notify Rabia RFQ Not Found",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Notify Rabia RFQ Not Found": {
+        "main": [
+          [
+            {
+              "node": "Mark RFQ NotFound Read",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch RFQ Vendor": {
+        "main": [
+          [
+            {
+              "node": "Check Vendor Found",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Vendor Found": {
+        "main": [
+          [
+            {
+              "node": "Vendor Found?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Vendor Found?": {
+        "main": [
+          [
+            {
+              "node": "Is Materials RFQ?",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Notify Rabia Vendor Not Found",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Notify Rabia Vendor Not Found": {
+        "main": [
+          [
+            {
+              "node": "Mark Vendor NotFound Read",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is Materials RFQ?": {
+        "main": [
+          [
+            {
+              "node": "Fetch RFQ Items",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Create Response Subfolder",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch RFQ Items": {
+        "main": [
+          [
+            {
+              "node": "AI Extract Bid Data",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Extract Bid Data": {
+        "main": [
+          [
+            {
+              "node": "Calculate Totals",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Chat Model Extract": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Extract Bid Data",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Calculate Totals": {
+        "main": [
+          [
+            {
+              "node": "POST Bid",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "POST Bid": {
+        "main": [
+          [
+            {
+              "node": "POST Bid Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "POST Bid Items": {
+        "main": [
+          [
+            {
+              "node": "PATCH Vendor Responded M",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PATCH Vendor Responded M": {
+        "main": [
+          [
+            {
+              "node": "Acknowledge Vendor M",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Acknowledge Vendor M": {
+        "main": [
+          [
+            {
+              "node": "Notify Rabia M",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Notify Rabia M": {
+        "main": [
+          [
+            {
+              "node": "Mark Read M",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create Response Subfolder": {
+        "main": [
+          [
+            {
+              "node": "AI Classify Attachments",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Collect Attachments",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Classify Attachments": {
+        "main": [
+          [
+            {
+              "node": "PATCH Vendor Responded S",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Chat Model Attachments": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Classify Attachments",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PATCH Vendor Responded S": {
+        "main": [
+          [
+            {
+              "node": "Acknowledge Vendor S",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Acknowledge Vendor S": {
+        "main": [
+          [
+            {
+              "node": "Notify Rabia S",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Notify Rabia S": {
+        "main": [
+          [
+            {
+              "node": "Mark Read S",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Test Webhook": {
+        "main": [
+          [
+            {
+              "node": "Split IDs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get Email By ID": {
+        "main": [
+          [
+            {
+              "node": "Loop Emails",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop Emails": {
+        "main": [
+          [],
+          [
+            {
+              "node": "Extract Email Fields",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mark Not RFQ Read": {
+        "main": [
+          [
+            {
+              "node": "Loop Emails",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mark RFQ NotFound Read": {
+        "main": [
+          [
+            {
+              "node": "Loop Emails",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mark Vendor NotFound Read": {
+        "main": [
+          [
+            {
+              "node": "Loop Emails",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mark Read M": {
+        "main": [
+          [
+            {
+              "node": "Loop Emails",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mark Read S": {
+        "main": [
+          [
+            {
+              "node": "Loop Emails",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Split IDs": {
+        "main": [
+          [
+            {
+              "node": "Get Email By ID",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Collect Attachments": {
+        "main": [
+          [
+            {
+              "node": "Save Attachment to Drive",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Younus Shafi",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-06-20T13:05:53.400Z",
+        "id": 692,
+        "workflowId": "EsLoQthHxlRBzA1E",
+        "versionId": "a3edd1c6-d317-4fb7-8523-2c178aa39176",
+        "event": "activated",
+        "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7"
+      },
+      {
+        "createdAt": "2026-06-20T13:05:54.946Z",
+        "id": 694,
+        "workflowId": "EsLoQthHxlRBzA1E",
+        "versionId": "a3edd1c6-d317-4fb7-8523-2c178aa39176",
+        "event": "activated",
+        "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7"
+      },
+      {
+        "createdAt": "2026-06-20T13:05:59.401Z",
+        "id": 695,
+        "workflowId": "EsLoQthHxlRBzA1E",
+        "versionId": "a3edd1c6-d317-4fb7-8523-2c178aa39176",
+        "event": "activated",
+        "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7"
+      },
+      {
+        "createdAt": "2026-06-20T13:06:01.403Z",
+        "id": 697,
+        "workflowId": "EsLoQthHxlRBzA1E",
+        "versionId": "a3edd1c6-d317-4fb7-8523-2c178aa39176",
+        "event": "activated",
+        "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7"
+      },
+      {
+        "createdAt": "2026-06-20T13:05:54.166Z",
+        "id": 693,
+        "workflowId": "EsLoQthHxlRBzA1E",
+        "versionId": "a3edd1c6-d317-4fb7-8523-2c178aa39176",
+        "event": "deactivated",
+        "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7"
+      },
+      {
+        "createdAt": "2026-06-20T13:06:00.212Z",
+        "id": 696,
+        "workflowId": "EsLoQthHxlRBzA1E",
+        "versionId": "a3edd1c6-d317-4fb7-8523-2c178aa39176",
+        "event": "deactivated",
+        "userId": "0aa0680b-0420-48ef-8c58-f6b1041c07b7"
+      }
+    ]
+  }
+}

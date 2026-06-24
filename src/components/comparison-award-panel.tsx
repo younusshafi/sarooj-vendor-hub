@@ -213,6 +213,7 @@ export function ComparisonAwardPanel({
         equalization to a vendor’s line to budget for an exclusion noted in their remark; award each
         line to a vendor (default = lowest equalized).
         {COMPARISON_EVAL_STUBBED && " — DEMO: not yet persisted to backend."}
+        <span className="block">* All amounts in OMR, shown to 3 decimals (baisa).</span>
       </p>
 
       <div className="overflow-x-auto">

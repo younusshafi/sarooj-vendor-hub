@@ -121,10 +121,13 @@ function BidPage() {
       subtotal += rate * qty;
       priced += 1;
     }
+    // Full precision through the subtotal; round only the finals to 3 dp (OMR/baisa).
+    // Total ties exactly to subtotal + VAT — matches the server.
+    const r3 = (n: number) => Math.round((n + Number.EPSILON) * 1000) / 1000;
     const exclusive = header.vat_treatment === "exclusive";
-    const subEx = exclusive ? subtotal : subtotal / 1.05;
-    const vat = exclusive ? subtotal * 0.05 : subtotal - subEx;
-    const total = exclusive ? subtotal + vat : subtotal;
+    const subEx = r3(exclusive ? subtotal : subtotal / 1.05);
+    const vat = r3(subEx * 0.05);
+    const total = r3(subEx + vat);
     return { subEx, vat, total, priced };
   }, [items, rows, header.vat_treatment]);
 
@@ -338,6 +341,9 @@ function BidPage() {
                 <div className="text-[12px] text-muted-foreground">
                   {totals.priced} of {items.length} lines quoted · totals are indicative; finalised
                   on submit.
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  * All amounts in OMR, shown to 3 decimals (baisa).
                 </div>
               </div>
             </SectionCard>

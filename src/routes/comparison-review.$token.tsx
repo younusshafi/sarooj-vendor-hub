@@ -197,6 +197,9 @@ function ReviewPage() {
                   <div className="text-xl font-bold" style={{ color: "#1A3A5C" }}>
                     {fmt(view.grand)} OMR
                   </div>
+                  <div className="mt-1 text-[11px] text-muted-foreground">
+                    * Amounts in OMR, 3 decimals (baisa)
+                  </div>
                 </div>
               </div>
 
