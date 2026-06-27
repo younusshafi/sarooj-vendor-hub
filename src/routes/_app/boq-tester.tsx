@@ -47,6 +47,15 @@ function pad(cells: string[], n: number): string[] {
   return out;
 }
 
+// A source "price" worth warning about is an actual NUMBER (e.g. "32,000.00"),
+// not a text annotation like "Rate Only" — which is a legitimate BOQ instruction
+// the vendor should still see. Only numeric values get flagged for blanking.
+function looksLikePrice(s: string): boolean {
+  if (!/\d/.test(s)) return false;
+  const cleaned = s.replace(/[^\d.]/g, "");
+  return cleaned !== "" && !Number.isNaN(parseFloat(cleaned));
+}
+
 function BoqTesterPage() {
   const [serviceUrl, setUrl] = useState(getBoqServiceUrl());
   const [health, setHealth] = useState<{ ok: boolean; keySet: boolean } | null>(null);
@@ -150,7 +159,7 @@ function BoqTesterPage() {
     edit !== null &&
     priceCols.length > 0 &&
     edit.rows.some(
-      (r) => r.role === "ITEM" && priceCols.some((ci) => (r.cells[ci] || "").trim() !== ""),
+      (r) => r.role === "ITEM" && priceCols.some((ci) => looksLikePrice(r.cells[ci] || "")),
     );
 
   const itemCount = edit ? edit.rows.filter((r) => r.role === "ITEM").length : 0;
