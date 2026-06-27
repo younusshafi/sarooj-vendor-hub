@@ -26,7 +26,8 @@ export const Route = createFileRoute("/_app/boq-tester")({
   component: BoqTesterPage,
 });
 
-const PRICE_HINT = /rate|price|amount|total|value/i;
+// Columns whose values are internal or price-bearing and must not reach a vendor.
+const PRICE_HINT = /rate|price|amount|total|value|budget|cost/i;
 
 // Roles that render as full-width bands rather than per-column cells.
 const BAND_ROLES = new Set(["SECTION", "NOTE", "TOTAL"]);
@@ -53,7 +54,9 @@ function pad(cells: string[], n: number): string[] {
 function looksLikePrice(s: string): boolean {
   if (!/\d/.test(s)) return false;
   const cleaned = s.replace(/[^\d.]/g, "");
-  return cleaned !== "" && !Number.isNaN(parseFloat(cleaned));
+  const n = parseFloat(cleaned);
+  // A real leaked price is a non-zero number; "0" / blank amount columns don't count.
+  return cleaned !== "" && !Number.isNaN(n) && n !== 0;
 }
 
 function BoqTesterPage() {
@@ -449,8 +452,8 @@ function BoqTesterPage() {
                         }
                         const cells = pad(row.cells, colCount);
                         const incomplete = row.role === "ITEM" && !!row.incomplete;
-                        // Excel "Description" is column index 1; highlight it when incomplete.
-                        const descIdx = 1;
+                        // Highlight the description column when incomplete (found by name).
+                        const descIdx = edit.columns.findIndex((c) => /desc/i.test(c));
                         return (
                           <tr key={rIdx} className="border-t border-border hover:bg-secondary/30">
                             <td
