@@ -14,7 +14,7 @@ import {
   FileCode,
 } from "lucide-react";
 import {
-  parseBoqPdfRemote,
+  parseBoqRemote,
   checkBoqService,
   getBoqServiceUrl,
   setBoqServiceUrl,
@@ -83,8 +83,9 @@ function BoqTesterPage() {
   }, []);
 
   const processFile = async (f: File) => {
-    if (!f.name.toLowerCase().endsWith(".pdf")) {
-      setError("This tester accepts .pdf only for now (Excel comes later).");
+    const ext = f.name.split(".").pop()?.toLowerCase();
+    if (ext !== "pdf" && ext !== "xlsx") {
+      setError("Upload a .pdf or .xlsx file (legacy .xls is not supported).");
       return;
     }
     setParsing(true);
@@ -93,7 +94,7 @@ function BoqTesterPage() {
     setEdit(null);
     setShowHtml(false);
     try {
-      const data = await parseBoqPdfRemote(f, serviceUrl);
+      const data = await parseBoqRemote(f, serviceUrl);
       setResult(data);
       setEdit({
         rfqRef: data.rfq_ref,
@@ -238,7 +239,7 @@ function BoqTesterPage() {
       {/* Upload */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Upload BOQ (PDF)</CardTitle>
+          <CardTitle className="text-base">Upload BOQ (PDF or Excel)</CardTitle>
         </CardHeader>
         <CardContent>
           <div
@@ -266,7 +267,9 @@ function BoqTesterPage() {
             ) : (
               <>
                 <UploadCloud className="mb-3 h-10 w-10 text-muted-foreground" />
-                <p className="text-sm font-medium text-foreground">Drag &amp; drop a BOQ PDF</p>
+                <p className="text-sm font-medium text-foreground">
+                  Drag &amp; drop a BOQ (PDF or .xlsx)
+                </p>
                 <label className="mt-4 cursor-pointer">
                   <span
                     className="rounded-md px-4 py-2 text-sm font-semibold text-white"
@@ -277,7 +280,7 @@ function BoqTesterPage() {
                   <input
                     ref={inputRef}
                     type="file"
-                    accept=".pdf"
+                    accept=".pdf,.xlsx"
                     className="hidden"
                     onChange={(e) => {
                       const f = e.target.files?.[0];
@@ -445,13 +448,25 @@ function BoqTesterPage() {
                           );
                         }
                         const cells = pad(row.cells, colCount);
+                        const incomplete = row.role === "ITEM" && !!row.incomplete;
+                        // Excel "Description" is column index 1; highlight it when incomplete.
+                        const descIdx = 1;
                         return (
                           <tr key={rIdx} className="border-t border-border hover:bg-secondary/30">
-                            <td className="px-2 py-1 text-center font-mono text-[10px] text-muted-foreground">
-                              {row.role === "ITEM" ? "•" : row.role[0]}
+                            <td
+                              className="px-2 py-1 text-center font-mono text-[10px]"
+                              style={{ color: incomplete ? "#B45309" : "var(--muted-foreground)" }}
+                              title={
+                                incomplete
+                                  ? "Code-only item — description must be completed from the drawings"
+                                  : undefined
+                              }
+                            >
+                              {incomplete ? "!" : row.role === "ITEM" ? "•" : row.role[0]}
                             </td>
                             {cells.map((cell, cIdx) => {
-                              const flagged = cell.includes("?");
+                              const flagged =
+                                cell.includes("?") || (incomplete && cIdx === descIdx);
                               return (
                                 <td key={cIdx} className="px-1 py-0.5">
                                   <input

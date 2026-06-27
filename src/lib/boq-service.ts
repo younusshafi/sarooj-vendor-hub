@@ -17,6 +17,9 @@ export interface ParsedBoqRow {
   row_num: number;
   role: BoqRole | string;
   cells: string[];
+  // Excel path only: a code-only ITEM (e.g. "D4") whose description must be
+  // completed from the drawings before issue.
+  incomplete?: boolean;
 }
 
 export interface ParsedBoqCounts {
@@ -70,11 +73,15 @@ export async function checkBoqService(url: string): Promise<{ ok: boolean; keySe
   }
 }
 
-export async function parseBoqPdfRemote(file: File, url: string): Promise<ParsedBoq> {
+/** Parse a BOQ file — picks the PDF or Excel endpoint by extension. */
+export async function parseBoqRemote(file: File, url: string): Promise<ParsedBoq> {
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  const endpoint = ext === "xlsx" ? "/parse-xlsx" : "/parse-pdf";
+
   const form = new FormData();
   form.append("file", file);
 
-  const res = await fetch(`${base(url)}/parse-pdf`, { method: "POST", body: form });
+  const res = await fetch(`${base(url)}${endpoint}`, { method: "POST", body: form });
 
   // The service returns JSON for both success and handled errors (422/500).
   let data: ParsedBoq;
