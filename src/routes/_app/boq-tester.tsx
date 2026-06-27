@@ -11,7 +11,10 @@ import {
   CheckCircle2,
   XCircle,
   Eye,
+  EyeOff,
   FileCode,
+  Table2,
+  Users,
 } from "lucide-react";
 import {
   parseBoqRemote,
@@ -34,12 +37,23 @@ const BAND_ROLES = new Set(["SECTION", "NOTE", "TOTAL"]);
 // Roles hidden from the editable table (title block + column header).
 const HIDDEN_ROLES = new Set(["HEADER", "COLHEADER"]);
 
+type ViewMode = "table" | "vendor" | "html";
+
 interface EditableState {
   rfqRef: string;
   projectTitle: string;
   scope: string;
   columns: string[];
   rows: ParsedBoqRow[];
+}
+
+// OMR is 3 decimals (baisa).
+function fmtOmr(n: number): string {
+  return n.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+}
+
+function toNum(s: string): number {
+  return parseFloat((s || "").replace(/,/g, "").trim());
 }
 
 function pad(cells: string[], n: number): string[] {
@@ -68,7 +82,12 @@ function BoqTesterPage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ParsedBoq | null>(null);
   const [edit, setEdit] = useState<EditableState | null>(null);
-  const [showHtml, setShowHtml] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("table");
+  // Columns hidden from the vendor (internal/price). Officer can override.
+  const [hiddenCols, setHiddenCols] = useState<Set<number>>(new Set());
+  // Vendor-entered unit rate + remark, keyed by row index (sandbox preview only).
+  const [rates, setRates] = useState<Record<number, string>>({});
+  const [remarks, setRemarks] = useState<Record<number, string>>({});
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -95,19 +114,28 @@ function BoqTesterPage() {
     setError(null);
     setResult(null);
     setEdit(null);
-    setShowHtml(false);
+    setViewMode("table");
+    setRates({});
+    setRemarks({});
     try {
       const data = await parseBoqRemote(f, serviceUrl);
+      const columns = data.columns.length ? data.columns : ["Col 1"];
       setResult(data);
       setEdit({
         rfqRef: data.rfq_ref,
         projectTitle: data.project_title,
         scope: data.scope,
-        columns: data.columns.length ? data.columns : ["Col 1"],
+        columns,
         rows: data.rows
           .filter((r) => !HIDDEN_ROLES.has(r.role))
           .map((r) => ({ ...r, cells: [...r.cells] })),
       });
+      // Default-hide internal/price columns from the vendor (officer can override).
+      const hc = new Set<number>();
+      columns.forEach((c, i) => {
+        if (PRICE_HINT.test(c)) hc.add(i);
+      });
+      setHiddenCols(hc);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Parse failed");
     } finally {
@@ -307,17 +335,31 @@ function BoqTesterPage() {
       {result && edit && (
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle className="text-base">Parsed Result — {result.filename}</CardTitle>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowHtml((s) => !s)}
-                className="gap-2"
-              >
-                {showHtml ? <FileCode className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                {showHtml ? "Show table" : "Preview RFQ document"}
-              </Button>
+              <div className="inline-flex rounded-md border border-border">
+                {(
+                  [
+                    ["table", "Officer table", Table2],
+                    ["vendor", "Vendor view", Users],
+                    ["html", "RFQ document", FileCode],
+                  ] as const
+                ).map(([mode, label, Icon]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setViewMode(mode)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors first:rounded-l-md last:rounded-r-md ${
+                      viewMode === mode
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-card text-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -372,11 +414,20 @@ function BoqTesterPage() {
               </div>
             )}
 
-            {showHtml ? (
+            {viewMode === "html" ? (
               <iframe
                 title="RFQ preview"
                 srcDoc={result.html}
                 className="h-[800px] w-full rounded-md border border-border bg-white"
+              />
+            ) : viewMode === "vendor" ? (
+              <VendorView
+                edit={edit}
+                hiddenCols={hiddenCols}
+                rates={rates}
+                remarks={remarks}
+                onRate={(i, v) => setRates((p) => ({ ...p, [i]: v }))}
+                onRemark={(i, v) => setRemarks((p) => ({ ...p, [i]: v }))}
               />
             ) : (
               <>
@@ -405,11 +456,41 @@ function BoqTesterPage() {
                     <thead className="bg-muted">
                       <tr className="text-left font-semibold uppercase tracking-wider text-muted-foreground">
                         <th className="w-10 px-2 py-2 text-center">#</th>
-                        {edit.columns.map((c, i) => (
-                          <th key={i} className="px-2 py-2">
-                            {c || `Col ${i + 1}`}
-                          </th>
-                        ))}
+                        {edit.columns.map((c, i) => {
+                          const hidden = hiddenCols.has(i);
+                          return (
+                            <th key={i} className="px-2 py-2 align-bottom">
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  title={
+                                    hidden
+                                      ? "Hidden from vendor (internal) — click to show"
+                                      : "Vendor sees this — click to hide"
+                                  }
+                                  onClick={() =>
+                                    setHiddenCols((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(i)) next.delete(i);
+                                      else next.add(i);
+                                      return next;
+                                    })
+                                  }
+                                  className="opacity-60 hover:opacity-100"
+                                >
+                                  {hidden ? (
+                                    <EyeOff className="h-3 w-3" />
+                                  ) : (
+                                    <Eye className="h-3 w-3" />
+                                  )}
+                                </button>
+                                <span className={hidden ? "line-through opacity-50" : ""}>
+                                  {c || `Col ${i + 1}`}
+                                </span>
+                              </div>
+                            </th>
+                          );
+                        })}
                         <th className="w-16 px-2 py-2 text-center">Actions</th>
                       </tr>
                     </thead>
@@ -503,7 +584,8 @@ function BoqTesterPage() {
                     {edit.rows.length} total rows shown
                   </span>
                   <span className="italic">
-                    Amber cells contain &quot;?&quot; — illegible source, verify before issue.
+                    Toggle the eye icons to set what the vendor sees · amber cells contain
+                    &quot;?&quot; (illegible source — verify).
                   </span>
                 </div>
               </>
@@ -511,6 +593,148 @@ function BoqTesterPage() {
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+function VendorView({
+  edit,
+  hiddenCols,
+  rates,
+  remarks,
+  onRate,
+  onRemark,
+}: {
+  edit: EditableState;
+  hiddenCols: Set<number>;
+  rates: Record<number, string>;
+  remarks: Record<number, string>;
+  onRate: (rowIdx: number, v: string) => void;
+  onRemark: (rowIdx: number, v: string) => void;
+}) {
+  const visible = edit.columns.map((c, i) => ({ c, i })).filter(({ i }) => !hiddenCols.has(i));
+  const qtyIdx = edit.columns.findIndex((c) => /qty|quantity/i.test(c));
+  const unitIdx = edit.columns.findIndex((c) => /unit|uom/i.test(c));
+
+  const rowQty = (row: ParsedBoqRow): number | null => {
+    if (qtyIdx >= 0) {
+      const n = toNum(row.cells[qtyIdx] || "");
+      if (!Number.isNaN(n)) return n;
+    }
+    // lump-sum item → quantity 1 so Amount = Rate
+    const unit = unitIdx >= 0 ? (row.cells[unitIdx] || "").toLowerCase() : "";
+    if (/\b(ls|lump|lumpsum|lot|sum|item)\b/.test(unit)) return 1;
+    return null;
+  };
+
+  const amountOf = (rowIdx: number, row: ParsedBoqRow): number | null => {
+    const q = rowQty(row);
+    const r = toNum(rates[rowIdx] || "");
+    if (q === null || Number.isNaN(r)) return null;
+    return q * r;
+  };
+
+  let grand = 0;
+  edit.rows.forEach((row, i) => {
+    if (row.role === "ITEM") {
+      const a = amountOf(i, row);
+      if (a !== null) grand += a;
+    }
+  });
+
+  const totalCols = visible.length + 4; // # + visible + Rate + Amount + Remark
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-md border border-border bg-secondary/40 p-3 text-xs text-muted-foreground">
+        This is what the <strong className="text-foreground">vendor</strong> sees. Internal/price
+        columns are hidden (toggle them on the Officer table). The vendor enters a{" "}
+        <strong className="text-foreground">Unit Rate</strong> only — the line{" "}
+        <strong className="text-foreground">Amount</strong> and the{" "}
+        <strong className="text-foreground">Grand Total</strong> calculate automatically. The{" "}
+        <strong className="text-foreground">Vendor Remark</strong> captures exclusions /
+        clarifications (these feed equalization at comparison).
+      </div>
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <table className="w-full text-xs">
+          <thead className="bg-muted">
+            <tr className="text-left font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="w-10 px-2 py-2 text-center">#</th>
+              {visible.map(({ c, i }) => (
+                <th key={i} className="px-2 py-2">
+                  {c || `Col ${i + 1}`}
+                </th>
+              ))}
+              <th className="w-28 px-2 py-2 text-right">Unit Rate (RO)</th>
+              <th className="w-28 px-2 py-2 text-right">Amount (RO)</th>
+              <th className="px-2 py-2" style={{ minWidth: 160 }}>
+                Vendor Remark
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {edit.rows.map((row, rIdx) => {
+              if (BAND_ROLES.has(row.role)) {
+                const bandText = row.cells.filter((c) => c.trim()).join(" ");
+                const bandStyle =
+                  row.role === "SECTION"
+                    ? { background: "#1B4332", color: "white" }
+                    : row.role === "TOTAL"
+                      ? { background: "#F4F4F4", fontWeight: 600 }
+                      : { background: "#FFF8E8", color: "#5A4A00", fontStyle: "italic" };
+                return (
+                  <tr key={rIdx} className="border-t border-border">
+                    <td colSpan={totalCols} className="px-2 py-1" style={bandStyle}>
+                      {bandText || " "}
+                    </td>
+                  </tr>
+                );
+              }
+              const cells = pad(row.cells, edit.columns.length);
+              const amt = amountOf(rIdx, row);
+              return (
+                <tr key={rIdx} className="border-t border-border">
+                  <td className="px-2 py-1 text-center font-mono text-[10px] text-muted-foreground">
+                    •
+                  </td>
+                  {visible.map(({ i }) => (
+                    <td key={i} className="px-2 py-1">
+                      {cells[i]}
+                    </td>
+                  ))}
+                  <td className="px-1 py-0.5">
+                    <input
+                      inputMode="decimal"
+                      value={rates[rIdx] ?? ""}
+                      onChange={(e) => onRate(rIdx, e.target.value)}
+                      placeholder="0.000"
+                      className="w-full rounded border border-border bg-white px-1.5 py-1 text-right outline-none focus:border-[var(--accent)]"
+                    />
+                  </td>
+                  <td className="px-2 py-1 text-right tabular-nums text-muted-foreground">
+                    {amt === null ? "—" : fmtOmr(amt)}
+                  </td>
+                  <td className="px-1 py-0.5">
+                    <input
+                      value={remarks[rIdx] ?? ""}
+                      onChange={(e) => onRemark(rIdx, e.target.value)}
+                      placeholder="e.g. excludes scaffolding"
+                      className="w-full rounded border border-border bg-white px-1.5 py-1 outline-none focus:border-[var(--accent)]"
+                    />
+                  </td>
+                </tr>
+              );
+            })}
+            <tr className="border-t-2 border-border" style={{ background: "#E0EAE5" }}>
+              <td colSpan={visible.length + 2} className="px-2 py-2 text-right font-semibold">
+                GRAND TOTAL (RO) — excl. VAT
+              </td>
+              <td className="px-2 py-2 text-right font-bold tabular-nums">{fmtOmr(grand)}</td>
+              <td />
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
