@@ -650,7 +650,10 @@ function RfqDocument({ edit, hiddenCols }: { edit: EditableState; hiddenCols: Se
 
   if (submitted) {
     return (
-      <div className="mx-auto max-w-[560px] rounded-xl border border-border bg-card p-8 text-center">
+      <div
+        data-theme="charcoal"
+        className="mx-auto max-w-[560px] rounded-xl border border-border bg-card p-8 text-center"
+      >
         <CheckCircle2 className="mx-auto h-12 w-12 text-[var(--accent)]" />
         <h3 className="mt-4 font-display text-xl text-foreground">Quotation submitted (sandbox)</h3>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -670,12 +673,9 @@ function RfqDocument({ edit, hiddenCols }: { edit: EditableState; hiddenCols: Se
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border-2" style={{ borderColor: "#1B4332" }}>
+    <div data-theme="charcoal" className="overflow-hidden rounded-lg border-2 border-border">
       {/* Document header */}
-      <div
-        className="flex items-center justify-between px-5 py-3 text-white"
-        style={{ background: "#1B4332" }}
-      >
+      <div className="flex items-center justify-between bg-header px-5 py-3 text-header-foreground">
         <div>
           <div className="text-[15px] font-bold tracking-wide">SAROOJ CONSTRUCTION COMPANY</div>
           <div className="text-[11px] opacity-80">Request for Quotation — Subcontract Works</div>
@@ -688,7 +688,7 @@ function RfqDocument({ edit, hiddenCols }: { edit: EditableState; hiddenCols: Se
         </div>
       </div>
 
-      <div className="space-y-5 bg-white p-5">
+      <div className="space-y-5 bg-card p-5">
         <p className="rounded bg-secondary/40 p-2 text-[11px] text-muted-foreground">
           This is the document each vendor receives at their private link. Internal columns are
           hidden; the vendor enters unit rates (amounts &amp; totals auto-calculate), notes
@@ -706,7 +706,7 @@ function RfqDocument({ edit, hiddenCols }: { edit: EditableState; hiddenCols: Se
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-[12px]">
               <thead>
-                <tr style={{ background: "#2D5A40", color: "white" }}>
+                <tr className="bg-primary text-primary-foreground">
                   <th className="px-2 py-1.5 text-left">#</th>
                   {visible.map(({ c, i }) => (
                     <th key={i} className="px-2 py-1.5 text-left">
@@ -724,13 +724,13 @@ function RfqDocument({ edit, hiddenCols }: { edit: EditableState; hiddenCols: Se
                 {edit.rows.map((row, rIdx) => {
                   if (BAND_ROLES.has(row.role)) {
                     const bandText = row.cells.filter((c) => c.trim()).join(" ");
-                    const st =
+                    const bandClass =
                       row.role === "SECTION"
-                        ? { background: "#1B4332", color: "white", fontWeight: 600 }
-                        : { background: "#FFF8E8", color: "#5A4A00", fontStyle: "italic" as const };
+                        ? "bg-primary font-semibold text-primary-foreground"
+                        : "bg-secondary italic text-muted-foreground";
                     return (
                       <tr key={rIdx}>
-                        <td colSpan={totalCols} className="px-2 py-1" style={st}>
+                        <td colSpan={totalCols} className={`px-2 py-1 ${bandClass}`}>
                           {bandText || " "}
                         </td>
                       </tr>
@@ -739,7 +739,7 @@ function RfqDocument({ edit, hiddenCols }: { edit: EditableState; hiddenCols: Se
                   const cells = pad(row.cells, edit.columns.length);
                   const amt = amountOf(rIdx, row);
                   return (
-                    <tr key={rIdx} className="border-b" style={{ borderColor: "#C8DDD7" }}>
+                    <tr key={rIdx} className="border-b border-border">
                       <td className="px-2 py-1 align-top text-muted-foreground">•</td>
                       {visible.map(({ i }) => (
                         <td key={i} className="px-2 py-1 align-top">
@@ -774,7 +774,7 @@ function RfqDocument({ edit, hiddenCols }: { edit: EditableState; hiddenCols: Se
                 })}
               </tbody>
               <tfoot>
-                <tr style={{ background: "#F4F4F4" }}>
+                <tr className="bg-secondary">
                   <td colSpan={visible.length + 2} className="px-2 py-1.5 text-right font-medium">
                     Subtotal (excl. VAT)
                   </td>
@@ -783,7 +783,7 @@ function RfqDocument({ edit, hiddenCols }: { edit: EditableState; hiddenCols: Se
                   </td>
                   <td />
                 </tr>
-                <tr style={{ background: "#F4F4F4" }}>
+                <tr className="bg-secondary">
                   <td
                     colSpan={visible.length + 2}
                     className="px-2 py-1.5 text-right text-muted-foreground"
@@ -793,7 +793,7 @@ function RfqDocument({ edit, hiddenCols }: { edit: EditableState; hiddenCols: Se
                   <td className="px-2 py-1.5 text-right tabular-nums">{fmtOmr(vat)}</td>
                   <td />
                 </tr>
-                <tr style={{ background: "#E0EAE5" }}>
+                <tr className="bg-muted">
                   <td colSpan={visible.length + 2} className="px-2 py-2 text-right font-bold">
                     GRAND TOTAL (incl. VAT)
                   </td>
@@ -910,18 +910,14 @@ function RfqDocument({ edit, hiddenCols }: { edit: EditableState; hiddenCols: Se
           )}
         </DocSection>
 
-        <div
-          className="flex flex-wrap items-center justify-end gap-3 border-t pt-4"
-          style={{ borderColor: "#C8DDD7" }}
-        >
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-4">
           <span className="text-[11px] text-muted-foreground">
             Vendor can revise until the deadline.
           </span>
           <button
             type="button"
             onClick={() => setSubmitted(true)}
-            className="rounded-lg px-6 py-2.5 text-[14px] font-semibold text-white"
-            style={{ background: "#1B4332" }}
+            className="rounded-lg bg-primary px-6 py-2.5 text-[14px] font-semibold text-primary-foreground hover:bg-[var(--primary-hover)]"
           >
             Submit quotation
           </button>
@@ -934,10 +930,7 @@ function RfqDocument({ edit, hiddenCols }: { edit: EditableState; hiddenCols: Se
 function DocSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
-      <div
-        className="mb-2 px-3 py-1.5 text-[12px] font-bold text-white"
-        style={{ background: "#1B4332" }}
-      >
+      <div className="mb-2 bg-primary px-3 py-1.5 text-[12px] font-bold text-primary-foreground">
         {title}
       </div>
       <div className="px-1">{children}</div>
@@ -948,9 +941,7 @@ function DocSection({ title, children }: { title: string; children: ReactNode })
 function DocInfo({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-2">
-      <span className="min-w-[60px] font-semibold" style={{ color: "#1B4332" }}>
-        {label}:
-      </span>
+      <span className="min-w-[60px] font-semibold text-primary">{label}:</span>
       <span className="text-foreground">{value}</span>
     </div>
   );
