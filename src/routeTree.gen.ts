@@ -24,6 +24,7 @@ import { Route as AppPendingRouteImport } from './routes/_app/pending'
 import { Route as AppOutreachRouteImport } from './routes/_app/outreach'
 import { Route as AppInviteRouteImport } from './routes/_app/invite'
 import { Route as AppCategoriesRouteImport } from './routes/_app/categories'
+import { Route as AppBoqTesterRouteImport } from './routes/_app/boq-tester'
 import { Route as AppVendorsIndexRouteImport } from './routes/_app/vendors.index'
 import { Route as AppRfqIndexRouteImport } from './routes/_app/rfq.index'
 import { Route as AppPrsIndexRouteImport } from './routes/_app/prs.index'
@@ -114,6 +115,11 @@ const AppCategoriesRoute = AppCategoriesRouteImport.update({
   path: '/categories',
   getParentRoute: () => AppRoute,
 } as any)
+const AppBoqTesterRoute = AppBoqTesterRouteImport.update({
+  id: '/boq-tester',
+  path: '/boq-tester',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppVendorsIndexRoute = AppVendorsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -196,6 +202,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/boq-tester': typeof AppBoqTesterRoute
   '/categories': typeof AppCategoriesRoute
   '/invite': typeof AppInviteRoute
   '/outreach': typeof AppOutreachRoute
@@ -226,6 +233,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/boq-tester': typeof AppBoqTesterRoute
   '/categories': typeof AppCategoriesRoute
   '/invite': typeof AppInviteRoute
   '/outreach': typeof AppOutreachRoute
@@ -255,6 +263,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_app/boq-tester': typeof AppBoqTesterRoute
   '/_app/categories': typeof AppCategoriesRoute
   '/_app/invite': typeof AppInviteRoute
   '/_app/outreach': typeof AppOutreachRoute
@@ -289,6 +298,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/boq-tester'
     | '/categories'
     | '/invite'
     | '/outreach'
@@ -319,6 +329,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/boq-tester'
     | '/categories'
     | '/invite'
     | '/outreach'
@@ -347,6 +358,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/_app/boq-tester'
     | '/_app/categories'
     | '/_app/invite'
     | '/_app/outreach'
@@ -489,6 +501,13 @@ declare module '@tanstack/react-router' {
       path: '/categories'
       fullPath: '/categories'
       preLoaderRoute: typeof AppCategoriesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/boq-tester': {
+      id: '/_app/boq-tester'
+      path: '/boq-tester'
+      fullPath: '/boq-tester'
+      preLoaderRoute: typeof AppBoqTesterRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/vendors/': {
@@ -668,6 +687,7 @@ const AppVendorsRouteWithChildren = AppVendorsRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppBoqTesterRoute: typeof AppBoqTesterRoute
   AppCategoriesRoute: typeof AppCategoriesRoute
   AppInviteRoute: typeof AppInviteRoute
   AppOutreachRoute: typeof AppOutreachRoute
@@ -680,6 +700,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppBoqTesterRoute: AppBoqTesterRoute,
   AppCategoriesRoute: AppCategoriesRoute,
   AppInviteRoute: AppInviteRoute,
   AppOutreachRoute: AppOutreachRoute,
