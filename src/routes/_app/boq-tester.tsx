@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,9 +12,9 @@ import {
   XCircle,
   Eye,
   EyeOff,
-  FileCode,
+  FileText,
   Table2,
-  Users,
+  Paperclip,
 } from "lucide-react";
 import {
   parseBoqRemote,
@@ -37,7 +37,7 @@ const BAND_ROLES = new Set(["SECTION", "NOTE", "TOTAL"]);
 // Roles hidden from the editable table (title block + column header).
 const HIDDEN_ROLES = new Set(["HEADER", "COLHEADER"]);
 
-type ViewMode = "table" | "vendor" | "html";
+type ViewMode = "table" | "doc";
 
 interface EditableState {
   rfqRef: string;
@@ -85,9 +85,6 @@ function BoqTesterPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   // Columns hidden from the vendor (internal/price). Officer can override.
   const [hiddenCols, setHiddenCols] = useState<Set<number>>(new Set());
-  // Vendor-entered unit rate + remark, keyed by row index (sandbox preview only).
-  const [rates, setRates] = useState<Record<number, string>>({});
-  const [remarks, setRemarks] = useState<Record<number, string>>({});
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -115,8 +112,6 @@ function BoqTesterPage() {
     setResult(null);
     setEdit(null);
     setViewMode("table");
-    setRates({});
-    setRemarks({});
     try {
       const data = await parseBoqRemote(f, serviceUrl);
       const columns = data.columns.length ? data.columns : ["Col 1"];
@@ -213,7 +208,7 @@ function BoqTesterPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-[280px]">
+            <div className="min-w-[280px] flex-1">
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
                 Service URL
               </label>
@@ -340,9 +335,8 @@ function BoqTesterPage() {
               <div className="inline-flex rounded-md border border-border">
                 {(
                   [
-                    ["table", "Officer table", Table2],
-                    ["vendor", "Vendor view", Users],
-                    ["html", "RFQ document", FileCode],
+                    ["table", "RFQ draft (officer)", Table2],
+                    ["doc", "RFQ document (vendor)", FileText],
                   ] as const
                 ).map(([mode, label, Icon]) => (
                   <button
@@ -408,27 +402,14 @@ function BoqTesterPage() {
                 </div>
                 <p className="mt-1">
                   Column(s) {priceCols.map((i) => `"${edit.columns[i]}"`).join(", ")} hold values
-                  from the original document. These must be cleared before this RFQ goes to vendors
-                  (auto-blanking will be added later).
+                  from the original document. These are hidden from the vendor (RFQ document) but
+                  must be blanked before this RFQ is issued (auto-blanking added later).
                 </p>
               </div>
             )}
 
-            {viewMode === "html" ? (
-              <iframe
-                title="RFQ preview"
-                srcDoc={result.html}
-                className="h-[800px] w-full rounded-md border border-border bg-white"
-              />
-            ) : viewMode === "vendor" ? (
-              <VendorView
-                edit={edit}
-                hiddenCols={hiddenCols}
-                rates={rates}
-                remarks={remarks}
-                onRate={(i, v) => setRates((p) => ({ ...p, [i]: v }))}
-                onRemark={(i, v) => setRemarks((p) => ({ ...p, [i]: v }))}
-              />
+            {viewMode === "doc" ? (
+              <RfqDocument edit={edit} hiddenCols={hiddenCols} />
             ) : (
               <>
                 {/* Editable project info */}
@@ -597,21 +578,39 @@ function BoqTesterPage() {
   );
 }
 
-function VendorView({
-  edit,
-  hiddenCols,
-  rates,
-  remarks,
-  onRate,
-  onRemark,
-}: {
-  edit: EditableState;
-  hiddenCols: Set<number>;
-  rates: Record<number, string>;
-  remarks: Record<number, string>;
-  onRate: (rowIdx: number, v: string) => void;
-  onRemark: (rowIdx: number, v: string) => void;
-}) {
+const docInput =
+  "w-full rounded-md border border-input bg-white px-3 py-2 text-[13px] outline-none focus:border-[var(--accent)]";
+const RATE3 = /^\d*(\.\d{0,3})?$/;
+const INT = /^\d*$/;
+const r3 = (n: number) => Math.round((n + Number.EPSILON) * 1000) / 1000;
+
+interface CommercialTerms {
+  quotationRef: string;
+  vatTreatment: "exclusive" | "inclusive";
+  paymentTerms: string;
+  validityDays: string;
+  subcontractPeriod: string;
+  exclusions: string;
+  notes: string;
+}
+
+// The vendor-facing RFQ document: rich, complete, fillable. Internal columns hidden.
+function RfqDocument({ edit, hiddenCols }: { edit: EditableState; hiddenCols: Set<number> }) {
+  const [rates, setRates] = useState<Record<number, string>>({});
+  const [remarks, setRemarks] = useState<Record<number, string>>({});
+  const [attachments, setAttachments] = useState<string[]>([]);
+  const [submitted, setSubmitted] = useState(false);
+  const [terms, setTerms] = useState<CommercialTerms>({
+    quotationRef: "",
+    vatTreatment: "exclusive",
+    paymentTerms: "",
+    validityDays: "",
+    subcontractPeriod: "",
+    exclusions: "",
+    notes: "",
+  });
+  const setC = (patch: Partial<CommercialTerms>) => setTerms((p) => ({ ...p, ...patch }));
+
   const visible = edit.columns.map((c, i) => ({ c, i })).filter(({ i }) => !hiddenCols.has(i));
   const qtyIdx = edit.columns.findIndex((c) => /qty|quantity/i.test(c));
   const unitIdx = edit.columns.findIndex((c) => /unit|uom/i.test(c));
@@ -621,12 +620,10 @@ function VendorView({
       const n = toNum(row.cells[qtyIdx] || "");
       if (!Number.isNaN(n)) return n;
     }
-    // lump-sum item → quantity 1 so Amount = Rate
     const unit = unitIdx >= 0 ? (row.cells[unitIdx] || "").toLowerCase() : "";
-    if (/\b(ls|lump|lumpsum|lot|sum|item)\b/.test(unit)) return 1;
+    if (/\b(ls|lump|lumpsum|lot|sum|item)\b/.test(unit)) return 1; // lump-sum → Amount = Rate
     return null;
   };
-
   const amountOf = (rowIdx: number, row: ParsedBoqRow): number | null => {
     const q = rowQty(row);
     const r = toNum(rates[rowIdx] || "");
@@ -634,107 +631,336 @@ function VendorView({
     return q * r;
   };
 
-  let grand = 0;
+  let subtotal = 0;
+  let priced = 0;
+  let itemTotal = 0;
   edit.rows.forEach((row, i) => {
-    if (row.role === "ITEM") {
-      const a = amountOf(i, row);
-      if (a !== null) grand += a;
+    if (row.role !== "ITEM") return;
+    itemTotal += 1;
+    const a = amountOf(i, row);
+    if (a !== null) {
+      subtotal += a;
+      priced += 1;
     }
   });
+  const subEx = r3(terms.vatTreatment === "exclusive" ? subtotal : subtotal / 1.05);
+  const vat = r3(subEx * 0.05);
+  const grand = r3(subEx + vat);
+  const totalCols = visible.length + 4;
 
-  const totalCols = visible.length + 4; // # + visible + Rate + Amount + Remark
+  if (submitted) {
+    return (
+      <div className="mx-auto max-w-[560px] rounded-xl border border-border bg-card p-8 text-center">
+        <CheckCircle2 className="mx-auto h-12 w-12 text-[var(--accent)]" />
+        <h3 className="mt-4 font-display text-xl text-foreground">Quotation submitted (sandbox)</h3>
+        <p className="mt-2 text-sm text-muted-foreground">
+          In the live flow this writes the vendor&apos;s submission to the database and locks the
+          link until the deadline. {priced} of {itemTotal} lines priced · Grand total{" "}
+          {fmtOmr(grand)} OMR.
+        </p>
+        <button
+          onClick={() => setSubmitted(false)}
+          className="mt-4 text-xs underline"
+          style={{ color: "var(--accent)" }}
+        >
+          Back to document
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-3">
-      <div className="rounded-md border border-border bg-secondary/40 p-3 text-xs text-muted-foreground">
-        This is what the <strong className="text-foreground">vendor</strong> sees. Internal/price
-        columns are hidden (toggle them on the Officer table). The vendor enters a{" "}
-        <strong className="text-foreground">Unit Rate</strong> only — the line{" "}
-        <strong className="text-foreground">Amount</strong> and the{" "}
-        <strong className="text-foreground">Grand Total</strong> calculate automatically. The{" "}
-        <strong className="text-foreground">Vendor Remark</strong> captures exclusions /
-        clarifications (these feed equalization at comparison).
+    <div className="overflow-hidden rounded-lg border-2" style={{ borderColor: "#1B4332" }}>
+      {/* Document header */}
+      <div
+        className="flex items-center justify-between px-5 py-3 text-white"
+        style={{ background: "#1B4332" }}
+      >
+        <div>
+          <div className="text-[15px] font-bold tracking-wide">SAROOJ CONSTRUCTION COMPANY</div>
+          <div className="text-[11px] opacity-80">Request for Quotation — Subcontract Works</div>
+        </div>
+        <div className="text-right text-[11px]">
+          <div>
+            RFQ: <span className="font-semibold">{edit.rfqRef || "[RFQ-REF]"}</span>
+          </div>
+          <div className="opacity-80">Response deadline: [set on issue]</div>
+        </div>
       </div>
-      <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full text-xs">
-          <thead className="bg-muted">
-            <tr className="text-left font-semibold uppercase tracking-wider text-muted-foreground">
-              <th className="w-10 px-2 py-2 text-center">#</th>
-              {visible.map(({ c, i }) => (
-                <th key={i} className="px-2 py-2">
-                  {c || `Col ${i + 1}`}
-                </th>
-              ))}
-              <th className="w-28 px-2 py-2 text-right">Unit Rate (RO)</th>
-              <th className="w-28 px-2 py-2 text-right">Amount (RO)</th>
-              <th className="px-2 py-2" style={{ minWidth: 160 }}>
-                Vendor Remark
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {edit.rows.map((row, rIdx) => {
-              if (BAND_ROLES.has(row.role)) {
-                const bandText = row.cells.filter((c) => c.trim()).join(" ");
-                const bandStyle =
-                  row.role === "SECTION"
-                    ? { background: "#1B4332", color: "white" }
-                    : row.role === "TOTAL"
-                      ? { background: "#F4F4F4", fontWeight: 600 }
-                      : { background: "#FFF8E8", color: "#5A4A00", fontStyle: "italic" };
-                return (
-                  <tr key={rIdx} className="border-t border-border">
-                    <td colSpan={totalCols} className="px-2 py-1" style={bandStyle}>
-                      {bandText || " "}
-                    </td>
-                  </tr>
-                );
-              }
-              const cells = pad(row.cells, edit.columns.length);
-              const amt = amountOf(rIdx, row);
-              return (
-                <tr key={rIdx} className="border-t border-border">
-                  <td className="px-2 py-1 text-center font-mono text-[10px] text-muted-foreground">
-                    •
-                  </td>
-                  {visible.map(({ i }) => (
-                    <td key={i} className="px-2 py-1">
-                      {cells[i]}
-                    </td>
+
+      <div className="space-y-5 bg-white p-5">
+        <p className="rounded bg-secondary/40 p-2 text-[11px] text-muted-foreground">
+          This is the document each vendor receives at their private link. Internal columns are
+          hidden; the vendor enters unit rates (amounts &amp; totals auto-calculate), notes
+          exclusions per line, completes commercial terms, attaches documents, and submits.
+        </p>
+
+        <DocSection title="1. Project Information">
+          <div className="grid grid-cols-1 gap-x-6 gap-y-1 text-[13px] sm:grid-cols-2">
+            <DocInfo label="Project" value={edit.projectTitle || "—"} />
+            <DocInfo label="Scope" value={edit.scope || "—"} />
+          </div>
+        </DocSection>
+
+        <DocSection title="2. Bill of Quantities — enter your unit rates">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-[12px]">
+              <thead>
+                <tr style={{ background: "#2D5A40", color: "white" }}>
+                  <th className="px-2 py-1.5 text-left">#</th>
+                  {visible.map(({ c, i }) => (
+                    <th key={i} className="px-2 py-1.5 text-left">
+                      {c || `Col ${i + 1}`}
+                    </th>
                   ))}
-                  <td className="px-1 py-0.5">
-                    <input
-                      inputMode="decimal"
-                      value={rates[rIdx] ?? ""}
-                      onChange={(e) => onRate(rIdx, e.target.value)}
-                      placeholder="0.000"
-                      className="w-full rounded border border-border bg-white px-1.5 py-1 text-right outline-none focus:border-[var(--accent)]"
-                    />
-                  </td>
-                  <td className="px-2 py-1 text-right tabular-nums text-muted-foreground">
-                    {amt === null ? "—" : fmtOmr(amt)}
-                  </td>
-                  <td className="px-1 py-0.5">
-                    <input
-                      value={remarks[rIdx] ?? ""}
-                      onChange={(e) => onRemark(rIdx, e.target.value)}
-                      placeholder="e.g. excludes scaffolding"
-                      className="w-full rounded border border-border bg-white px-1.5 py-1 outline-none focus:border-[var(--accent)]"
-                    />
-                  </td>
+                  <th className="px-2 py-1.5 text-right">Unit Rate (RO)</th>
+                  <th className="px-2 py-1.5 text-right">Amount (RO)</th>
+                  <th className="px-2 py-1.5 text-left" style={{ minWidth: 150 }}>
+                    Remark / Exclusion
+                  </th>
                 </tr>
-              );
-            })}
-            <tr className="border-t-2 border-border" style={{ background: "#E0EAE5" }}>
-              <td colSpan={visible.length + 2} className="px-2 py-2 text-right font-semibold">
-                GRAND TOTAL (RO) — excl. VAT
-              </td>
-              <td className="px-2 py-2 text-right font-bold tabular-nums">{fmtOmr(grand)}</td>
-              <td />
-            </tr>
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {edit.rows.map((row, rIdx) => {
+                  if (BAND_ROLES.has(row.role)) {
+                    const bandText = row.cells.filter((c) => c.trim()).join(" ");
+                    const st =
+                      row.role === "SECTION"
+                        ? { background: "#1B4332", color: "white", fontWeight: 600 }
+                        : { background: "#FFF8E8", color: "#5A4A00", fontStyle: "italic" as const };
+                    return (
+                      <tr key={rIdx}>
+                        <td colSpan={totalCols} className="px-2 py-1" style={st}>
+                          {bandText || " "}
+                        </td>
+                      </tr>
+                    );
+                  }
+                  const cells = pad(row.cells, edit.columns.length);
+                  const amt = amountOf(rIdx, row);
+                  return (
+                    <tr key={rIdx} className="border-b" style={{ borderColor: "#C8DDD7" }}>
+                      <td className="px-2 py-1 align-top text-muted-foreground">•</td>
+                      {visible.map(({ i }) => (
+                        <td key={i} className="px-2 py-1 align-top">
+                          {cells[i]}
+                        </td>
+                      ))}
+                      <td className="px-1 py-0.5 align-top">
+                        <input
+                          inputMode="decimal"
+                          value={rates[rIdx] ?? ""}
+                          placeholder="0.000"
+                          onChange={(e) =>
+                            RATE3.test(e.target.value) &&
+                            setRates((p) => ({ ...p, [rIdx]: e.target.value }))
+                          }
+                          className="w-24 rounded border border-input bg-white px-1.5 py-1 text-right tabular-nums outline-none focus:border-[var(--accent)]"
+                        />
+                      </td>
+                      <td className="px-2 py-1 text-right align-top tabular-nums text-muted-foreground">
+                        {amt === null ? "—" : fmtOmr(amt)}
+                      </td>
+                      <td className="px-1 py-0.5 align-top">
+                        <input
+                          value={remarks[rIdx] ?? ""}
+                          placeholder="e.g. excludes scaffolding"
+                          onChange={(e) => setRemarks((p) => ({ ...p, [rIdx]: e.target.value }))}
+                          className="w-full min-w-[150px] rounded border border-input bg-white px-1.5 py-1 outline-none focus:border-[var(--accent)]"
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{ background: "#F4F4F4" }}>
+                  <td colSpan={visible.length + 2} className="px-2 py-1.5 text-right font-medium">
+                    Subtotal (excl. VAT)
+                  </td>
+                  <td className="px-2 py-1.5 text-right font-medium tabular-nums">
+                    {fmtOmr(subEx)}
+                  </td>
+                  <td />
+                </tr>
+                <tr style={{ background: "#F4F4F4" }}>
+                  <td
+                    colSpan={visible.length + 2}
+                    className="px-2 py-1.5 text-right text-muted-foreground"
+                  >
+                    VAT @ 5%
+                  </td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">{fmtOmr(vat)}</td>
+                  <td />
+                </tr>
+                <tr style={{ background: "#E0EAE5" }}>
+                  <td colSpan={visible.length + 2} className="px-2 py-2 text-right font-bold">
+                    GRAND TOTAL (incl. VAT)
+                  </td>
+                  <td className="px-2 py-2 text-right font-bold tabular-nums">{fmtOmr(grand)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {priced} of {itemTotal} lines priced · amounts in OMR to 3 decimals (baisa) · totals
+            indicative, finalised on submit.
+          </p>
+        </DocSection>
+
+        <DocSection title="3. Commercial Terms">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <DocField label="VAT treatment">
+              <select
+                value={terms.vatTreatment}
+                onChange={(e) =>
+                  setC({ vatTreatment: e.target.value as "exclusive" | "inclusive" })
+                }
+                className={docInput}
+              >
+                <option value="exclusive">Rates exclusive of VAT</option>
+                <option value="inclusive">Rates inclusive of VAT</option>
+              </select>
+            </DocField>
+            <DocField label="Quotation reference">
+              <input
+                value={terms.quotationRef}
+                onChange={(e) => setC({ quotationRef: e.target.value })}
+                className={docInput}
+              />
+            </DocField>
+            <DocField label="Payment terms">
+              <input
+                value={terms.paymentTerms}
+                onChange={(e) => setC({ paymentTerms: e.target.value })}
+                placeholder="e.g. 30 days, advance %"
+                className={docInput}
+              />
+            </DocField>
+            <DocField label="Quote validity (days)">
+              <input
+                inputMode="numeric"
+                value={terms.validityDays}
+                onChange={(e) => INT.test(e.target.value) && setC({ validityDays: e.target.value })}
+                className={docInput}
+              />
+            </DocField>
+            <DocField label="Proposed subcontract period">
+              <input
+                value={terms.subcontractPeriod}
+                onChange={(e) => setC({ subcontractPeriod: e.target.value })}
+                placeholder="e.g. 12 weeks"
+                className={docInput}
+              />
+            </DocField>
+          </div>
+          <div className="mt-3">
+            <DocField label="Overall exclusions">
+              <textarea
+                rows={2}
+                value={terms.exclusions}
+                onChange={(e) => setC({ exclusions: e.target.value })}
+                placeholder="Anything not covered by this quotation"
+                className={docInput}
+              />
+            </DocField>
+          </div>
+          <div className="mt-3">
+            <DocField label="Key conditions / notes">
+              <textarea
+                rows={2}
+                value={terms.notes}
+                onChange={(e) => setC({ notes: e.target.value })}
+                className={docInput}
+              />
+            </DocField>
+          </div>
+        </DocSection>
+
+        <DocSection title="4. Attachments">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input px-3 py-1.5 text-[12px] hover:bg-secondary">
+            <Paperclip className="h-3.5 w-3.5" /> Add files (method statement, compliance, covering
+            letter…)
+            <input
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                const names = Array.from(e.target.files ?? []).map((f) => f.name);
+                if (names.length) setAttachments((p) => [...p, ...names]);
+              }}
+            />
+          </label>
+          {attachments.length > 0 && (
+            <ul className="mt-2 space-y-1 text-[12px]">
+              {attachments.map((n, i) => (
+                <li key={i} className="flex items-center gap-2">
+                  <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                  {n}
+                  <button
+                    onClick={() => setAttachments((p) => p.filter((_, j) => j !== i))}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DocSection>
+
+        <div
+          className="flex flex-wrap items-center justify-end gap-3 border-t pt-4"
+          style={{ borderColor: "#C8DDD7" }}
+        >
+          <span className="text-[11px] text-muted-foreground">
+            Vendor can revise until the deadline.
+          </span>
+          <button
+            type="button"
+            onClick={() => setSubmitted(true)}
+            className="rounded-lg px-6 py-2.5 text-[14px] font-semibold text-white"
+            style={{ background: "#1B4332" }}
+          >
+            Submit quotation
+          </button>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function DocSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div>
+      <div
+        className="mb-2 px-3 py-1.5 text-[12px] font-bold text-white"
+        style={{ background: "#1B4332" }}
+      >
+        {title}
+      </div>
+      <div className="px-1">{children}</div>
+    </div>
+  );
+}
+
+function DocInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-2">
+      <span className="min-w-[60px] font-semibold" style={{ color: "#1B4332" }}>
+        {label}:
+      </span>
+      <span className="text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function DocField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <label className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</label>
+      {children}
     </div>
   );
 }
