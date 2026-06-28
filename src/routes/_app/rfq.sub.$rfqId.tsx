@@ -25,6 +25,8 @@ import { RfqDispatchPanel } from "@/components/rfq-dispatch-panel";
 import { BidLinksPanel } from "@/components/bid-links-panel";
 import { SrBoqIssuePanel } from "@/components/sr/sr-boq-issue-panel";
 import { SrComparisonPanel } from "@/components/sr/sr-comparison-panel";
+import { StatusStepper } from "@/components/rfq/status-stepper";
+import { deriveSrStage, type RfqStage } from "@/lib/rfq-stage";
 import { BoqUploadStep } from "@/components/frame/BoqUploadStep";
 import { FrameGrid } from "@/components/frame/FrameGrid";
 import { FrameView } from "@/components/frame/FrameView";
@@ -505,6 +507,7 @@ function RfqPreviewPage() {
   // Vendor selection lives here (not in RfqVendorList) so it persists across
   // Overview/Vendors tab switches and is available to the dispatch panel.
   const [selectedVendors, setSelectedVendors] = useState<SelectedVendor[]>([]);
+  const [srStage, setSrStage] = useState<RfqStage>("draft");
 
   // If store has data, use it directly
   useEffect(() => {
@@ -558,6 +561,51 @@ function RfqPreviewPage() {
       setLoading(false);
     })();
   }, [draft, rfqId]);
+
+  // Lifecycle stage for the stepper — derived from the sr_* tables (no persisted stage).
+  // SR has no approval→PO flow yet, so it tops out at "evaluation"; later steps render greyed.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data: boq } = await supabase
+        .from("sr_boq")
+        .select("boq_id")
+        .eq("rfq_id", rfqId)
+        .eq("status", "issued")
+        .order("issued_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      let bidCount = 0;
+      let awardCount = 0;
+      if (boq?.boq_id) {
+        const [{ count: bc }, { count: ac }] = await Promise.all([
+          supabase
+            .from("sr_bid")
+            .select("*", { count: "exact", head: true })
+            .eq("boq_id", boq.boq_id)
+            .eq("is_latest", true),
+          supabase
+            .from("sr_award")
+            .select("*", { count: "exact", head: true })
+            .eq("boq_id", boq.boq_id),
+        ]);
+        bidCount = bc ?? 0;
+        awardCount = ac ?? 0;
+      }
+      if (!alive) return;
+      setSrStage(
+        deriveSrStage({
+          rfqStatus: header?.status ?? null,
+          boqIssued: !!boq?.boq_id,
+          bidCount,
+          awardCount,
+        }),
+      );
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [rfqId, header?.status]);
 
   if (loading) {
     return (
@@ -621,6 +669,10 @@ function RfqPreviewPage() {
             </button>
           )}
         </div>
+      </div>
+
+      <div className="rounded-xl border border-border bg-card px-6 py-5">
+        <StatusStepper current={srStage} />
       </div>
 
       <div className="flex gap-1 border-b border-border">

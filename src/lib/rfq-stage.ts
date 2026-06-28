@@ -108,6 +108,30 @@ export function deriveStage(s: RfqStageSignals): RfqStage {
   return "draft";
 }
 
+/** Signals for the subcontractor (SR) flow — derived from the sr_* tables. */
+export interface SrStageSignals {
+  /** rfqs.status. */
+  rfqStatus: string | null;
+  /** An sr_boq with status 'issued' exists for this RFQ. */
+  boqIssued: boolean;
+  /** Number of latest sr_bid rows. */
+  bidCount: number;
+  /** Number of sr_award rows (any line awarded). */
+  awardCount: number;
+}
+
+/**
+ * Derive the SR stage. SR has no formal approval→PO flow yet, so it tops out at
+ * "evaluation"; the stepper renders Approved / PO Issued as upcoming (greyed) —
+ * honest about what isn't built.
+ */
+export function deriveSrStage(s: SrStageSignals): RfqStage {
+  if (s.awardCount > 0) return "evaluation";
+  if (s.bidCount > 0) return "responses_in";
+  if (s.boqIssued || s.rfqStatus === "issued" || s.rfqStatus === "sent") return "issued";
+  return "draft";
+}
+
 export function stageIndex(stage: RfqStage): number {
   return RFQ_STAGES.indexOf(stage);
 }
