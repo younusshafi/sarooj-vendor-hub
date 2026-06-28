@@ -577,8 +577,9 @@ function RfqPreviewPage() {
         .maybeSingle();
       let bidCount = 0;
       let awardCount = 0;
+      let comparisonStatus: string | null = null;
       if (boq?.boq_id) {
-        const [{ count: bc }, { count: ac }] = await Promise.all([
+        const [{ count: bc }, { count: ac }, { data: cmp }] = await Promise.all([
           supabase
             .from("sr_bid")
             .select("*", { count: "exact", head: true })
@@ -588,9 +589,11 @@ function RfqPreviewPage() {
             .from("sr_award")
             .select("*", { count: "exact", head: true })
             .eq("boq_id", boq.boq_id),
+          supabase.from("sr_comparison").select("status").eq("boq_id", boq.boq_id).maybeSingle(),
         ]);
         bidCount = bc ?? 0;
         awardCount = ac ?? 0;
+        comparisonStatus = (cmp?.status as string | null) ?? null;
       }
       if (!alive) return;
       setSrStage(
@@ -599,6 +602,7 @@ function RfqPreviewPage() {
           boqIssued: !!boq?.boq_id,
           bidCount,
           awardCount,
+          comparisonStatus,
         }),
       );
     })();

@@ -14,6 +14,7 @@ import { Route as RegisterRouteImport } from './routes/register'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as SrComparisonReviewTokenRouteImport } from './routes/sr-comparison-review.$token'
 import { Route as SrBidTokenRouteImport } from './routes/sr-bid.$token'
 import { Route as ComparisonReviewTokenRouteImport } from './routes/comparison-review.$token'
 import { Route as BidTokenRouteImport } from './routes/bid.$token'
@@ -65,6 +66,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppRoute,
+} as any)
+const SrComparisonReviewTokenRoute = SrComparisonReviewTokenRouteImport.update({
+  id: '/sr-comparison-review/$token',
+  path: '/sr-comparison-review/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const SrBidTokenRoute = SrBidTokenRouteImport.update({
   id: '/sr-bid/$token',
@@ -220,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/bid/$token': typeof BidTokenRoute
   '/comparison-review/$token': typeof ComparisonReviewTokenRoute
   '/sr-bid/$token': typeof SrBidTokenRoute
+  '/sr-comparison-review/$token': typeof SrComparisonReviewTokenRoute
   '/prs/$prNumber': typeof AppPrsPrNumberRoute
   '/rfq/$rfqId': typeof AppRfqRfqIdRouteWithChildren
   '/rfq/bids': typeof AppRfqBidsRoute
@@ -249,6 +256,7 @@ export interface FileRoutesByTo {
   '/bid/$token': typeof BidTokenRoute
   '/comparison-review/$token': typeof ComparisonReviewTokenRoute
   '/sr-bid/$token': typeof SrBidTokenRoute
+  '/sr-comparison-review/$token': typeof SrComparisonReviewTokenRoute
   '/': typeof AppIndexRoute
   '/prs/$prNumber': typeof AppPrsPrNumberRoute
   '/rfq/bids': typeof AppRfqBidsRoute
@@ -283,6 +291,7 @@ export interface FileRoutesById {
   '/bid/$token': typeof BidTokenRoute
   '/comparison-review/$token': typeof ComparisonReviewTokenRoute
   '/sr-bid/$token': typeof SrBidTokenRoute
+  '/sr-comparison-review/$token': typeof SrComparisonReviewTokenRoute
   '/_app/': typeof AppIndexRoute
   '/_app/prs/$prNumber': typeof AppPrsPrNumberRoute
   '/_app/rfq/$rfqId': typeof AppRfqRfqIdRouteWithChildren
@@ -319,6 +328,7 @@ export interface FileRouteTypes {
     | '/bid/$token'
     | '/comparison-review/$token'
     | '/sr-bid/$token'
+    | '/sr-comparison-review/$token'
     | '/prs/$prNumber'
     | '/rfq/$rfqId'
     | '/rfq/bids'
@@ -348,6 +358,7 @@ export interface FileRouteTypes {
     | '/bid/$token'
     | '/comparison-review/$token'
     | '/sr-bid/$token'
+    | '/sr-comparison-review/$token'
     | '/'
     | '/prs/$prNumber'
     | '/rfq/bids'
@@ -381,6 +392,7 @@ export interface FileRouteTypes {
     | '/bid/$token'
     | '/comparison-review/$token'
     | '/sr-bid/$token'
+    | '/sr-comparison-review/$token'
     | '/_app/'
     | '/_app/prs/$prNumber'
     | '/_app/rfq/$rfqId'
@@ -407,6 +419,7 @@ export interface RootRouteChildren {
   BidTokenRoute: typeof BidTokenRoute
   ComparisonReviewTokenRoute: typeof ComparisonReviewTokenRoute
   SrBidTokenRoute: typeof SrBidTokenRoute
+  SrComparisonReviewTokenRoute: typeof SrComparisonReviewTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -445,6 +458,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/sr-comparison-review/$token': {
+      id: '/sr-comparison-review/$token'
+      path: '/sr-comparison-review/$token'
+      fullPath: '/sr-comparison-review/$token'
+      preLoaderRoute: typeof SrComparisonReviewTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/sr-bid/$token': {
       id: '/sr-bid/$token'
@@ -742,6 +762,7 @@ const rootRouteChildren: RootRouteChildren = {
   BidTokenRoute: BidTokenRoute,
   ComparisonReviewTokenRoute: ComparisonReviewTokenRoute,
   SrBidTokenRoute: SrBidTokenRoute,
+  SrComparisonReviewTokenRoute: SrComparisonReviewTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

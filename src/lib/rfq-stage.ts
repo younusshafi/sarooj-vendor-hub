@@ -118,15 +118,16 @@ export interface SrStageSignals {
   bidCount: number;
   /** Number of sr_award rows (any line awarded). */
   awardCount: number;
+  /** sr_comparison.status, or null if not yet submitted for approval. */
+  comparisonStatus?: string | null;
 }
 
-/**
- * Derive the SR stage. SR has no formal approval→PO flow yet, so it tops out at
- * "evaluation"; the stepper renders Approved / PO Issued as upcoming (greyed) —
- * honest about what isn't built.
- */
+/** Derive the SR stage from the sr_* signals (now including the approval/PO flow). */
 export function deriveSrStage(s: SrStageSignals): RfqStage {
-  if (s.awardCount > 0) return "evaluation";
+  const cmp = s.comparisonStatus ?? null;
+  if (cmp === "po_issued") return "po_issued";
+  if (cmp === "approved") return "approved";
+  if (s.awardCount > 0 || cmp === "pending_approval" || cmp === "returned") return "evaluation";
   if (s.bidCount > 0) return "responses_in";
   if (s.boqIssued || s.rfqStatus === "issued" || s.rfqStatus === "sent") return "issued";
   return "draft";

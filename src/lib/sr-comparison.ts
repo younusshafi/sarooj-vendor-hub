@@ -296,3 +296,137 @@ export async function srSaveComparison(
     if (error) throw error;
   }
 }
+
+// ── Approval → PO (sr_comparison_* RPCs; mirror of the materials flow) ────────
+
+export type SrApprovalStatus = "draft" | "pending_approval" | "approved" | "returned" | "po_issued";
+
+export interface SrComparisonState {
+  status: SrApprovalStatus;
+  review_token: string | null;
+  prepared_by: string | null;
+  approved_by: string | null;
+  decision_notes: string | null;
+  review_notes: string | null;
+  po_number: string | null;
+  po_issued_by: string | null;
+  po_issued_at: string | null;
+  approved_at: string | null;
+}
+
+/** Read the approval/PO state for a BOQ (null until first submitted). */
+export async function srLoadComparisonState(boqId: string): Promise<SrComparisonState | null> {
+  const { data } = await supabase
+    .from("sr_comparison")
+    .select(
+      "status,review_token,prepared_by,approved_by,decision_notes,review_notes,po_number,po_issued_by,po_issued_at,approved_at",
+    )
+    .eq("boq_id", boqId)
+    .maybeSingle();
+  return (data as SrComparisonState | null) ?? null;
+}
+
+export async function srComparisonSubmit(
+  boqId: string,
+  actor: string | null,
+): Promise<{ ok: boolean; review_token?: string; error?: string }> {
+  const { data, error } = await supabase.rpc("sr_comparison_submit_for_approval", {
+    p_boq_id: boqId,
+    p_actor: actor,
+  });
+  if (error) throw error;
+  return data as { ok: boolean; review_token?: string; error?: string };
+}
+
+export async function srComparisonIssuePo(
+  boqId: string,
+  poNumber: string,
+  actor: string | null,
+): Promise<{ ok: boolean; po_number?: string; error?: string }> {
+  const { data, error } = await supabase.rpc("sr_comparison_issue_po", {
+    p_boq_id: boqId,
+    p_po_number: poNumber,
+    p_actor: actor,
+  });
+  if (error) throw error;
+  return data as { ok: boolean; po_number?: string; error?: string };
+}
+
+export async function srComparisonDecide(
+  token: string,
+  decision: "approve" | "return" | "revoke",
+  notes: string,
+): Promise<{ ok: boolean; decision?: string; error?: string }> {
+  const { data, error } = await supabase.rpc("sr_comparison_decide_by_token", {
+    p_token: token,
+    p_decision: decision,
+    p_notes: notes,
+  });
+  if (error) throw error;
+  return data as { ok: boolean; decision?: string; error?: string };
+}
+
+// ── Approver review payload (Rabia's /sr-comparison-review/<token> link) ──────
+
+export interface SrReviewVendorLine {
+  line_id: string;
+  unit_rate_omr: number | null;
+  amount_omr: number | null;
+  remark: string | null;
+}
+export interface SrReviewVendor {
+  rfq_vendor_id: string;
+  bid_id: string;
+  company_name: string;
+  total_omr: number | null;
+  subtotal_omr: number | null;
+  vat_omr: number | null;
+  payment_terms: string | null;
+  validity_days: number | null;
+  lines: SrReviewVendorLine[];
+}
+export interface SrReviewLine {
+  line_id: string;
+  seq: number;
+  role: string;
+  qty: number | null;
+  cells: string[];
+}
+interface SrReviewFound {
+  found: true;
+  status: SrApprovalStatus;
+  prepared_by: string | null;
+  approved_by: string | null;
+  decision_notes: string | null;
+  review_notes: string | null;
+  rfq: {
+    rfq_id: string;
+    rfq_reference: string;
+    title: string | null;
+    project_name: string | null;
+    scope: string | null;
+  };
+  columns: SrBoqColumn[];
+  lines: SrReviewLine[];
+  vendors: SrReviewVendor[];
+  equalizations: { line_id: string; rfq_vendor_id: string; adjustment_omr: number; note: string }[];
+  awards: {
+    line_id: string;
+    rfq_vendor_id: string;
+    awarded_bid_id: string | null;
+    reason: string;
+  }[];
+}
+export type SrComparisonReview = { found: false } | (SrReviewFound & { descIdx: number });
+
+export async function srComparisonGetByToken(token: string): Promise<SrComparisonReview> {
+  const { data, error } = await supabase.rpc("sr_comparison_get_by_token", { p_token: token });
+  if (error) throw error;
+  const d = data as { found: false } | SrReviewFound;
+  if (!d || !d.found) return { found: false };
+  const columns = (d.columns ?? []) as SrBoqColumn[];
+  const descIdx = columns.findIndex(
+    (c) => c.role === "desc" || /desc|item|work|description/i.test(c.name),
+  );
+  return { ...d, columns, descIdx };
+}
