@@ -263,7 +263,7 @@ function SrBidPage() {
                               <td key={i} className="px-2 py-1.5">
                                 <div
                                   className={`whitespace-pre-wrap break-words ${
-                                    isDesc ? "max-w-[420px]" : "max-w-[180px]"
+                                    isDesc ? "min-w-[460px] max-w-[720px]" : "max-w-[150px]"
                                   }`}
                                 >
                                   {cell}

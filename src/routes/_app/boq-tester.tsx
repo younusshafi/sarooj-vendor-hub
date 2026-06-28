@@ -861,7 +861,7 @@ function RfqDocument({ edit, hiddenCols }: { edit: EditableState; hiddenCols: Se
                         <td key={i} className="px-2 py-1 align-top">
                           <div
                             className={`whitespace-pre-wrap break-words ${
-                              i === descIdx ? "max-w-[420px]" : "max-w-[180px]"
+                              i === descIdx ? "min-w-[460px] max-w-[720px]" : "max-w-[150px]"
                             }`}
                           >
                             {cells[i]}
