@@ -24,6 +24,7 @@ import { RfqEmailEditor } from "@/components/rfq-email-editor";
 import { RfqDispatchPanel } from "@/components/rfq-dispatch-panel";
 import { BidLinksPanel } from "@/components/bid-links-panel";
 import { SrBoqIssuePanel } from "@/components/sr/sr-boq-issue-panel";
+import { SrComparisonPanel } from "@/components/sr/sr-comparison-panel";
 import { BoqUploadStep } from "@/components/frame/BoqUploadStep";
 import { FrameGrid } from "@/components/frame/FrameGrid";
 import { FrameView } from "@/components/frame/FrameView";
@@ -499,7 +500,7 @@ function RfqPreviewPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<
-    "overview" | "vendors" | "documents" | "boq" | "frame"
+    "overview" | "vendors" | "documents" | "boq" | "bids" | "frame"
   >("overview");
   // Vendor selection lives here (not in RfqVendorList) so it persists across
   // Overview/Vendors tab switches and is available to the dispatch panel.
@@ -591,6 +592,7 @@ function RfqPreviewPage() {
     { key: "vendors" as const, label: "Vendors" },
     { key: "documents" as const, label: "Documents" },
     { key: "boq" as const, label: "Issue BOQ" },
+    { key: "bids" as const, label: "Bids & Award" },
     { key: "frame" as const, label: "BoQ Upload" },
   ];
 
@@ -609,14 +611,14 @@ function RfqPreviewPage() {
             {header.status}
           </Badge>
           {header.status !== "draft" && (
-            <Link
-              to="/rfq/$rfqId/comparison"
-              params={{ rfqId }}
+            <button
+              type="button"
+              onClick={() => setActiveTab("bids")}
               className="text-sm font-medium"
               style={{ color: "var(--accent)" }}
             >
               Compare &amp; Award bids →
-            </Link>
+            </button>
           )}
         </div>
       </div>
@@ -707,6 +709,8 @@ function RfqPreviewPage() {
       )}
 
       {activeTab === "boq" && <SrBoqIssuePanel rfqId={rfqId} rfqReference={header.rfq_reference} />}
+
+      {activeTab === "bids" && <SrComparisonPanel rfqId={rfqId} />}
 
       {activeTab === "frame" && (
         <div className="space-y-6">

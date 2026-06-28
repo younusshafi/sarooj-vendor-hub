@@ -75,8 +75,8 @@ New `sr_*` tables in `scc_procurement`, plus 4 token-gated SECURITY DEFINER RPCs
 
 **Active build — finish the BOQ→SR flow**
 1. ~~Officer Issue in real SR page~~ — ✅ done, awaiting user's local test, then push. (Then clean up scratch data.)
-2. **SR comparison sheet** — next biggest piece. Read `sr_bid_line` × `sr_boq_line` skeleton × `sr_bid_equalization`; show vendor submissions side-by-side, apply equalization (exclusion→factor), award (parallel `sr_award` table is acceptable). Reuses the MR comparison concept for flexible columns. Unblocks #3.
-3. **Negotiation reopen UI** — a button wiring the tested `sr_bid_reopen` RPC into the comparison view (re-enables a vendor's link past deadline for negotiation).
+2. ~~SR comparison sheet~~ — ✅ **DONE 2026-06-28 (uncommitted).** `src/lib/sr-comparison.ts` (reads sr_boq + sr_boq_line × latest sr_bid/sr_bid_line + sr_bid_equalization + sr_award; writes equalizations/awards with replace-semantics) + `src/components/sr/sr-comparison-panel.tsx` (commercial summary, per-line equalized matrix w/ lowest-highlight + equalize modal, per-line award + non-lowest reason, PO/award split). Wired as a new **"Bids & Award" tab** on `rfq.sub.$rfqId.tsx` (no new route); fixed the broken "Compare & Award" header link (was pointing at the MR comparison route). tsc+build green, new files lint-clean. NOTE: no formal SR approval→PO step yet (MR-style); SR ends at award+save. Stepper not yet on SR page.
+3. ~~Negotiation reopen UI~~ — ✅ **DONE** as part of #2: per-vendor "Re-open" action in the comparison (modal → `sr_bid_reopen` RPC → keeps the vendor link open until a date).
 4. **Attachments** — wire `sr_bid_attachment` upload via the Drive/n8n path + display on the bid.
 5. **Dispatch** — how vendors receive their `/sr-bid` link (email via n8n, or manual copy for now).
 
