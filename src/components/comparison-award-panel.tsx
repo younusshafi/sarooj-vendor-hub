@@ -7,6 +7,7 @@ import {
   COMPARISON_EVAL_STUBBED,
   type ComparisonEval,
 } from "@/lib/comparison-eval";
+import { fmtOmr as fmt } from "@/lib/omr";
 
 // Loose row types — the comparison route passes Supabase rows as `any`.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -15,8 +16,6 @@ const GREEN_BG = "#E0F2EA";
 const GREEN_FG = "#0D5C3A";
 
 const key = (itemId: string, vendorId: string) => `${itemId}::${vendorId}`;
-const fmt = (n: number) =>
-  n.toLocaleString("en", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
 interface EqEntry {
   equalization_omr: number;

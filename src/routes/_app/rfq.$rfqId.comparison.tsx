@@ -9,6 +9,7 @@ import { exportComparisonSheet } from "@/utils/exportComparison";
 import { ComparisonAwardPanel } from "@/components/comparison-award-panel";
 import { loadComparisonEval } from "@/lib/comparison-eval";
 import { submitForApproval } from "@/lib/comparison-approval";
+import { fmtOmr } from "@/lib/omr";
 
 export const Route = createFileRoute("/_app/rfq/$rfqId/comparison")({
   component: ComparisonViewPage,
@@ -465,9 +466,7 @@ function ComparisonViewPage() {
                               }}
                             >
                               {rate != null ? (
-                                rate.toLocaleString("en", {
-                                  minimumFractionDigits: 3,
-                                })
+                                fmtOmr(rate)
                               ) : (
                                 <span className="italic text-muted-foreground">NQ</span>
                               )}
@@ -485,9 +484,7 @@ function ComparisonViewPage() {
                               }}
                             >
                               {amt != null ? (
-                                amt.toLocaleString("en", {
-                                  minimumFractionDigits: 3,
-                                })
+                                fmtOmr(amt)
                               ) : (
                                 <span className="italic text-muted-foreground">NQ</span>
                               )}
@@ -496,18 +493,10 @@ function ComparisonViewPage() {
                         );
                       })}
                       <td className="px-4 py-3 text-right font-mono text-xs font-semibold">
-                        {minRate != null
-                          ? minRate.toLocaleString("en", {
-                              minimumFractionDigits: 3,
-                            })
-                          : "—"}
+                        {minRate != null ? fmtOmr(minRate) : "—"}
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-xs font-semibold">
-                        {minRate != null
-                          ? (minRate * item.quantity).toLocaleString("en", {
-                              minimumFractionDigits: 3,
-                            })
-                          : "—"}
+                        {minRate != null ? fmtOmr(minRate * item.quantity) : "—"}
                       </td>
                     </tr>
                   );
@@ -543,10 +532,7 @@ function ComparisonViewPage() {
                             color: bold ? "#1A3A5C" : undefined,
                           }}
                         >
-                          OMR{" "}
-                          {(b[key] ?? 0).toLocaleString("en", {
-                            minimumFractionDigits: 3,
-                          })}
+                          OMR {fmtOmr(b[key] ?? 0)}
                         </td>
                       </>
                     ))}

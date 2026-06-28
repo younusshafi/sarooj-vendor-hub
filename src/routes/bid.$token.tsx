@@ -13,6 +13,7 @@ import {
   type BidLineInput,
   type VatTreatment,
 } from "@/lib/bid-link";
+import { fmtOmr as fmt } from "@/lib/omr";
 
 export const Route = createFileRoute("/bid/$token")({
   head: () => ({
@@ -52,10 +53,6 @@ const emptyHeader: BidHeader = {
 
 const RATE_RE = /^\d*(\.\d{0,3})?$/; // up to 3 decimals
 const INT_RE = /^\d*$/;
-
-function fmt(n: number): string {
-  return n.toLocaleString("en", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-}
 
 function BidPage() {
   const { token } = Route.useParams();

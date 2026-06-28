@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase-external/client";
 import { formatDate } from "@/lib/format";
+import { fmtOmr } from "@/lib/omr";
 import { excludeTestBatch, splitRecipients, groupByCategory, wasSent } from "@/lib/rfq-vendors";
 import { BidLinksPanel } from "@/components/bid-links-panel";
 
@@ -333,7 +334,7 @@ function RFQDetailPage() {
                     </td>
                     <td className="px-4 py-3 font-mono">
                       {b.total_inc_vat_omr != null
-                        ? `OMR ${Number(b.total_inc_vat_omr).toLocaleString("en", { minimumFractionDigits: 3 })}`
+                        ? `OMR ${fmtOmr(Number(b.total_inc_vat_omr))}`
                         : "—"}
                     </td>
                     <td className="px-4 py-3">

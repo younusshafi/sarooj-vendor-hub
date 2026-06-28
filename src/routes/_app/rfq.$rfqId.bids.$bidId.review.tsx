@@ -5,6 +5,7 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase-external/client";
 import { useAuth } from "@/integrations/supabase-external/auth";
 import { toast } from "sonner";
+import { fmtOmr } from "@/lib/omr";
 
 export const Route = createFileRoute("/_app/rfq/$rfqId/bids/$bidId/review")({
   component: BidReviewPage,
@@ -451,11 +452,7 @@ function BidReviewPage() {
                           />
                         </td>
                         <td className="px-3 py-2 text-right text-xs font-mono">
-                          {rate > 0
-                            ? lineTotal.toLocaleString("en", {
-                                minimumFractionDigits: 3,
-                              })
-                            : "—"}
+                          {rate > 0 ? fmtOmr(lineTotal) : "—"}
                         </td>
                       </tr>
                     );
@@ -478,25 +475,18 @@ function BidReviewPage() {
             <div className="mt-3 space-y-1 text-right text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Sub Total (ex-VAT)</span>
-                <span className="font-mono">
-                  OMR{" "}
-                  {subtotal.toLocaleString("en", {
-                    minimumFractionDigits: 3,
-                  })}
-                </span>
+                <span className="font-mono">OMR {fmtOmr(subtotal)}</span>
               </div>
               {fields.vat_treatment === "exclusive" && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">VAT (5%)</span>
-                  <span className="font-mono">
-                    OMR {vat.toLocaleString("en", { minimumFractionDigits: 3 })}
-                  </span>
+                  <span className="font-mono">OMR {fmtOmr(vat)}</span>
                 </div>
               )}
               <div className="flex justify-between border-t border-amber-200 pt-1 font-semibold">
                 <span style={{ color: "#7A5200" }}>Total (inc-VAT)</span>
                 <span className="font-mono" style={{ color: "#7A5200" }}>
-                  OMR {total.toLocaleString("en", { minimumFractionDigits: 3 })}
+                  OMR {fmtOmr(total)}
                 </span>
               </div>
             </div>

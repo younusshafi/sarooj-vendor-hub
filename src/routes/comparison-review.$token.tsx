@@ -6,14 +6,12 @@ import {
   decideComparison,
   type ComparisonReviewData,
 } from "@/lib/comparison-approval";
+import { fmtOmr as fmt } from "@/lib/omr";
 
 export const Route = createFileRoute("/comparison-review/$token")({
   head: () => ({ meta: [{ title: "Comparison approval — Sarooj Construction Company" }] }),
   component: ReviewPage,
 });
-
-const fmt = (n: number) =>
-  n.toLocaleString("en", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
 function ReviewPage() {
   const { token } = Route.useParams();
