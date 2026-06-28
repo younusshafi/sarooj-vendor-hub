@@ -12,6 +12,7 @@ import { loadComparisonEval } from "@/lib/comparison-eval";
 import { submitForApproval } from "@/lib/comparison-approval";
 import { fmtOmr } from "@/lib/omr";
 import { ShareableLink } from "@/components/rfq/shareable-link";
+import { sendApprovalEmail, getApproverEmail } from "@/lib/notify";
 
 export const Route = createFileRoute("/_app/rfq/$rfqId/comparison")({
   component: ComparisonViewPage,
@@ -255,7 +256,17 @@ function ComparisonViewPage() {
     try {
       const res = await submitForApproval(comparison.comparison_id, user?.email ?? "");
       if (!res.ok) throw new Error(res.error || "Submit failed");
-      toast.success("Submitted to Rabia for approval");
+      if (res.review_token) {
+        const to = await getApproverEmail();
+        await sendApprovalEmail({
+          to,
+          rfqReference: rfq?.rfq_reference ?? "",
+          title: rfq?.title ?? null,
+          reviewUrl: `${window.location.origin}/comparison-review/${res.review_token}`,
+          preparedBy: user?.email ?? null,
+        });
+      }
+      toast.success("Submitted to Rabia for approval — review link emailed.");
       refetchComparison();
     } catch (err: any) {
       toast.error(err.message || "Submit failed");

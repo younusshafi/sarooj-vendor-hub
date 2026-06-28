@@ -764,7 +764,9 @@ function RfqPreviewPage() {
 
       {activeTab === "boq" && <SrBoqIssuePanel rfqId={rfqId} rfqReference={header.rfq_reference} />}
 
-      {activeTab === "bids" && <SrComparisonPanel rfqId={rfqId} />}
+      {activeTab === "bids" && (
+        <SrComparisonPanel rfqId={rfqId} rfqReference={header.rfq_reference} />
+      )}
 
       {activeTab === "frame" && (
         <div className="space-y-6">

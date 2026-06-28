@@ -22,6 +22,7 @@ import {
   type SrCmpVendor,
   type SrComparisonState,
 } from "@/lib/sr-comparison";
+import { sendApprovalEmail, getApproverEmail } from "@/lib/notify";
 
 const GREEN_BG = "#E0F2EA";
 const GREEN_FG = "#0D5C3A";
@@ -33,7 +34,13 @@ interface EqEntry {
   note: string;
 }
 
-export function SrComparisonPanel({ rfqId }: { rfqId: string }) {
+export function SrComparisonPanel({
+  rfqId,
+  rfqReference,
+}: {
+  rfqId: string;
+  rfqReference?: string;
+}) {
   const { user } = useAuth();
   const [data, setData] = useState<SrComparison | null>(null);
   const [loading, setLoading] = useState(true);
@@ -204,7 +211,17 @@ export function SrComparisonPanel({ rfqId }: { rfqId: string }) {
     try {
       const res = await srComparisonSubmit(data.boq_id, user?.email ?? null);
       if (!res.ok) throw new Error(res.error || "Submit failed");
-      toast.success("Submitted for approval — share the review link below.");
+      if (res.review_token) {
+        const to = await getApproverEmail();
+        await sendApprovalEmail({
+          to,
+          rfqReference: rfqReference ?? data.scope ?? "Subcontract RFQ",
+          title: data.scope ?? null,
+          reviewUrl: `${window.location.origin}/sr-comparison-review/${res.review_token}`,
+          preparedBy: user?.email ?? null,
+        });
+      }
+      toast.success("Submitted for approval — review link emailed (and shown below).");
       await reloadApproval();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Submit failed");
