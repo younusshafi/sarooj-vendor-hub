@@ -185,7 +185,8 @@ States rendered: loading · invalid/expired/used ("Response Recorded") · valid 
 
 ## 7. Validation (client = UX; RPC = authority)
 
-- Money: `numeric ≥ 0`, 3 decimals. `quantity_offered ≥ 0`. `*_days`, `*_percentage` integers ≥ 0.
+- Money: `numeric ≥ 0`, stored to 3 decimals. `quantity_offered ≥ 0`. `*_days`, `*_percentage` integers ≥ 0.
+  (Display trims trailing zeros via `src/lib/omr.ts` `fmtOmr` — see CLAUDE.md "Money".)
 - `vat_treatment ∈ {inclusive, exclusive}`. Currency default `OMR`.
 - Partial quotes allowed (null line = NQ). A submit with zero priced lines is allowed but warned.
 - Deadline: RPC rejects writes when `now > rfqs.deadline`.

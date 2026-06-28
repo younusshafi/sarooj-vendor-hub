@@ -57,8 +57,9 @@ Supabase HTTP nodes use `authentication:none` + hardcoded `apikey`/`Authorizatio
   recipient address is `rfq_vendors.email_to`.
 - **Empty string → null** on writes for non-text columns (rule 5).
 - **Materials flows must not regress** (rule 6).
-- **OMR = 3 decimals (baisa).** VAT rule (implemented everywhere): **compute at full precision, round only the
-  final subtotal/VAT/total to 3 dp; total = subtotal + VAT (ties out).** Display 3 dp. Subtle disclaimer shown.
+- **OMR = up to 3 decimals (baisa).** VAT rule (implemented everywhere): **compute at full precision, round only the
+  final subtotal/VAT/total to 3 dp; total = subtotal + VAT (ties out).** **Display: trim trailing zeros** via the
+  shared `src/lib/omr.ts` `fmtOmr` (230,000 not 230,000.000; 1,158.5 keeps baisa) — see CLAUDE.md "Money". Subtle disclaimer shown.
 - **Deadline is a DATE.** Bid link locks when `current_date > rfqs.deadline`.
 - **DoD gate:** `npx tsc --noEmit` · `npm run lint` · `npm run build` · `node scripts/verify_pr_contracts.mjs`.
   NOTE: `npm run lint` is **already red at baseline** (~75 pre-existing `no-explicit-any`/prettier errors in

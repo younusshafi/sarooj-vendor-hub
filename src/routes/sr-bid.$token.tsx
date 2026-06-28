@@ -9,6 +9,7 @@ import {
   type SrCommercialTerms,
   type SrBidLineInput,
 } from "@/lib/sr-boq";
+import { fmtOmr as fmt } from "@/lib/omr";
 
 export const Route = createFileRoute("/sr-bid/$token")({
   head: () => ({ meta: [{ title: "Submit your quotation — Sarooj Construction Company" }] }),
@@ -18,10 +19,6 @@ export const Route = createFileRoute("/sr-bid/$token")({
 const RATE_RE = /^\d*(\.\d{0,3})?$/;
 const INT_RE = /^\d*$/;
 const r3 = (n: number) => Math.round((n + Number.EPSILON) * 1000) / 1000;
-// OMR up to 3 decimals (baisa); trim meaningless trailing zeros (230000 -> "230,000").
-function fmt(n: number): string {
-  return n.toLocaleString("en", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
-}
 
 interface LineRow {
   rate: string;

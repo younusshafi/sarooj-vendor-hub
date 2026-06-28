@@ -37,7 +37,8 @@ const vat_amount_omr      = round3(subtotal_ex_vat_omr * 0.05);
 const total_inc_vat_omr   = round3(subtotal_ex_vat_omr + vat_amount_omr); // ties out
 ```
 Backup: `WF10_Response_Monitor_EsLoQthHxlRBzA1E_2026-06-24.json`. Same rule applied to the
-bid-form RPC `bid_submit_by_token` and the frontend bid form / comparison display (3 dp).
+bid-form RPC `bid_submit_by_token` and the frontend bid form / comparison display (computed to
+3 dp; displayed via `src/lib/omr.ts` `fmtOmr` which trims trailing zeros — see CLAUDE.md "Money").
 Verified: tie-out holds; a high-qty example showed the old rule drifting 0.278 OMR, now removed.
 
 ## 2026-06-24 — WF6 invite registration URL (defect fix)

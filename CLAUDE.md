@@ -39,6 +39,19 @@ node scripts/verify_pr_contracts.mjs
 
 Generate `src/types/pr.ts` (or repo convention) from these in Stage 0 and import them everywhere — the compiler then enforces the contract and prevents drift.
 
+## Money — OMR amounts (rounding + display)
+
+OMR has up to **3 decimals** (1 rial = 1000 baisa). Two separate concerns:
+
+- **Rounding/calc (unchanged):** compute at **full precision**, round **only** the final
+  subtotal / VAT / total to **3 dp**; `total = subtotal + VAT` (ties out exactly). DB money
+  columns are `numeric(_,3)`.
+- **Display:** show **meaningful decimals only — trim trailing zeros**. `230000` → `230,000`,
+  `1158.5` → `1,158.5`, `1158.535` → `1,158.535`. Use the single shared formatter
+  **`fmtOmr` from `src/lib/omr.ts`** everywhere an OMR amount is shown. **Do not** hand-roll
+  `toLocaleString` with fixed `minimumFractionDigits: 3` — that reintroduces `230,000.000` and
+  drifts between screens. (Materials + subcontractor both route through `fmtOmr`.)
+
 ## Status badge tokens
 
 `--cream:#F4F8F6; --ink:#0D3D2E; --accent:#0D7A5A; --border:#C8DDD7`

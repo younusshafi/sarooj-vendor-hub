@@ -31,6 +31,7 @@ import {
   type ParsedBoq,
   type ParsedBoqRow,
 } from "@/lib/boq-service";
+import { fmtOmr } from "@/lib/omr";
 import { srBoqIssue, type SrBoqColumn, type SrIssueLine } from "@/lib/sr-boq";
 
 export const Route = createFileRoute("/_app/boq-tester")({
@@ -53,12 +54,6 @@ interface EditableState {
   scope: string;
   columns: string[];
   rows: ParsedBoqRow[];
-}
-
-// OMR has up to 3 decimals (baisa). Show meaningful decimals only — trim trailing
-// zeros so 230000 -> "230,000" but 1158.5 -> "1,158.5".
-function fmtOmr(n: number): string {
-  return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 });
 }
 
 function toNum(s: string): number {
