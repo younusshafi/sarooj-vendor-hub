@@ -733,6 +733,7 @@ function RfqDocument({ edit, hiddenCols }: { edit: EditableState; hiddenCols: Se
   const visible = edit.columns.map((c, i) => ({ c, i })).filter(({ i }) => !hiddenCols.has(i));
   const qtyIdx = edit.columns.findIndex((c) => /qty|quantity/i.test(c));
   const unitIdx = edit.columns.findIndex((c) => /unit|uom/i.test(c));
+  const descIdx = edit.columns.findIndex((c) => /desc/i.test(c));
 
   const rowQty = (row: ParsedBoqRow): number | null => {
     if (qtyIdx >= 0) {
@@ -862,7 +863,13 @@ function RfqDocument({ edit, hiddenCols }: { edit: EditableState; hiddenCols: Se
                       <td className="px-2 py-1 align-top text-muted-foreground">•</td>
                       {visible.map(({ i }) => (
                         <td key={i} className="px-2 py-1 align-top">
-                          {cells[i]}
+                          <div
+                            className={`whitespace-pre-wrap break-words ${
+                              i === descIdx ? "max-w-[420px]" : "max-w-[180px]"
+                            }`}
+                          >
+                            {cells[i]}
+                          </div>
                         </td>
                       ))}
                       <td className="px-1 py-0.5 align-top">

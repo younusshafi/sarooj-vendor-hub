@@ -258,11 +258,21 @@ function SrBidPage() {
                       return (
                         <tr key={l.line_id} className="border-b border-border align-top">
                           <td className="px-2 py-1.5 text-muted-foreground">{l.seq}</td>
-                          {l.cells.map((cell, i) => (
-                            <td key={i} className="px-2 py-1.5">
-                              {cell}
-                            </td>
-                          ))}
+                          {l.cells.map((cell, i) => {
+                            const isDesc =
+                              columns[i]?.role === "desc" || /desc/i.test(columns[i]?.name ?? "");
+                            return (
+                              <td key={i} className="px-2 py-1.5">
+                                <div
+                                  className={`whitespace-pre-wrap break-words ${
+                                    isDesc ? "max-w-[420px]" : "max-w-[180px]"
+                                  }`}
+                                >
+                                  {cell}
+                                </div>
+                              </td>
+                            );
+                          })}
                           <td className="px-2 py-1.5">
                             <input
                               inputMode="decimal"
