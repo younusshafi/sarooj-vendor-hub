@@ -112,8 +112,23 @@ function ComparisonViewPage() {
           "*, vendors(company_name, status, data_confidence, cr_status), bid_items(*, rfq_items(item_number, sap_item_number, sap_material_code, description, quantity, unit, budget_unit_rate_omr, budget_amount_omr))",
         )
         .eq("rfq_id", rfqId)
-        .order("total_inc_vat_omr");
-      return (data ?? []) as any[];
+        .order("created_at", { ascending: false });
+      // One column per vendor: keep each vendor's LATEST submission (a vendor who
+      // replied twice must not appear as two competing columns). Older ones are kept
+      // only as a revision count. Then order by total for display.
+      const all = (data ?? []) as any[];
+      const counts: Record<string, number> = {};
+      for (const b of all) if (b.vendor_id) counts[b.vendor_id] = (counts[b.vendor_id] ?? 0) + 1;
+      const seen = new Set<string>();
+      const latest = all.filter((b) => {
+        const vid = b.vendor_id ?? b.bid_id;
+        if (seen.has(vid)) return false;
+        seen.add(vid);
+        return true;
+      });
+      for (const b of latest) b._revisionCount = counts[b.vendor_id] ?? 1;
+      latest.sort((a, b) => (a.total_inc_vat_omr ?? Infinity) - (b.total_inc_vat_omr ?? Infinity));
+      return latest;
     },
   });
 
@@ -200,10 +215,12 @@ function ComparisonViewPage() {
     }
     setSavingDecision(true);
     try {
+      // Records the decision fields for the comparison sheet / Excel export. Deliberately
+      // does NOT write comparison.status — the Approval flow (Submit → approve → PO) is the
+      // single owner of status, so this no longer clashes with it.
       const { error } = await supabase
         .from("comparisons")
         .update({
-          status: "finalised",
           approved_vendor_column: approvedColumn ? parseInt(approvedColumn) : null,
           selection_type: selectionType,
           decision_notes: decisionNotes,
@@ -213,7 +230,7 @@ function ComparisonViewPage() {
         })
         .eq("comparison_id", comparison.comparison_id);
       if (error) throw error;
-      toast.success("Comparison marked as final");
+      toast.success("Decision saved");
       refetchComparison();
     } catch (err: any) {
       toast.error(err.message || "Failed to save decision");
@@ -380,6 +397,11 @@ function ComparisonViewPage() {
                       <div>
                         {i + 1}. {b.vendors?.company_name || "Vendor"}
                       </div>
+                      {b._revisionCount > 1 && (
+                        <div className="text-[10px] font-normal opacity-70">
+                          latest of {b._revisionCount} revisions
+                        </div>
+                      )}
                       <span
                         className="inline-block mt-1 font-medium"
                         style={{
@@ -917,11 +939,11 @@ function ComparisonViewPage() {
             style={{ backgroundColor: "var(--accent)" }}
           >
             {savingDecision && <Loader2 className="h-4 w-4 animate-spin" />}
-            {comparison?.status === "finalised" ? "Update Final Decision" : "Mark as Final"}
+            {comparison?.approved_at ? "Update Decision" : "Save Decision"}
           </button>
         </div>
 
-        {comparison?.status === "finalised" && (
+        {comparison?.approved_at && (
           <div
             className="mt-3 rounded-md p-3 text-sm font-medium"
             style={{
@@ -929,10 +951,7 @@ function ComparisonViewPage() {
               color: "var(--toast-success-fg)",
             }}
           >
-            ✓ Marked as final on{" "}
-            {comparison.approved_at
-              ? new Date(comparison.approved_at).toLocaleDateString("en-GB")
-              : "—"}
+            ✓ Decision recorded on {new Date(comparison.approved_at).toLocaleDateString("en-GB")}
           </div>
         )}
       </div>
