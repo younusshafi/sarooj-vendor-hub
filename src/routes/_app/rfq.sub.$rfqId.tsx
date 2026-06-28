@@ -23,6 +23,7 @@ import { RfqVendorList, type SelectedVendor } from "@/components/rfq-vendor-list
 import { RfqEmailEditor } from "@/components/rfq-email-editor";
 import { RfqDispatchPanel } from "@/components/rfq-dispatch-panel";
 import { BidLinksPanel } from "@/components/bid-links-panel";
+import { SrBoqIssuePanel } from "@/components/sr/sr-boq-issue-panel";
 import { BoqUploadStep } from "@/components/frame/BoqUploadStep";
 import { FrameGrid } from "@/components/frame/FrameGrid";
 import { FrameView } from "@/components/frame/FrameView";
@@ -497,9 +498,9 @@ function RfqPreviewPage() {
   const [header, setHeader] = useState<RfqHeader | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview" | "vendors" | "documents" | "frame">(
-    "overview",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "vendors" | "documents" | "boq" | "frame"
+  >("overview");
   // Vendor selection lives here (not in RfqVendorList) so it persists across
   // Overview/Vendors tab switches and is available to the dispatch panel.
   const [selectedVendors, setSelectedVendors] = useState<SelectedVendor[]>([]);
@@ -589,6 +590,7 @@ function RfqPreviewPage() {
     { key: "overview" as const, label: "Overview" },
     { key: "vendors" as const, label: "Vendors" },
     { key: "documents" as const, label: "Documents" },
+    { key: "boq" as const, label: "Issue BOQ" },
     { key: "frame" as const, label: "BoQ Upload" },
   ];
 
@@ -703,6 +705,8 @@ function RfqPreviewPage() {
           <DocumentsList rfqId={rfqId} />
         </div>
       )}
+
+      {activeTab === "boq" && <SrBoqIssuePanel rfqId={rfqId} rfqReference={header.rfq_reference} />}
 
       {activeTab === "frame" && (
         <div className="space-y-6">
