@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, AlertCircle, CheckCircle2, Lock } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle2, Lock, Paperclip } from "lucide-react";
 import {
   srBidGetByToken,
   srBidSubmitByToken,
@@ -11,6 +11,8 @@ import {
 } from "@/lib/sr-boq";
 import { fmtOmr as fmt } from "@/lib/omr";
 import { RfqDocShell, RfqDocSection } from "@/components/rfq-document";
+import { uploadDocument } from "@/lib/subcontract-webhook";
+import { fileToBase64 } from "@/lib/file-utils";
 
 export const Route = createFileRoute("/sr-bid/$token")({
   head: () => ({ meta: [{ title: "Submit your quotation — Sarooj Construction Company" }] }),
@@ -24,6 +26,14 @@ const r3 = (n: number) => Math.round((n + Number.EPSILON) * 1000) / 1000;
 interface LineRow {
   rate: string;
   remark: string;
+}
+
+interface Att {
+  id: string;
+  name: string;
+  url: string | null;
+  status: "uploading" | "done" | "error";
+  error?: string;
 }
 
 const emptyTerms: SrCommercialTerms = {
@@ -48,6 +58,7 @@ function SrBidPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitErr, setSubmitErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [attachments, setAttachments] = useState<Att[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -138,6 +149,25 @@ function SrBidPage() {
     setSubmitting(false);
     if (res.ok) setDone(true);
     else setSubmitErr(res.error);
+  };
+
+  // Vendor attachments — reuse the existing Drive upload webhook (uploads to the RFQ's
+  // Drive folder + records it; the officer sees it in the SR Documents tab). Fire-and-forget
+  // per file, independent of the rate submission.
+  const handleAttach = async (file: File) => {
+    if (!found) return;
+    const id = crypto.randomUUID();
+    setAttachments((a) => [...a, { id, name: file.name, url: null, status: "uploading" }]);
+    const update = (patch: Partial<Att>) =>
+      setAttachments((a) => a.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    try {
+      const base64 = await fileToBase64(file);
+      const res = await uploadDocument(found.rfq.rfq_id, file, "Vendor bid attachment", base64);
+      if (res.ok && res.data.success) update({ status: "done", url: res.data.drive_file_url });
+      else update({ status: "error", error: res.ok ? "Upload returned an error" : res.error });
+    } catch (err) {
+      update({ status: "error", error: err instanceof Error ? err.message : "Upload failed" });
+    }
   };
 
   return (
@@ -406,6 +436,63 @@ function SrBidPage() {
               </Field>
             </div>
           </RfqDocSection>
+
+          {!readOnly && (
+            <RfqDocSection title="Attachments (optional)">
+              <div className="space-y-3 p-4">
+                <p className="text-[13px] text-muted-foreground">
+                  Attach supporting documents (your quotation PDF, method statement, catalogues).
+                  These are shared with Sarooj procurement.
+                </p>
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-input bg-card px-4 py-2 text-sm font-medium hover:bg-secondary">
+                  <Paperclip className="h-4 w-4" /> Add file
+                  <input
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleAttach(f);
+                      e.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+                {attachments.length > 0 && (
+                  <ul className="space-y-1.5">
+                    {attachments.map((a) => (
+                      <li
+                        key={a.id}
+                        className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                      >
+                        <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="flex-1 truncate">{a.name}</span>
+                        {a.status === "uploading" && (
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                        {a.status === "done" &&
+                          (a.url ? (
+                            <a
+                              href={a.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[13px] font-medium text-[var(--accent)] hover:underline"
+                            >
+                              View
+                            </a>
+                          ) : (
+                            <CheckCircle2 className="h-4 w-4 text-[var(--accent)]" />
+                          ))}
+                        {a.status === "error" && (
+                          <span className="text-[12px] text-destructive">
+                            {a.error ?? "Failed"}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </RfqDocSection>
+          )}
 
           {!readOnly && (
             <div className="flex flex-col items-end gap-2 pb-12">
