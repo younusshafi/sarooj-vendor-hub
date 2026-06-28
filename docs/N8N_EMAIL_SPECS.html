@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>n8n email automation specs — Sarooj Procurement</title>
+<style>
+  :root{--ink:#0D3D2E;--accent:#0D7A5A;--border:#C8DDD7;--cream:#F4F8F6;--charcoal:#1f242b;--mut:#5b6b66;
+    --warn-bg:#FDF3E0;--warn-fg:#7A5200;--gap-bg:#FEF2F2;--gap-fg:#991B1B;--gap-border:#DC2626;}
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#13211c;background:#eef3f1}
+  .wrap{max-width:1000px;margin:0 auto;padding:30px 22px 80px}
+  header.top{background:var(--charcoal);color:#eef3f1;border-radius:16px;padding:24px 26px;margin-bottom:18px}
+  header.top h1{margin:0 0 6px;font-size:22px}
+  header.top p{margin:0;color:#b9c6c0;font-size:13.5px}
+  h2.sec{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--mut);margin:34px 0 12px;border-bottom:1px solid var(--border);padding-bottom:6px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-bottom:16px}
+  .card h3{margin:0 0 4px;font-size:16px;color:var(--ink)}
+  .card .who{font-size:12px;color:var(--mut);margin-bottom:10px}
+  table.kv{width:100%;border-collapse:collapse;font-size:13.5px;margin:6px 0}
+  table.kv th,table.kv td{border:1px solid var(--border);padding:7px 9px;text-align:left;vertical-align:top}
+  table.kv th{background:var(--cream);width:160px;color:var(--mut);font-weight:600}
+  code,.mono{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;background:var(--cream);border:1px solid var(--border);border-radius:5px;padding:1px 5px}
+  pre{background:#0f1720;color:#dbe7e2;border-radius:10px;padding:12px 14px;overflow-x:auto;font-size:12px;line-height:1.5}
+  .callout{border-radius:12px;padding:13px 15px;margin:14px 0;font-size:13.5px}
+  .callout.warn{background:var(--warn-bg);border:1px solid #f0c673;color:var(--warn-fg)}
+  .callout.gap{background:var(--gap-bg);border:1px solid var(--gap-border);color:#7f1d1d}
+  .callout.note{background:var(--cream);border:1px solid var(--border);color:#234}
+  .callout .h{font-weight:700;display:block;margin-bottom:3px}
+  ol li,ul li{margin:3px 0}
+  .tag{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:5px;background:#E0F2EA;color:#0D5C3A;margin-left:6px;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>n8n email automation specs — for the backend operator</h1>
+    <p>The only backend work left for the procurement system. All three are email automations in n8n. The frontend already mints every token/link and shows it for manual copy as a fallback — these automations just send the email. Written 2026-06-28.</p>
+  </header>
+
+  <div class="callout gap">
+    <span class="h">⚠ Back up each workflow BEFORE editing (do this first)</span>
+    In the n8n UI, open the workflow → <b>top-right ⋯ menu → Download</b> (exports the workflow JSON to a file) — keep that file as the rollback. Alternatively <b>Duplicate</b> the workflow and edit the copy, switching the webhook over only once tested. Never edit a live workflow without an exported copy. (These specs were authored from the frontend repo, which cannot read or edit n8n — the connector is read-only + currently expired — so the operator applies them.)
+  </div>
+
+  <div class="callout note">
+    <span class="h">Integration pattern (matches the existing WF7/WF8)</span>
+    Easiest + consistent with how the app already works: the <b>frontend POSTs to an n8n webhook</b> after the relevant action, passing the IDs + the already-minted link. n8n just composes + sends the email. The frontend changes are tiny and can be added on request (fire-and-forget, so a missing webhook never breaks the action). Recipient addresses should come from a <code>system_settings</code> row (e.g. <code>approver_email</code>) rather than hard-coding — there is already a <code>system_settings</code> table.
+  </div>
+
+  <!-- 1 -->
+  <h2 class="sec">1 — Email the approver the comparison review link <span class="tag">MR + SR</span></h2>
+  <div class="card">
+    <h3>On "Submit for approval" → email Rabia the single-use review link</h3>
+    <div class="who">Replaces the current manual copy/paste of the review link. Confirmed needed (handoff #6).</div>
+    <table class="kv">
+      <tr><th>Trigger</th><td>New n8n <b>Webhook</b> node, path <code>/webhook/scc-approval-request</code> (POST). Called by the frontend right after <code>comparison_submit_for_approval</code> (MR) / <code>sr_comparison_submit_for_approval</code> (SR).</td></tr>
+      <tr><th>Payload (frontend → n8n)</th><td><pre>{
+  "kind": "materials" | "subcontractor",
+  "rfq_reference": "MR-2606-035",
+  "title": "Building Materials …",
+  "review_url": "https://&lt;app&gt;/comparison-review/&lt;token&gt;",   // or /sr-comparison-review/&lt;token&gt;
+  "prepared_by": "younus@zavia-ai.com"
+}</pre></td></tr>
+      <tr><th>Recipient</th><td>Approver email from <code>system_settings.approver_email</code> (add this row; current approver = Rabia, <code>rabia.vahabudeen@sarooj.com</code>). Honour <code>dispatch_test_mode</code> like WF8 (in test mode send to the test recipients instead).</td></tr>
+      <tr><th>Email subject</th><td><code>Approval needed — {rfq_reference} comparison</code></td></tr>
+      <tr><th>Email body</th><td>Short note + the <code>review_url</code> as the single call-to-action: "A procurement comparison for <b>{rfq_reference} — {title}</b> is ready for your approval. Review &amp; decide here: {review_url}. Prepared by {prepared_by}." The link lets her Approve / Return / Revoke; it stays live until the PO is issued.</td></tr>
+      <tr><th>Frontend change (small, FE-owned)</th><td>After a successful submit, POST the payload to the webhook (fire-and-forget). MR: <code>rfq.$rfqId.comparison.tsx</code> handleSubmitForApproval. SR: <code>sr-comparison-panel.tsx</code> handleSubmitApproval. Both already have the token in the RPC response.</td></tr>
+    </table>
+  </div>
+
+  <!-- 2 -->
+  <h2 class="sec">2 — Notifications <span class="tag">MR + SR</span></h2>
+  <div class="card">
+    <h3>(a) Notify procurement when a vendor submits a quotation</h3>
+    <div class="who">So the officer knows a bid arrived without polling.</div>
+    <table class="kv">
+      <tr><th>Trigger</th><td>Webhook <code>/webhook/scc-bid-submitted</code>, OR (cleaner) a Supabase DB trigger / scheduled poll on <code>bids</code> (materials) and <code>sr_bid</code> (subcontractor) for new <code>is_latest</code> rows. Webhook is simplest: the vendor submit RPCs already run server-side — the frontend bid/sr-bid pages can POST on success.</td></tr>
+      <tr><th>Payload</th><td><pre>{ "kind":"materials"|"subcontractor", "rfq_reference":"…",
+  "vendor_name":"…", "total_omr": 6783 }</pre></td></tr>
+      <tr><th>Recipient</th><td>Procurement officer(s) — a <code>system_settings.officer_emails</code> list (or the RFQ's <code>created_by</code>).</td></tr>
+      <tr><th>Subject / body</th><td><code>New quotation — {rfq_reference} from {vendor_name}</code> · body links to the RFQ's Bids tab.</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h3>(b) Notify the officer on approve / return / revoke</h3>
+    <table class="kv">
+      <tr><th>Trigger</th><td>Inside the same workflow as <code>comparison_decide_by_token</code> / <code>sr_comparison_decide_by_token</code> — or a webhook <code>/webhook/scc-approval-decided</code> the decide step calls. Since the decision happens in a SECURITY DEFINER RPC (no n8n today), the cleanest is a Supabase DB trigger on <code>comparisons.status</code> / <code>sr_comparison.status</code> change → call n8n. If DB triggers aren't desired, add an n8n webhook the approver review page calls after a decision.</td></tr>
+      <tr><th>Recipient</th><td>The <code>prepared_by</code> officer on the comparison.</td></tr>
+      <tr><th>Subject</th><td><code>{rfq_reference} — comparison {approved | returned | revoked}</code> · body includes the approver's note (<code>review_notes</code>) on return/revoke.</td></tr>
+    </table>
+  </div>
+
+  <!-- 3 -->
+  <h2 class="sec">3 — Materials dispatch: link-first email <span class="tag">MR</span></h2>
+  <div class="card">
+    <h3>WF8 (scc-rfq-dispatch): send the <code>/bid/&lt;token&gt;</code> portal link instead of the schedule-table "reply by email"</h3>
+    <div class="who">Decision 2026-06-28: MR should collect bids via the portal like SR (handoff #7b, memory mr-bid-model-link-first).</div>
+    <table class="kv">
+      <tr><th>Where</th><td>The existing <b>WF8 / scc-rfq-dispatch</b> workflow, in the node that composes the covering email. <b>Back it up first.</b></td></tr>
+      <tr><th>Change</th><td>WF8 already mints/stamps each vendor's <code>bid_token</code> and sends per-vendor. Replace the schedule-table + "reply directly to this email" body with a short note + the vendor's link: <code>{app_origin}/bid/{bid_token}</code>. Keep T&amp;Cs. (The token already exists on <code>rfq_vendors.bid_token</code> at dispatch.)</td></tr>
+      <tr><th>Body</th><td>"You're invited to quote for {rfq_reference} — {title}. Submit your quotation here: {link}. This link is unique to you and is the only way to quote." Drop the inline rate table (the portal shows the schedule).</td></tr>
+      <tr><th>FE follow-up (after this lands)</th><td>The Bid-Review screen's "Original Email | AI-extracted" panel becomes less relevant for portal-submitted bids — demote it for those (frontend, can do later).</td></tr>
+      <tr><th>Same for SR?</th><td>SR is already link-first; SR dispatch email isn't built yet (links handed out manually). A parallel <code>/sr-bid/&lt;token&gt;</code> dispatch email can mirror this.</td></tr>
+    </table>
+  </div>
+
+  <div class="callout warn">
+    <span class="h">Two small data prerequisites (additive, no schema risk)</span>
+    Add <code>system_settings</code> rows for recipients: <code>approver_email</code> and <code>officer_emails</code> (JSON list). These are data rows, not schema. Keep honouring the existing <code>dispatch_test_mode</code> flag in every send.
+  </div>
+
+  <div class="callout note">
+    <span class="h">What the frontend already provides (so n8n only sends)</span>
+    Review links are minted by the submit RPCs and shown via <code>&lt;ShareableLink&gt;</code> (state "manual" today → flip to "emailed" once these land). Vendor bid links exist on <code>rfq_vendors.bid_token</code>. Nothing here requires new frontend data — only the small fire-and-forget webhook POSTs noted above, which the FE team can add on request.
+  </div>
+</div>
+</body>
+</html>
