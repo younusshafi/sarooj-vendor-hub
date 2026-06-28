@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- loose Supabase rows from the untyped external client (see comparison-award-panel.tsx) */
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, AlertTriangle } from "lucide-react";
@@ -144,7 +145,6 @@ function VendorProfilePage() {
               </button>
             )}
             {/* hidden — phase 2 / demo */}
-
           </div>
         </div>
 

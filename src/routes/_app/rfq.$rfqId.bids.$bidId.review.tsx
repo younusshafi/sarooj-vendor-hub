@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- loose Supabase rows from the untyped external client (see comparison-award-panel.tsx) */
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -180,8 +181,6 @@ function BidReviewPage() {
           })
           .eq("item_id", item.bid_item_id);
       }
-    } catch (err: any) {
-      throw err;
     } finally {
       setSaving(false);
     }

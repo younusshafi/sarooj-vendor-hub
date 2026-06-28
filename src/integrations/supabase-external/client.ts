@@ -71,23 +71,17 @@ export interface Vendor {
 
 /** Extract first contact's email from the contacts JSONB array */
 export function vendorEmail(v: Vendor): string | null {
-  return Array.isArray(v.contacts)
-    ? (v.contacts.find((c) => c.email)?.email ?? null)
-    : null;
+  return Array.isArray(v.contacts) ? (v.contacts.find((c) => c.email)?.email ?? null) : null;
 }
 
 /** Extract first contact's name from the contacts JSONB array */
 export function vendorContactName(v: Vendor): string | null {
-  return Array.isArray(v.contacts)
-    ? (v.contacts.find((c) => c.name)?.name ?? null)
-    : null;
+  return Array.isArray(v.contacts) ? (v.contacts.find((c) => c.name)?.name ?? null) : null;
 }
 
 /** Extract first contact's phone from the contacts JSONB array */
 export function vendorPhone(v: Vendor): string | null {
-  return Array.isArray(v.contacts)
-    ? (v.contacts.find((c) => c.phone)?.phone ?? null)
-    : null;
+  return Array.isArray(v.contacts) ? (v.contacts.find((c) => c.phone)?.phone ?? null) : null;
 }
 
 export interface VendorDocument {

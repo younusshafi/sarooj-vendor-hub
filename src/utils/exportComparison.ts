@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- loose Supabase rows from the untyped external client (see comparison-award-panel.tsx) */
 import * as XLSX from "xlsx";
 
 export function exportComparisonSheet(rfq: any, rfqItems: any[], bids: any[], comparison: any) {
