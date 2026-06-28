@@ -22,7 +22,7 @@ import { RfqEditableFields } from "@/components/rfq-editable-fields";
 import { RfqVendorList, type SelectedVendor } from "@/components/rfq-vendor-list";
 import { RfqEmailEditor } from "@/components/rfq-email-editor";
 import { RfqDispatchPanel } from "@/components/rfq-dispatch-panel";
-import { BidLinksPanel } from "@/components/bid-links-panel";
+import { SrBidLinksPanel } from "@/components/sr/sr-bid-links-panel";
 import { SrBoqIssuePanel } from "@/components/sr/sr-boq-issue-panel";
 import { SrComparisonPanel } from "@/components/sr/sr-comparison-panel";
 import { StatusStepper } from "@/components/rfq/status-stepper";
@@ -739,9 +739,7 @@ function RfqPreviewPage() {
 
       {activeTab === "vendors" && (
         <div className="space-y-6">
-          {header.status !== "draft" && (
-            <BidLinksPanel rfqId={rfqId} rfqReference={header.rfq_reference} />
-          )}
+          <SrBidLinksPanel rfqId={rfqId} />
           <RfqVendorList
             rfqId={rfqId}
             status={header.status}
