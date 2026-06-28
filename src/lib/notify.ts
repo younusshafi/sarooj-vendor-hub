@@ -79,6 +79,20 @@ export async function getOfficerEmails(): Promise<string> {
   }
 }
 
+/** Whether Dispatch Test Mode is ON (system_settings.dispatch_test_mode = 'on'). */
+export async function getDispatchTestMode(): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from("system_settings")
+      .select("setting_value")
+      .eq("setting_key", "dispatch_test_mode")
+      .maybeSingle();
+    return (data as { setting_value: string } | null)?.setting_value === "on";
+  } catch {
+    return false;
+  }
+}
+
 /** Notify the officer(s) that a vendor submitted a quotation. */
 export async function notifyBidSubmitted(a: {
   rfqReference: string;
