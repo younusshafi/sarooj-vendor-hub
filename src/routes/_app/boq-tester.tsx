@@ -24,6 +24,7 @@ import {
   type ParsedBoq,
   type ParsedBoqRow,
 } from "@/lib/boq-service";
+import { srBoqIssue, type SrBoqColumn, type SrIssueLine } from "@/lib/sr-boq";
 
 export const Route = createFileRoute("/_app/boq-tester")({
   component: BoqTesterPage,
@@ -87,6 +88,11 @@ function BoqTesterPage() {
   const [hiddenCols, setHiddenCols] = useState<Set<number>>(new Set());
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Officer "Issue to RFQ" (sr_boq_issue)
+  const [rfqId, setRfqId] = useState("");
+  const [issuing, setIssuing] = useState(false);
+  const [issueMsg, setIssueMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const runHealth = async () => {
     setChecking(true);
@@ -176,6 +182,65 @@ function BoqTesterPage() {
       rows.splice(rowIdx + 1, 0, blank);
       return { ...prev, rows };
     });
+  };
+
+  const handleIssue = async () => {
+    if (!edit || !rfqId.trim()) return;
+    setIssuing(true);
+    setIssueMsg(null);
+
+    const qtyIdx = edit.columns.findIndex((c) => /qty|quantity/i.test(c));
+    const unitIdx = edit.columns.findIndex((c) => /unit|uom/i.test(c));
+
+    const columns: SrBoqColumn[] = edit.columns.map((name, i) => {
+      const visible = !hiddenCols.has(i);
+      let role: SrBoqColumn["role"];
+      if (!visible) role = "internal";
+      else if (/desc/i.test(name)) role = "desc";
+      else if (/qty|quantity/i.test(name)) role = "qty";
+      else if (/unit|uom/i.test(name)) role = "unit";
+      else role = "data";
+      return { key: `c${i}`, name, visible, role };
+    });
+
+    const lines: SrIssueLine[] = edit.rows.map((row, r) => {
+      let qty: number | null = null;
+      if (row.role === "ITEM") {
+        if (qtyIdx >= 0) {
+          const n = toNum(row.cells[qtyIdx] || "");
+          if (!Number.isNaN(n)) qty = n;
+        }
+        if (qty === null) {
+          const unit = unitIdx >= 0 ? row.cells[unitIdx] || "" : "";
+          if (/\b(ls|lump|lumpsum|lot|sum|item)\b/i.test(unit)) qty = 1;
+        }
+      }
+      return { seq: r + 1, role: row.role, cells: row.cells, incomplete: !!row.incomplete, qty };
+    });
+
+    try {
+      const res = await srBoqIssue({
+        rfq_id: rfqId.trim(),
+        columns,
+        lines,
+        scope: edit.scope,
+        source_kind: result?.filename.toLowerCase().endsWith(".xlsx") ? "xlsx" : "pdf",
+        source_filename: result?.filename ?? null,
+        actor: null,
+      });
+      if (res.ok) {
+        setIssueMsg({
+          ok: true,
+          text: `Issued ✓ — boq_id: ${res.boq_id}. Vendor links are this RFQ's rfq_vendors.bid_token (open /sr-bid/<token>).`,
+        });
+      } else {
+        setIssueMsg({ ok: false, text: res.error });
+      }
+    } catch (err) {
+      setIssueMsg({ ok: false, text: err instanceof Error ? err.message : "Issue failed" });
+    } finally {
+      setIssuing(false);
+    }
   };
 
   // ── Source-price leak detection (HITL warning) ──
@@ -568,6 +633,44 @@ function BoqTesterPage() {
                     Toggle the eye icons to set what the vendor sees · amber cells contain
                     &quot;?&quot; (illegible source — verify).
                   </span>
+                </div>
+
+                {/* Issue to RFQ */}
+                <div className="rounded-lg border border-border p-4">
+                  <h3 className="mb-1 text-sm font-semibold text-foreground">
+                    Issue this BOQ to an RFQ
+                  </h3>
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    Writes the curated skeleton (visible columns + roles, lines with qty) to{" "}
+                    <code className="rounded bg-muted px-1 py-0.5">sr_boq</code> via{" "}
+                    <code className="rounded bg-muted px-1 py-0.5">sr_boq_issue</code>. Paste the
+                    target SR RFQ&apos;s id.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      value={rfqId}
+                      onChange={(e) => setRfqId(e.target.value)}
+                      placeholder="rfq_id (uuid)"
+                      className="min-w-[280px] flex-1 rounded-md border border-border bg-white px-3 py-2 font-mono text-xs outline-none focus:border-[var(--accent)]"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleIssue}
+                      disabled={issuing || !rfqId.trim()}
+                      className="gap-2 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
+                    >
+                      {issuing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                      Issue BOQ
+                    </Button>
+                  </div>
+                  {issueMsg && (
+                    <p
+                      className="mt-2 break-all text-xs"
+                      style={{ color: issueMsg.ok ? "var(--accent)" : "var(--destructive)" }}
+                    >
+                      {issueMsg.text}
+                    </p>
+                  )}
                 </div>
               </>
             )}
