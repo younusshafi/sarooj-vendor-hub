@@ -28,7 +28,8 @@ losing context. Read this top-to-bottom once.
 | Frontend repo | `C:\Users\sinne\OneDrive\Projects\Sarooj\Procurement\sarooj-vendor-hub-code` |
 | Stack | React 19 + Vite + TanStack Router (file-based) + Supabase-js + TS + Tailwind v4 + shadcn |
 | Git remote | `github.com/younusshafi/sarooj-vendor-hub`, branch `main`, git user "Sarooj Build" |
-| Production URL | **`https://procurement.scc.zavia-ai.com`** (custom domain; NOT the old `sarooj-procurement-coral`) |
+| Production URL | **`https://sarooj-vendor-hub-code.vercel.app`** (Vercel Hobby). [Earlier handoff wrongly listed `procurement.scc.zavia-ai.com` — that does NOT exist.] |
+| BOQ parser endpoint | **`https://n8n.zavia-ai.com/boq`** (FastAPI on the VPS via nginx subpath; systemd `boq-parser`). See `docs/DEPLOYMENT.md`. |
 | Vercel project | `sarooj-vendor-hub-code` · `prj_thXVTgOL5guQxBQFDbcLeGm9PIQ2` · team `team_kySqSOMKB1BJdPQ1Zyhtparb` (production deploy is READY/live) |
 | Supabase project | **`fimfybfgjrbkcylmyekz`** ("SCC"), schema **`scc_procurement`** |
 | Supabase anon key | hardcoded in `src/integrations/supabase-external/client.ts` (client sets `db:{schema:'scc_procurement'}`). RLS is **OFF project-wide** (security note). |

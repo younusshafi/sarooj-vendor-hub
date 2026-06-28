@@ -46,7 +46,14 @@ export interface ParsedBoq {
 }
 
 const STORAGE_KEY = "boq-service-url";
-const DEFAULT_URL = "http://localhost:8001";
+
+// Build-time config (Vite exposes VITE_* at build). The parser is public behind the n8n
+// domain; the dev app can call it directly (CORS allows localhost) — no SSH tunnel needed.
+// Per-machine override: the /boq-tester URL field (localStorage) wins over these.
+const env = import.meta.env as unknown as Record<string, string | undefined>;
+const DEFAULT_URL = env.VITE_BOQ_SERVICE_URL || "https://n8n.zavia-ai.com/boq";
+// Shared secret required by /parse-* (set VITE_BOQ_API_KEY in the Vercel + .env.local build env).
+const BOQ_KEY = env.VITE_BOQ_API_KEY || "";
 
 export function getBoqServiceUrl(): string {
   if (typeof localStorage === "undefined") return DEFAULT_URL;
@@ -81,7 +88,11 @@ export async function parseBoqRemote(file: File, url: string): Promise<ParsedBoq
   const form = new FormData();
   form.append("file", file);
 
-  const res = await fetch(`${base(url)}${endpoint}`, { method: "POST", body: form });
+  const res = await fetch(`${base(url)}${endpoint}`, {
+    method: "POST",
+    body: form,
+    headers: BOQ_KEY ? { "X-BOQ-Key": BOQ_KEY } : undefined,
+  });
 
   // The service returns JSON for both success and handled errors (422/500).
   let data: ParsedBoq;
