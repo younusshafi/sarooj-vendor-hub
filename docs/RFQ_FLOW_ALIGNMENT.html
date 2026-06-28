@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RFQ Flow Alignment — MR vs SR (issue + comparison)</title>
+<style>
+  :root{
+    --ink:#0D3D2E; --accent:#0D7A5A; --border:#C8DDD7; --cream:#F4F8F6;
+    --charcoal:#1f242b; --charcoal-soft:#2b323b;
+    --mr:#1A3A5C; --mr-soft:#E8EFF7;
+    --sr:#0D5C3A; --sr-soft:#E0F2EA;
+    --warn-bg:#FDF3E0; --warn-fg:#7A5200;
+    --gap-bg:#FEF2F2; --gap-fg:#991B1B; --gap-border:#DC2626;
+    --mut:#5b6b66;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#13211c;background:#eef3f1}
+  .wrap{max-width:1180px;margin:0 auto;padding:32px 24px 80px}
+  header.top{background:var(--charcoal);color:#eef3f1;border-radius:16px;padding:26px 28px;margin-bottom:8px}
+  header.top h1{margin:0 0 6px;font-size:24px;letter-spacing:.2px}
+  header.top p{margin:0;color:#b9c6c0;font-size:14px}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:18px 2px 26px;font-size:13px;color:var(--mut)}
+  .legend b{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:middle}
+  h2.section{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--mut);margin:38px 0 14px;border-bottom:1px solid var(--border);padding-bottom:6px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  @media(max-width:880px){.cols{grid-template-columns:1fr}}
+  .lane{border-radius:14px;border:1px solid var(--border);background:#fff;overflow:hidden}
+  .lane.mr .lane-h{background:var(--mr);border-color:var(--mr)}
+  .lane.sr .lane-h{background:var(--sr)}
+  .lane-h{color:#fff;padding:14px 18px}
+  .lane-h h3{margin:0;font-size:16px}
+  .lane-h .sub{font-size:12.5px;opacity:.85;margin-top:2px}
+  .lane-body{padding:8px 16px 18px}
+  .step{padding:14px 4px;border-bottom:1px dashed var(--border)}
+  .step:last-child{border-bottom:0}
+  .step .n{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:12px;font-weight:700;color:#fff;margin-right:8px}
+  .mr .n{background:var(--mr)} .sr .n{background:var(--sr)}
+  .step .title{font-weight:650}
+  .click{display:inline-block;background:#13211c;color:#fff;border-radius:6px;padding:1px 8px;font-size:12.5px;font-weight:600;margin:0 2px}
+  .route{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;background:var(--cream);border:1px solid var(--border);border-radius:5px;padding:1px 6px}
+  .meta{font-size:13px;color:var(--mut);margin-top:7px}
+  .meta .lbl{font-weight:650;color:#2c3a35}
+  .pill{display:inline-block;font-size:11.5px;font-weight:600;border-radius:999px;padding:1px 9px;margin-left:4px}
+  .pill.wf{background:#efe7d4;color:var(--warn-fg)}
+  .pill.rpc{background:var(--sr-soft);color:var(--sr)}
+  .pill.db{background:var(--mr-soft);color:var(--mr)}
+  .arrow{color:var(--mut);margin:0 4px}
+  .callout{border-radius:12px;padding:14px 16px;margin:14px 0;font-size:13.5px}
+  .callout.gap{background:var(--gap-bg);border:1px solid var(--gap-border);color:#7f1d1d}
+  .callout.warn{background:var(--warn-bg);border:1px solid #f0c673;color:var(--warn-fg)}
+  .callout.note{background:var(--cream);border:1px solid var(--border);color:#234}
+  .callout .h{font-weight:700;display:block;margin-bottom:3px}
+  .notbuilt{background:repeating-linear-gradient(45deg,#fafafa,#fafafa 10px,#f1f1f1 10px,#f1f1f1 20px)}
+  table.cmp{width:100%;border-collapse:collapse;margin-top:6px;font-size:13.5px}
+  table.cmp th,table.cmp td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top}
+  table.cmp th{background:var(--cream);font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
+  table.cmp td.mrcell{background:#f7fafc}
+  table.cmp td.srcell{background:#f5fbf8}
+  code.k{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:#0a4}
+  .foot{margin-top:40px;font-size:12.5px;color:var(--mut);border-top:1px solid var(--border);padding-top:14px}
+  .tag{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:6px}
+  .tag.live{background:var(--sr-soft);color:var(--sr)}
+  .tag.todo{background:var(--gap-bg);color:var(--gap-fg)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1>RFQ Flow Alignment — how I understand it today</h1>
+    <p>Front-end / user-perspective walkthrough of both procurement tracks: <b>MR (Materials)</b> and <b>SR (Subcontractor / BOQ)</b>, from <b>issuance</b> through <b>bid comparison</b>. Built by reading the routes &amp; components, not from memory. Written 2026-06-28.</p>
+  </header>
+
+  <div class="legend">
+    <span><b style="background:var(--mr)"></b>MR = Materials track (SAP Excel, deterministic)</span>
+    <span><b style="background:var(--sr)"></b>SR = Subcontractor track (BOQ parser, flexible columns)</span>
+    <span><span class="pill wf" style="margin:0">WF</span> = n8n webhook</span>
+    <span><span class="pill rpc" style="margin:0">RPC</span> = Supabase function</span>
+    <span><span class="pill db" style="margin:0">DB</span> = direct table read/write</span>
+  </div>
+
+  <!-- ============ ISSUANCE ============ -->
+  <h2 class="section">Part 1 — Issuance (officer sends the RFQ to vendors)</h2>
+
+  <div class="callout note">
+    <span class="h">The front door (both tracks start here)</span>
+    On the <b>RFQ Tracker</b> (<span class="route">/rfq</span>) the <span class="click">+ New RFQ</span> button is a dropdown: <b>Materials RFQ</b> → <span class="route">/rfq/new</span> · <b>Subcontractor RFQ</b> → <span class="route">/rfq/sub/new</span>. The Tracker lists both types in one table and each row's <b>View</b> routes to its own detail page (<span class="route">/rfq/$rfqId</span> for MR, <span class="route">/rfq/sub/$rfqId</span> for SR).
+  </div>
+
+  <div class="cols">
+
+    <!-- MR ISSUE -->
+    <div class="lane mr">
+      <div class="lane-h"><h3>MR — Materials issuance <span class="tag live">live</span></h3>
+        <div class="sub">SAP Export → generate → invite → dispatch by email</div></div>
+      <div class="lane-body">
+
+        <div class="step">
+          <div><span class="n">1</span><span class="title">Generate RFQs from SAP</span></div>
+          <div class="meta">Officer uploads a SAP "SAPUI5 Export" .xlsx, fills optional project metadata, clicks <span class="click">Generate RFQs</span> on <span class="route">/rfq/new</span>.</div>
+          <div class="meta"><span class="lbl">Goes to:</span> n8n <span class="pill wf">WF7 scc-rfq-generate</span> <span class="arrow">→</span> creates <code class="k">rfqs</code> (status <b>draft</b>) + <code class="k">rfq_items</code>, then lands on <span class="route">/rfq/summary</span>.</div>
+        </div>
+
+        <div class="step">
+          <div><span class="n">2</span><span class="title">Invite vendors</span></div>
+          <div class="meta">On <span class="route">/rfq/preview</span> ("RFQ Preview &amp; Dispatch") the officer searches the <code class="k">vendors</code> table (email pulled from <code class="k">vendors.contacts[]</code>, blacklisted filtered out) and adds each one.</div>
+          <div class="meta"><span class="lbl">Goes to:</span> <span class="pill db">DB</span> insert into <code class="k">rfq_vendors</code> with <code class="k">email_to</code>, status <b>pending</b>. No token yet.</div>
+        </div>
+
+        <div class="step">
+          <div><span class="n">3</span><span class="title">Edit covering email &amp; dispatch</span></div>
+          <div class="meta"><span class="lbl">How you get to dispatch:</span> from the detail page <b>Vendors</b> tab (while draft) → set deadline → <span class="click">Preview &amp; Select Recipients</span> → <span class="route">/rfq/preview</span>. (Also reachable from the post-generate summary page.)</div>
+          <div class="meta">There the officer edits covering-email subject/body, ticks the vendors to send to, clicks <span class="click">Send RFQ to N Vendors</span> (confirmation modal with deadline).</div>
+          <div class="meta"><span class="lbl">Goes to:</span> saves email to <code class="k">rfqs</code>, then n8n <span class="pill wf">WF8 scc-rfq-dispatch</span> with the selected vendor ids + deadline.</div>
+          <div class="meta"><span class="lbl">WF8 does (backend):</span> stamps <code class="k">sent_at</code>, flips <code class="k">rfqs.status → issued</code>, sends the covering email. (Note: <code class="k">bid_token</code> is <b>not</b> minted here — it already exists on the vendor rows from insert, even while draft. Verified via DB 2026-06-28.)</div>
+        </div>
+
+        <div class="step">
+          <div><span class="n">4</span><span class="title">Manual link fallback</span></div>
+          <div class="meta">On the detail page Vendors tab, <b>BidLinksPanel</b> lists every dispatched vendor with copy / mailto buttons for their <span class="route">/bid/&lt;token&gt;</span> link — used until automated email is trusted, or to re-send.</div>
+        </div>
+
+        <div class="step">
+          <div><span class="n">5</span><span class="title">Vendor quotes</span></div>
+          <div class="meta">Vendor opens <span class="route">/bid/&lt;token&gt;</span> <span class="arrow">→</span> <span class="pill rpc">RPC bid_get_by_token</span>, enters unit rates + commercial terms, clicks <span class="click">Submit quotation</span> <span class="arrow">→</span> <span class="pill rpc">RPC bid_submit_by_token</span> (revisable until deadline).</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SR ISSUE -->
+    <div class="lane sr">
+      <div class="lane-h"><h3>SR — Subcontractor issuance <span class="tag live">live (testing)</span></h3>
+        <div class="sub">BOQ upload → parse → curate columns → issue</div></div>
+      <div class="lane-body">
+
+        <div class="step">
+          <div><span class="n">1</span><span class="title">Open the SR RFQ &amp; the Issue tab</span></div>
+          <div class="meta">Officer is on the subcontractor RFQ page <span class="route">/rfq/sub/&lt;rfqId&gt;</span> and clicks the <span class="click">Issue BOQ</span> tab. Panel checks: is an <code class="k">sr_boq</code> already issued? loads <code class="k">rfq_vendors</code>, pings parser health.</div>
+        </div>
+
+        <div class="step">
+          <div><span class="n">2</span><span class="title">Upload &amp; parse the BOQ</span></div>
+          <div class="meta">Drag/drop a <b>PDF or .xlsx</b> BOQ <span class="arrow">→</span> <code class="k">parseBoqRemote</code> calls the external parser at <code class="k">VITE_BOQ_SERVICE_URL</code> (auth <code class="k">X-BOQ-Key</code>, ~20–60s vision model). Returns flexible columns + rows + parser notes + scope.</div>
+        </div>
+
+        <div class="step">
+          <div><span class="n">3</span><span class="title">Curate what vendors see</span></div>
+          <div class="meta">Officer eye-toggles columns (price/budget cols auto-hidden), edits any cell, fixes flagged/incomplete rows, sets the Scope line. A red <b>price-leak</b> banner warns if numbers sit in a hidden column.</div>
+        </div>
+
+        <div class="step">
+          <div><span class="n">4</span><span class="title">Issue the BOQ</span></div>
+          <div class="meta">Click <span class="click">Issue BOQ to vendors</span> <span class="arrow">→</span> <span class="pill rpc">RPC sr_boq_issue</span> builds the <code class="k">sr_boq</code> + <code class="k">sr_boq_line</code> skeleton. Internal columns are <b>stored but projected out server-side</b> so they never reach a vendor.</div>
+        </div>
+
+        <div class="step">
+          <div><span class="n">5</span><span class="title">Hand out per-vendor links</span></div>
+          <div class="meta">Panel flips to the issued state and lists each invited vendor with their <span class="route">/sr-bid/&lt;token&gt;</span> link (copy / open). Token comes from <code class="k">rfq_vendors.bid_token</code>.</div>
+        </div>
+
+        <div class="step">
+          <div><span class="n">6</span><span class="title">Vendor quotes</span></div>
+          <div class="meta">Vendor opens <span class="route">/sr-bid/&lt;token&gt;</span> <span class="arrow">→</span> <span class="pill rpc">RPC sr_bid_get_by_token</span> (visible columns only), enters unit rates + remarks + commercial terms, submits <span class="arrow">→</span> <span class="pill rpc">RPC sr_bid_submit_by_token</span> (<code class="k">sr_bid</code>/<code class="k">sr_bid_line</code>, revisions, deadline lock, reopen window).</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="callout gap">
+    <span class="h">⚠ The one real coupling to confirm: how do SR vendors get added?</span>
+    The SR Issue panel only <i>reads</i> <code class="k">rfq_vendors.bid_token</code> — it never creates it. The token itself isn't the problem (it's generated at row-insert, draft-time — verified via DB). The open question is the <b>vendor-invite step</b>: SR vendor rows still come from the materials-style invite path (the same <code class="k">rfq_vendors</code> insert used by the Preview page). So SR doesn't yet have its own clean "invite these subcontractors" entry — it leans on the materials machinery. That's the biggest "are we on the same page?" item — see the page-overlap note below.
+  </div>
+
+  <div class="callout warn">
+    <span class="h">The SR page mixes three "send to vendor" mechanisms today</span>
+    <span class="route">/rfq/sub/&lt;rfqId&gt;</span> has 5 tabs: <b>Overview</b> (materials-style email dispatch panel), <b>Vendors</b> (materials BidLinksPanel + invite), <b>Documents</b> (Drive upload via n8n), <b>Issue BOQ</b> (the new SR parser flow), and <b>BoQ Upload</b> (the older "frame" path → <code class="k">scc-frame-generate</code> → <code class="k">rfq_items</code>). Three of those are different ways to push work to a vendor. Worth deciding which is the canonical SR spine before we build the SR comparison sheet.
+  </div>
+
+  <div class="callout gap">
+    <span class="h">Two bid-collection models — and the decision to converge them</span>
+    <b>Model A (MR today):</b> the dispatched email contains the item schedule as a <i>table</i> and says "reply directly to this email" — vendors email their prices back and n8n + AI extraction turns the reply into a <code class="k">bid</code> (that's what the Bid-Review "Original Email | AI-Extracted Data" screen is built for).
+    <b>Model B (SR, and MR's manual fallback):</b> the vendor gets a private <span class="route">/bid/&lt;token&gt;</span> / <span class="route">/sr-bid/&lt;token&gt;</span> link and submits on a web form — no email parsing.
+    <br><br><b>Decision 2026-06-28:</b> MR moves to <b>Model B (link-first), like SR.</b> Load-bearing change is <b>backend</b> — <code class="k">bid_token</code> is minted by WF8 at dispatch, so only WF8 can embed each vendor's link; the WF7/WF8 email template must carry the portal link instead of the table. Frontend portal + BidLinksPanel already exist, so the model is testable today via manual link hand-out. Likely FE follow-up: demote the "Original Email" panel on Bid Review for portal-submitted bids.
+  </div>
+
+  <!-- ============ COMPARISON ============ -->
+  <h2 class="section">Part 2 — Bid comparison &amp; award</h2>
+  <div class="cols">
+
+    <!-- MR COMPARISON -->
+    <div class="lane mr">
+      <div class="lane-h"><h3>MR — Materials comparison <span class="tag live">live</span></h3>
+        <div class="sub">review each bid → matrix → recommend → award → approve → PO</div></div>
+      <div class="lane-body">
+
+        <div class="step">
+          <div><span class="n">1</span><span class="title">Review each bid</span></div>
+          <div class="meta">Per bid on <span class="route">/rfq/&lt;rfqId&gt;/bids/&lt;bidId&gt;/review</span>: left = original vendor email, right = AI-extracted fields + line rates (colour-coded by confidence), all editable. Officer clicks <span class="click">CONFIRM BID</span> (→ status <b>confirmed</b>), or Save Draft / Reject.</div>
+        </div>
+
+        <div class="step">
+          <div><span class="n">2</span><span class="title">Comparison matrix</span></div>
+          <div class="meta">On <span class="route">/rfq/&lt;rfqId&gt;/comparison</span>: items × vendors grid, unit rate + amount per cell, <b>lowest highlighted green</b>, missing = <i>NQ</i>, plus Budget Rate/Amt and a Min column; footer subtotal / VAT / total. A Commercial Summary table compares payment terms, lead time, validity, brand, vendor status.</div>
+          <div class="meta"><span class="lbl">Data:</span> <span class="pill db">DB</span> <code class="k">bids</code> + <code class="k">bid_items</code> joined to <code class="k">rfq_items</code>, ordered by total.</div>
+        </div>
+
+        <div class="step">
+          <div><span class="n">3</span><span class="title">AI recommendation</span></div>
+          <div class="meta"><span class="click">Generate AI Recommendation</span> <span class="arrow">→</span> n8n <span class="pill wf">WF11 scc-rfq-recommendation</span> writes a pick + reasoning to <code class="k">comparisons</code>.</div>
+        </div>
+
+        <div class="step">
+          <div><span class="n">4</span><span class="title">Per-line award + equalization</span></div>
+          <div class="meta"><b>ComparisonAwardPanel</b> awards each line to a vendor and applies equalization adjustments; "Mark as Final" / Decision card capture approved column + lowest-vs-not-lowest + notes.</div>
+        </div>
+
+        <div class="step">
+          <div><span class="n">5</span><span class="title">Approval → PO</span></div>
+          <div class="meta"><span class="click">Submit for approval</span> mints a single-use <span class="route">/comparison-review/&lt;token&gt;</span> link for Rabia. On approval, officer enters the PO number <span class="arrow">→</span> <span class="pill rpc">RPC comparison_issue_po</span> <span class="arrow">→</span> status <b>po_issued</b> (locked).</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SR COMPARISON -->
+    <div class="lane sr">
+      <div class="lane-h"><h3>SR — Subcontractor comparison <span class="tag todo">not built yet</span></h3>
+        <div class="sub">this is pending item #2 — the next big build</div></div>
+      <div class="lane-body notbuilt">
+
+        <div class="callout note" style="margin:12px 6px">
+          <span class="h">Nothing here exists in code yet.</span>
+          The vendor side (<span class="route">/sr-bid</span> submit → <code class="k">sr_bid</code>/<code class="k">sr_bid_line</code>) is live, but there is <b>no SR comparison screen</b>. Below is my <b>proposed</b> shape for us to agree on before building — deliberately mirroring the MR concept but adapted to flexible BOQ columns.
+        </div>
+
+        <div class="step">
+          <div><span class="n">1</span><span class="title">Side-by-side BOQ matrix</span></div>
+          <div class="meta">Read the issued skeleton <code class="k">sr_boq_line</code> × each vendor's <code class="k">sr_bid_line</code>, show the BOQ rows down the left and each vendor's unit rate / amount across — same green-lowest idea as MR, but columns come from the BOQ, not a fixed SAP shape.</div>
+        </div>
+
+        <div class="step">
+          <div><span class="n">2</span><span class="title">Equalization (exclusion → factor)</span></div>
+          <div class="meta">Apply <code class="k">sr_bid_equalization</code> adjustments so quotes compare like-for-like (subcontractor BOQs differ in inclusions). Table + RPCs already exist.</div>
+        </div>
+
+        <div class="step">
+          <div><span class="n">3</span><span class="title">Award</span></div>
+          <div class="meta">Award lines / whole BOQ; a parallel <code class="k">sr_award</code> table is acceptable (per handoff). Reuses the MR award concept.</div>
+        </div>
+
+        <div class="step">
+          <div><span class="n">4</span><span class="title">Negotiation reopen</span></div>
+          <div class="meta">A button wiring the already-tested <span class="pill rpc">RPC sr_bid_reopen</span> to re-enable a vendor's link past the deadline for a negotiation round.</div>
+        </div>
+
+        <div class="step">
+          <div><span class="n">5</span><span class="title">Approval / PO</span></div>
+          <div class="meta">Open question: reuse the MR approval+PO machinery (<code class="k">comparison_issue_po</code>, Rabia review link) or build an SR equivalent? <b>Decide together.</b></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DIVERGENCE TABLE ============ -->
+  <h2 class="section">Part 3 — Where the two tracks diverge (quick reference)</h2>
+  <table class="cmp">
+    <thead><tr><th style="width:22%">Concern</th><th style="width:39%">MR — Materials</th><th style="width:39%">SR — Subcontractor</th></tr></thead>
+    <tbody>
+      <tr><td>Source of items</td><td class="mrcell">SAP "SAPUI5 Export" .xlsx, deterministic</td><td class="srcell">BOQ PDF/.xlsx through the LLM/vision parser</td></tr>
+      <tr><td>Column shape</td><td class="mrcell">Fixed (item, desc, qty, unit, budget…)</td><td class="srcell">Flexible — the BOQ decides; officer curates visibility</td></tr>
+      <tr><td>Item creation</td><td class="mrcell"><span class="pill wf">WF7</span> → <code class="k">rfq_items</code></td><td class="srcell"><span class="pill rpc">sr_boq_issue</span> → <code class="k">sr_boq_line</code></td></tr>
+      <tr><td>Price hiding</td><td class="mrcell">n/a (budget kept internal in DB)</td><td class="srcell">Eye-toggle + server-side projection of internal cols</td></tr>
+      <tr><td>Dispatch</td><td class="mrcell"><span class="pill wf">WF8</span> email + stamps <code class="k">sent_at</code>/<code class="k">status</code></td><td class="srcell">Manual link hand-out</td></tr>
+      <tr><td>Token (<code class="k">bid_token</code>)</td><td class="mrcell">Exists from insert (draft-time), not at dispatch</td><td class="srcell">Same <code class="k">rfq_vendors.bid_token</code></td></tr>
+      <tr><td>Vendor link</td><td class="mrcell"><span class="route">/bid/&lt;token&gt;</span></td><td class="srcell"><span class="route">/sr-bid/&lt;token&gt;</span></td></tr>
+      <tr><td>Submit RPC</td><td class="mrcell"><code class="k">bid_submit_by_token</code></td><td class="srcell"><code class="k">sr_bid_submit_by_token</code></td></tr>
+      <tr><td>Comparison</td><td class="mrcell">Full: review → matrix → WF11 → award → approve → PO</td><td class="srcell"><b>Not built</b> — pending #2</td></tr>
+      <tr><td>Equalization</td><td class="mrcell">In ComparisonAwardPanel</td><td class="srcell">Planned via <code class="k">sr_bid_equalization</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout note">
+    <span class="h">My summary of the alignment question</span>
+    MR is a complete loop today. SR is complete <i>up to vendor submission</i> and stops there — the comparison/award half is the next build (#2). The two open design choices I want your call on before writing code: <b>(1)</b> does SR get its own clean vendor-invite/dispatch (its own token minting), or keep borrowing the materials WF8 path? and <b>(2)</b> does SR comparison reuse the MR approval+PO machinery or get its own?
+  </div>
+
+  <!-- ============ DESIGN PHILOSOPHY ============ -->
+  <h2 class="section">Part 4 — Design philosophy (agreed 2026-06-28)</h2>
+  <div class="callout note">
+    <span class="h">Principles</span>
+    <b>1. Lifecycle-first IA</b> — structure mirrors the journey (Define → Solicit → Collect → Evaluate → Award → Approve → PO) with a persistent status stepper that always shows "what stage, what's next."<br>
+    <b>2. One mental model across MR &amp; SR</b> — same page skeleton; type differences (SAP vs BOQ; email vs portal) live <i>inside</i> a stage.<br>
+    <b>3. Separate what / who / responses / award</b> — content (items+email+T&amp;Cs) ≠ recipients ≠ bids ≠ evaluation. Email leaves the Vendors tab.<br>
+    <b>4. One canonical action per decision</b> — no two buttons writing the same state (kills "Mark as Final" vs "Submit for approval", and single-column Decision card vs per-line Award).<br>
+    <b>5. Progressive disclosure gated by stage</b> — only valid actions are shown for the current stage.<br>
+    <b>6. Formalize the link/token seam</b> — every shareable link (bid, approval) has a state: <i>manual-copy → (later) auto-emailed</i>, so n8n automation drops in with no UI rework.<br>
+    <b>7. Safe, additive migration</b> — introduced alongside current pages; nothing existing breaks (per CLAUDE.md).
+  </div>
+  <div class="callout note">
+    <span class="h">Agreed forks</span>
+    <b>Hybrid navigation</b> (stepper + jumpable tabs) · heavy views (comparison, dispatch) stay <b>dedicated full-width routes</b> framed as stages · <b>MR first</b>, SR adopts the same skeleton after.
+  </div>
+  <div class="callout note">
+    <span class="h">Ingestion is a pluggable adapter, not a stage (future-proofs MR→LLM)</span>
+    The canonical artifact is the <b>items table</b> (<code class="k">rfq_items</code> MR / <code class="k">sr_boq_line</code> SR); the <i>source</i> is a swappable front-end on the Define/"RFQ Document" stage — today SAP→WF7 (MR, deterministic) and BOQ→parser→HITL (SR). When MR later adopts the <b>Python/LLM parser</b> for ingestion it's just another adapter feeding the same table: <b>no new stage, no stepper change, no schema change</b> (LLM fills <code class="k">rfq_items</code> like WF7). So SR's parse→curate→confidence panel is built as a <b>shared</b> component, and HITL/confidence states are generic (the SAP path simply doesn't trigger them). LLM is already in MR on the bid side (Model-A email→AI extraction). <i>Future caveat:</i> MR ingesting arbitrary unstructured docs may eventually want SR's flexible-column model — that would be backend; not a blocker now, IA kept able to flex toward it.
+  </div>
+
+  <h3 style="font-size:15px;color:#13211c;margin:18px 2px 8px">Target IA — MR detail page</h3>
+  <table class="cmp">
+    <thead><tr><th style="width:20%">Tab</th><th style="width:42%">Holds</th><th style="width:38%">Change from today</th></tr></thead>
+    <tbody>
+      <tr><td><b>Overview</b></td><td>Status stepper, key facts, dates, PR#s, Drive, counts (sent/responded). A dashboard.</td><td>Add the stepper; keep facts.</td></tr>
+      <tr><td><b>RFQ Document</b></td><td>Items/schedule <b>+ covering email (subject/body) + T&amp;Cs</b>.</td><td>NEW home for the email (moved out of Vendors).</td></tr>
+      <tr><td><b>Vendors</b></td><td><i>Only</i> selection + dispatch + response tracking + bid-links hand-out.</td><td>Slimmed; email preview removed.</td></tr>
+      <tr><td><b>Bids &amp; Award</b></td><td>Bids → review → comparison → equalization → award → approval → PO.</td><td>Elevated to own the whole evaluation lifecycle (was a thin list + separate route).</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ============ PHASED PLAN ============ -->
+  <h2 class="section">Part 5 — Phased build plan (additive, MR-first)</h2>
+  <table class="cmp">
+    <thead><tr><th style="width:8%">Phase</th><th style="width:30%">What</th><th style="width:40%">Detail</th><th style="width:22%">User-visible?</th></tr></thead>
+    <tbody>
+      <tr><td><b>0</b></td><td>Foundations</td><td>Shared <b>stage model</b> (map <code class="k">rfq.status</code> + signals → lifecycle stages); reusable <code class="k">&lt;StatusStepper&gt;</code> + stage-gating hook; the <code class="k">&lt;ShareableLink&gt;</code> seam abstraction (state: manual → emailed).</td><td>No — plumbing.</td></tr>
+      <tr><td><b>1</b></td><td>MR detail recompose</td><td>The 4 tabs on <span class="route">/rfq/$rfqId</span>; move email → RFQ Document; slim Vendors; stepper on Overview. Comparison/preview stay as deep routes launched from stages.</td><td>Yes — MR officers.</td></tr>
+      <tr><td><b>2</b></td><td>Comparison cleanup</td><td>Fix <b>duplicate-vendor-columns</b> (one column/vendor, latest + revisions); <b>retire the Decision card</b> (fold not-lowest justification into the award step) after verifying no downstream reader of <code class="k">approved_vendor_column</code>/<code class="k">selection_type</code>/<code class="k">status='finalised'</code>.</td><td>Yes — evaluators.</td></tr>
+      <tr><td><b>3</b></td><td>SR adopts skeleton</td><td>Same 4-stage IA on <span class="route">/rfq/sub/$rfqId</span>; "Issue BOQ" becomes the RFQ-Document stage; consolidate the 3 overlapping send mechanisms.</td><td>Yes — SR officers.</td></tr>
+      <tr><td><b>4</b></td><td>Link-seam automation</td><td>Wire <code class="k">&lt;ShareableLink&gt;</code> states so manual links flip to "auto-emailed" once the backend lands the emails. FE-ready ahead of n8n.</td><td>Yes — when backend ready.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout gap">
+    <span class="h">Backend (n8n) dependencies this plan does NOT cover — operator-owned</span>
+    Link-in-email for MR (link-first, handoff 7b) · email the approval review link to Rabia (handoff 6) · submit/approve/return notifications. The frontend will be built ready for these; the emails themselves are n8n.
+  </div>
+  <div class="callout note">
+    <span class="h">Every phase ends on the DoD gate</span>
+    <code class="k">npx tsc --noEmit</code> · <code class="k">npm run lint</code> · <code class="k">npm run build</code> · <code class="k">node scripts/verify_pr_contracts.mjs</code> — all green, additive, no regression to existing flows.
+  </div>
+
+  <div class="foot">
+    Sources: <code class="k">rfq.new.tsx</code>, <code class="k">rfq.preview.tsx</code>, <code class="k">bid.$token.tsx</code>, <code class="k">bid-links-panel.tsx</code>, <code class="k">settings.tsx</code> (MR issue) · <code class="k">rfq.$rfqId.comparison.tsx</code>, <code class="k">rfq.$rfqId.bids.$bidId.review.tsx</code>, <code class="k">comparison-award-panel</code> (MR comparison) · <code class="k">sr/sr-boq-issue-panel.tsx</code>, <code class="k">rfq.sub.$rfqId.tsx</code>, <code class="k">sr-bid.$token.tsx</code>, <code class="k">lib/sr-boq.ts</code> (SR). This is a description of current code as of 2026-06-28, plus a clearly-marked proposal for the unbuilt SR comparison.
+  </div>
+
+</div>
+</body>
+</html>

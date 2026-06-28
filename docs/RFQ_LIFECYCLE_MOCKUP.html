@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RFQ Lifecycle Stepper — visual mockup</title>
+<style>
+  :root{
+    --cream:#F4F8F6; --ink:#0D3D2E; --accent:#0D7A5A; --accent-deep:#0A5C44; --border:#C8DDD7;
+    --charcoal:#1f242b; --mut:#5b6b66;
+    --done:#0D7A5A; --todo-bg:#E5EAE8; --todo-fg:#9aa8a3;
+    --cur-ring:#0D7A5A;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#eef3f1;color:#13211c;font:15px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1040px;margin:0 auto;padding:30px 22px 80px}
+  header.top{background:var(--charcoal);color:#eef3f1;border-radius:16px;padding:24px 26px;margin-bottom:24px}
+  header.top h1{margin:0 0 6px;font-size:22px}
+  header.top p{margin:0;color:#b9c6c0;font-size:13.5px}
+  h2.sec{font-size:12px;text-transform:uppercase;letter-spacing:.13em;color:var(--mut);margin:34px 0 14px;border-bottom:1px solid var(--border);padding-bottom:6px}
+
+  /* ── Stepper ── */
+  .frame{background:#fff;border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:14px}
+  .when{font-size:12px;color:var(--mut);margin-bottom:16px}
+  .when b{color:#13211c}
+  .stepper{display:flex;align-items:flex-start}
+  .step{flex:1;text-align:center;position:relative;min-width:0}
+  .step::before{content:"";position:absolute;top:17px;left:-50%;width:100%;height:3px;background:var(--todo-bg);z-index:0}
+  .step:first-child::before{display:none}
+  .step.done::before,.step.current::before{background:var(--done)}
+  .node{position:relative;z-index:1;width:36px;height:36px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
+  .step.done .node{background:var(--done);color:#fff}
+  .step.current .node{background:#fff;color:var(--accent);border:3px solid var(--cur-ring);box-shadow:0 0 0 5px rgba(13,122,90,.15)}
+  .step.todo .node{background:var(--todo-bg);color:var(--todo-fg)}
+  .lbl{margin-top:8px;font-size:12.5px;font-weight:600;line-height:1.25}
+  .step.todo .lbl{color:var(--todo-fg);font-weight:500}
+  .step.current .lbl{color:var(--accent-deep)}
+  .sub{margin-top:2px;font-size:10.5px;color:var(--mut);line-height:1.2}
+  .step.todo .sub{color:#b9c6c0}
+  .badge{display:inline-block;margin-top:7px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 8px;border-radius:999px}
+
+  .act{margin-top:16px;border-top:1px dashed var(--border);padding-top:12px;font-size:12.5px;color:#234}
+  .act .k{font-weight:700;color:var(--accent-deep)}
+  .pill{display:inline-block;background:#13211c;color:#fff;border-radius:6px;padding:1px 8px;font-size:11.5px;font-weight:600;margin:0 2px}
+
+  .opt-note{font-size:12.5px;color:var(--mut);margin:2px 0 12px}
+  .reco{display:inline-block;background:#E0F2EA;color:#0D5C3A;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:5px;margin-left:6px;vertical-align:middle}
+  code.k{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#0a4}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin:6px 2px 0}
+  .dot{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:middle;margin-right:5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1>RFQ Lifecycle Stepper — how it looks, start to finish</h1>
+    <p>The persistent progress bar at the top of an RFQ detail page. Each frame below = the same stepper at one point in an RFQ's life, in order. Mockup for the Phase-0 stage model. Charcoal = procurement theme.</p>
+  </header>
+
+  <div class="legend">
+    <span><span class="dot" style="background:var(--done)"></span>Done</span>
+    <span><span class="dot" style="background:#fff;border:3px solid var(--accent)"></span>Current stage</span>
+    <span><span class="dot" style="background:var(--todo-bg)"></span>Not yet reached</span>
+  </div>
+
+  <!-- ============ START TO FINISH (6-stage) ============ -->
+  <h2 class="sec">The journey — a materials RFQ from creation to closed (6-stage model)</h2>
+
+  <!-- 1 DRAFT -->
+  <div class="frame">
+    <div class="when">① <b>Just created</b> — officer generated the RFQ from SAP, nothing sent yet · <code class="k">rfqs.status='draft'</code></div>
+    <div class="stepper">
+      <div class="step current"><div class="node">1</div><div class="lbl">Draft</div><div class="sub">created, not sent</div><span class="badge" style="background:#E5EAE8;color:#0D3D2E">you are here</span></div>
+      <div class="step todo"><div class="node">2</div><div class="lbl">Issued</div><div class="sub">awaiting responses</div></div>
+      <div class="step todo"><div class="node">3</div><div class="lbl">Responses In</div><div class="sub">bids arriving</div></div>
+      <div class="step todo"><div class="node">4</div><div class="lbl">Evaluation</div><div class="sub">compare &amp; award</div></div>
+      <div class="step todo"><div class="node">5</div><div class="lbl">Approved</div><div class="sub">by Rabia</div></div>
+      <div class="step todo"><div class="node">6</div><div class="lbl">PO Issued</div><div class="sub">closed</div></div>
+    </div>
+    <div class="act"><span class="k">Page shows:</span> edit items &amp; covering email (RFQ Document tab), pick recipients. <span class="k">Action:</span> <span class="pill">Select recipients &amp; Send</span></div>
+  </div>
+
+  <!-- 2 ISSUED -->
+  <div class="frame">
+    <div class="when">② <b>Dispatched</b> — sent to vendors, none have replied yet · <code class="k">status='issued'</code>, 0 bids</div>
+    <div class="stepper">
+      <div class="step done"><div class="node">✓</div><div class="lbl">Draft</div><div class="sub">created, not sent</div></div>
+      <div class="step current"><div class="node">2</div><div class="lbl">Issued</div><div class="sub">awaiting responses</div><span class="badge" style="background:#E8EFF7;color:#1A3A5C">you are here</span></div>
+      <div class="step todo"><div class="node">3</div><div class="lbl">Responses In</div><div class="sub">bids arriving</div></div>
+      <div class="step todo"><div class="node">4</div><div class="lbl">Evaluation</div><div class="sub">compare &amp; award</div></div>
+      <div class="step todo"><div class="node">5</div><div class="lbl">Approved</div><div class="sub">by Rabia</div></div>
+      <div class="step todo"><div class="node">6</div><div class="lbl">PO Issued</div><div class="sub">closed</div></div>
+    </div>
+    <div class="act"><span class="k">Page shows:</span> recipient list + sent status, the vendor bid links to hand out. <span class="k">Action:</span> <span class="pill">Copy / send bid links</span> · track responses</div>
+  </div>
+
+  <!-- 3 RESPONSES IN -->
+  <div class="frame">
+    <div class="when">③ <b>Bids coming in</b> — at least one vendor has submitted · <code class="k">status='issued'</code> + bids &gt; 0</div>
+    <div class="stepper">
+      <div class="step done"><div class="node">✓</div><div class="lbl">Draft</div><div class="sub">created, not sent</div></div>
+      <div class="step done"><div class="node">✓</div><div class="lbl">Issued</div><div class="sub">awaiting responses</div></div>
+      <div class="step current"><div class="node">3</div><div class="lbl">Responses In</div><div class="sub">bids arriving</div><span class="badge" style="background:#FDF3E0;color:#7A5200">you are here</span></div>
+      <div class="step todo"><div class="node">4</div><div class="lbl">Evaluation</div><div class="sub">compare &amp; award</div></div>
+      <div class="step todo"><div class="node">5</div><div class="lbl">Approved</div><div class="sub">by Rabia</div></div>
+      <div class="step todo"><div class="node">6</div><div class="lbl">PO Issued</div><div class="sub">closed</div></div>
+    </div>
+    <div class="act"><span class="k">Page shows:</span> Bids &amp; Award tab lights up with incoming bids (one row per vendor). <span class="k">Action:</span> <span class="pill">Review bid</span> → confirm</div>
+  </div>
+
+  <!-- 4 EVALUATION -->
+  <div class="frame">
+    <div class="when">④ <b>Evaluating</b> — comparing confirmed bids, awarding lines · a <code class="k">comparison</code> exists with awards</div>
+    <div class="stepper">
+      <div class="step done"><div class="node">✓</div><div class="lbl">Draft</div><div class="sub">created, not sent</div></div>
+      <div class="step done"><div class="node">✓</div><div class="lbl">Issued</div><div class="sub">awaiting responses</div></div>
+      <div class="step done"><div class="node">✓</div><div class="lbl">Responses In</div><div class="sub">bids arriving</div></div>
+      <div class="step current"><div class="node">4</div><div class="lbl">Evaluation</div><div class="sub">compare &amp; award</div><span class="badge" style="background:#E8EFF7;color:#1A3A5C">you are here</span></div>
+      <div class="step todo"><div class="node">5</div><div class="lbl">Approved</div><div class="sub">by Rabia</div></div>
+      <div class="step todo"><div class="node">6</div><div class="lbl">PO Issued</div><div class="sub">closed</div></div>
+    </div>
+    <div class="act"><span class="k">Page shows:</span> comparison matrix, equalization, per-line award. <span class="k">Action:</span> award every line → <span class="pill">Submit for approval</span> (mints Rabia's review link)</div>
+  </div>
+
+  <!-- 5 APPROVED -->
+  <div class="frame">
+    <div class="when">⑤ <b>Approved</b> — Rabia approved the award via her review link · <code class="k">comparison.status='approved'</code></div>
+    <div class="stepper">
+      <div class="step done"><div class="node">✓</div><div class="lbl">Draft</div><div class="sub">created, not sent</div></div>
+      <div class="step done"><div class="node">✓</div><div class="lbl">Issued</div><div class="sub">awaiting responses</div></div>
+      <div class="step done"><div class="node">✓</div><div class="lbl">Responses In</div><div class="sub">bids arriving</div></div>
+      <div class="step done"><div class="node">✓</div><div class="lbl">Evaluation</div><div class="sub">compare &amp; award</div></div>
+      <div class="step current"><div class="node">5</div><div class="lbl">Approved</div><div class="sub">by Rabia</div><span class="badge" style="background:#FDF3E0;color:#7A5200">you are here</span></div>
+      <div class="step todo"><div class="node">6</div><div class="lbl">PO Issued</div><div class="sub">closed</div></div>
+    </div>
+    <div class="act"><span class="k">Page shows:</span> award locked, approver noted. <span class="k">Action:</span> enter PO number → <span class="pill">Mark PO Issued</span></div>
+  </div>
+
+  <!-- 6 PO -->
+  <div class="frame">
+    <div class="when">⑥ <b>Closed</b> — PO recorded; comparison locked permanently · <code class="k">comparison.status='po_issued'</code></div>
+    <div class="stepper">
+      <div class="step done"><div class="node">✓</div><div class="lbl">Draft</div><div class="sub">created, not sent</div></div>
+      <div class="step done"><div class="node">✓</div><div class="lbl">Issued</div><div class="sub">awaiting responses</div></div>
+      <div class="step done"><div class="node">✓</div><div class="lbl">Responses In</div><div class="sub">bids arriving</div></div>
+      <div class="step done"><div class="node">✓</div><div class="lbl">Evaluation</div><div class="sub">compare &amp; award</div></div>
+      <div class="step done"><div class="node">✓</div><div class="lbl">Approved</div><div class="sub">by Rabia</div></div>
+      <div class="step current"><div class="node">✓</div><div class="lbl">PO Issued</div><div class="sub">closed</div><span class="badge" style="background:#E0F2EA;color:#0D5C3A">done</span></div>
+    </div>
+    <div class="act"><span class="k">Page shows:</span> read-only summary, PO number + date. No further actions.</div>
+  </div>
+
+  <!-- ============ OPTIONS ============ -->
+  <h2 class="sec">Pick the granularity — the open decision</h2>
+  <p class="opt-note">Same journey, three levels of detail. The fuller the stepper, the more precisely it tells the officer where they are — at the cost of more states to maintain. Steppers shown at the <b>Evaluation</b> point so you can compare.</p>
+
+  <!-- Option A: 6 -->
+  <div class="frame">
+    <div class="when"><b>Option A — 6 stages</b> <span class="reco">recommended</span> · most descriptive; distinguishes Approved vs PO</div>
+    <div class="stepper">
+      <div class="step done"><div class="node">✓</div><div class="lbl">Draft</div></div>
+      <div class="step done"><div class="node">✓</div><div class="lbl">Issued</div></div>
+      <div class="step done"><div class="node">✓</div><div class="lbl">Responses In</div></div>
+      <div class="step current"><div class="node">4</div><div class="lbl">Evaluation</div></div>
+      <div class="step todo"><div class="node">5</div><div class="lbl">Approved</div></div>
+      <div class="step todo"><div class="node">6</div><div class="lbl">PO Issued</div></div>
+    </div>
+  </div>
+
+  <!-- Option B: 4 -->
+  <div class="frame">
+    <div class="when"><b>Option B — 4 stages</b> · mirrors the backend's <code class="k">v_pr_tracker.pr_status_code</code> exactly (one consistent story across dashboard, PR tracker, RFQ page)</div>
+    <div class="stepper">
+      <div class="step done"><div class="node">✓</div><div class="lbl">Draft</div></div>
+      <div class="step done"><div class="node">✓</div><div class="lbl">Issued&nbsp;–&nbsp;awaiting</div></div>
+      <div class="step current"><div class="node">3</div><div class="lbl">Responses&nbsp;–&nbsp;pending eval</div></div>
+      <div class="step todo"><div class="node">4</div><div class="lbl">Evaluation complete</div></div>
+    </div>
+    <div class="act" style="border:0;padding-top:8px"><span class="k">Trade-off:</span> simplest &amp; backend-aligned, but the approval → PO tail isn't shown as steps.</div>
+  </div>
+
+  <!-- Option C: 5 -->
+  <div class="frame">
+    <div class="when"><b>Option C — 5 stages</b> · keeps response/eval detail, collapses the approval+PO tail into one terminal step</div>
+    <div class="stepper">
+      <div class="step done"><div class="node">✓</div><div class="lbl">Draft</div></div>
+      <div class="step done"><div class="node">✓</div><div class="lbl">Issued</div></div>
+      <div class="step done"><div class="node">✓</div><div class="lbl">Responses In</div></div>
+      <div class="step current"><div class="node">4</div><div class="lbl">Evaluation</div></div>
+      <div class="step todo"><div class="node">5</div><div class="lbl">Awarded &amp; PO</div></div>
+    </div>
+  </div>
+
+  <p class="opt-note" style="margin-top:18px">Note: SR (subcontractor) currently has no comparison/approval/PO built, so on the SR page the later steps would render as <i>upcoming/greyed</i> until those are built — same stepper, honest about what's not there yet.</p>
+
+</div>
+</body>
+</html>

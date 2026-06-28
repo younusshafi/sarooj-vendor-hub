@@ -401,6 +401,13 @@ function RFQPreviewPage() {
       const result: { message?: string } = await res.json();
       if (!res.ok) throw new Error(result.message || `WF8 error: ${res.status}`);
       toast.success("RFQ dispatched successfully!");
+      // Mark dispatch as in-flight: WF8 takes ~40s to flip status→issued. The detail page
+      // reads this to show a "sending…" state instead of re-showing the select-recipients UI.
+      try {
+        sessionStorage.setItem(`rfq_dispatching_${rfqId}`, String(Date.now()));
+      } catch {
+        /* sessionStorage unavailable — non-fatal */
+      }
       navigate({ to: "/rfq/$rfqId", params: { rfqId } });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Dispatch failed";

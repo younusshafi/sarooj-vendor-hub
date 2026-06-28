@@ -418,9 +418,28 @@ function DashboardPage() {
     <div className="space-y-8">
       <div>
         <h1 className="font-display text-[28px] text-foreground">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Overview of the vendor master.</p>
+        <p className="text-sm text-muted-foreground">
+          Procurement pipeline at a glance · vendor master below.
+        </p>
       </div>
 
+      {/* ── Procurement: parallel MR / SR sections (no silent type mixing) ── */}
+      <ProcurementSection
+        title="Procurement — Materials (MR)"
+        subtitle="Materials RFQ pipeline at a glance"
+        stats={procStats.data?.materials}
+        loading={procStats.isLoading}
+        kind="materials"
+      />
+      <ProcurementSection
+        title="Procurement — Subcontractor (SR)"
+        subtitle="Subcontractor RFQ pipeline — detail opens in the Subcontractor app"
+        stats={procStats.data?.subcontractor}
+        loading={procStats.isLoading}
+        kind="subcontractor"
+      />
+
+      <h2 className="font-display text-xl text-foreground">Vendor Master</h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <StatCard
           value={stats.data?.total ?? 0}
@@ -511,22 +530,6 @@ function DashboardPage() {
           </table>
         </div>
       </section>
-
-      {/* ── Procurement: parallel MR / SR sections (no silent type mixing) ── */}
-      <ProcurementSection
-        title="Procurement — Materials (MR)"
-        subtitle="Materials RFQ pipeline at a glance"
-        stats={procStats.data?.materials}
-        loading={procStats.isLoading}
-        kind="materials"
-      />
-      <ProcurementSection
-        title="Procurement — Subcontractor (SR)"
-        subtitle="Subcontractor RFQ pipeline — detail opens in the Subcontractor app"
-        stats={procStats.data?.subcontractor}
-        loading={procStats.isLoading}
-        kind="subcontractor"
-      />
     </div>
   );
 }

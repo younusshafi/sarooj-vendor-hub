@@ -13,6 +13,7 @@ export function RfqEmailEditor({ rfqId, status = "draft" }: { rfqId: string; sta
   const [body, setBody] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [editingBody, setEditingBody] = useState(false);
 
   const fetchEmail = useCallback(async () => {
     const { data, error } = await supabase
@@ -124,24 +125,39 @@ export function RfqEmailEditor({ rfqId, status = "draft" }: { rfqId: string; sta
         </div>
 
         <div>
-          <Label htmlFor="email_body">Body (HTML)</Label>
-          <div className="mt-1 space-y-2">
-            <textarea
-              id="email_body"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              disabled={readOnly}
-              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm font-mono min-h-[200px] focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-70"
-            />
-            <details className="rounded-md border border-border p-3">
-              <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
-                Preview rendered email
-              </summary>
-              <div
-                className="mt-2 prose prose-sm max-w-none text-sm"
-                dangerouslySetInnerHTML={{ __html: body }}
+          <div className="flex items-center justify-between">
+            <Label htmlFor="email_body">Body</Label>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => setEditingBody((v) => !v)}
+                className="text-xs font-medium underline"
+                style={{ color: "var(--accent)" }}
+              >
+                {editingBody ? "Done — show preview" : "Edit HTML"}
+              </button>
+            )}
+          </div>
+          <div className="mt-1">
+            {editingBody && !readOnly ? (
+              <textarea
+                id="email_body"
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                className="min-h-[260px] w-full rounded-md border border-border bg-card px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
-            </details>
+            ) : (
+              <div className="rounded-md border border-border bg-card p-4">
+                {body.trim() ? (
+                  <div
+                    className="prose prose-sm max-w-none text-sm"
+                    dangerouslySetInnerHTML={{ __html: body }}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">No email body yet.</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </CardContent>

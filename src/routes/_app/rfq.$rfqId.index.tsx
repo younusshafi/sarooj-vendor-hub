@@ -7,8 +7,6 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
-  ChevronDown,
-  ChevronUp,
   Send,
   CheckCircle,
 } from "lucide-react";
@@ -17,6 +15,9 @@ import { formatDate } from "@/lib/format";
 import { fmtOmr } from "@/lib/omr";
 import { excludeTestBatch, splitRecipients, groupByCategory, wasSent } from "@/lib/rfq-vendors";
 import { BidLinksPanel } from "@/components/bid-links-panel";
+import { RfqEmailEditor } from "@/components/rfq-email-editor";
+import { StatusStepper } from "@/components/rfq/status-stepper";
+import { deriveStage } from "@/lib/rfq-stage";
 
 export const Route = createFileRoute("/_app/rfq/$rfqId/")({
   component: RFQDetailPage,
@@ -24,7 +25,7 @@ export const Route = createFileRoute("/_app/rfq/$rfqId/")({
 
 // This is the materials (Supplies) RFQ detail page. Subcontractor RFQs have their
 // own in-app detail screen — if one is reached here directly by URL, redirect to it.
-type Tab = "overview" | "vendors" | "bids";
+type Tab = "overview" | "document" | "vendors" | "bids";
 
 function RFQDetailPage() {
   const { rfqId } = Route.useParams();
@@ -38,6 +39,8 @@ function RFQDetailPage() {
       if (error) throw error;
       return data as any;
     },
+    // While draft, poll so the view flips to "issued" automatically once dispatch (WF8, ~40s) finishes.
+    refetchInterval: (query) => (query.state.data?.status === "draft" ? 6000 : false),
   });
 
   const { data: vendors, isLoading: vendorsLoading } = useQuery({
@@ -52,6 +55,8 @@ function RFQDetailPage() {
       return (data ?? []) as any[];
     },
     enabled: tab === "vendors",
+    // Refresh recipients (sent_at) while dispatch is settling.
+    refetchInterval: rfq?.status === "draft" ? 6000 : false,
   });
 
   const { data: rfqItems } = useQuery({
@@ -83,6 +88,28 @@ function RFQDetailPage() {
     enabled: true,
   });
 
+  // Signals to place this RFQ on the lifecycle stepper (derived — no persisted stage).
+  const { data: stageSignals } = useQuery({
+    queryKey: ["rfq-stage-signals", rfqId],
+    queryFn: async () => {
+      const { data: cmp } = await supabase
+        .from("comparisons")
+        .select("comparison_id,status")
+        .eq("rfq_id", rfqId)
+        .maybeSingle();
+      let hasAwards = false;
+      if (cmp?.comparison_id) {
+        const { count } = await supabase
+          .from("comparison_awards")
+          .select("*", { count: "exact", head: true })
+          .eq("comparison_id", cmp.comparison_id);
+        hasAwards = (count ?? 0) > 0;
+      }
+      return { comparisonStatus: (cmp?.status as string | null) ?? null, hasAwards };
+    },
+    refetchInterval: rfq?.status === "draft" ? 6000 : false,
+  });
+
   // Guard: a subcontractor RFQ reached here directly belongs to the SR detail screen.
   const isSubcontractor = !!rfq && rfq.rfq_type !== "materials";
   useEffect(() => {
@@ -110,10 +137,18 @@ function RFQDetailPage() {
     );
   }
 
+  const stage = deriveStage({
+    status: rfq.status,
+    bidCount: bids?.length ?? 0,
+    comparisonStatus: stageSignals?.comparisonStatus ?? null,
+    hasAwards: stageSignals?.hasAwards ?? false,
+  });
+
   const TABS: { id: Tab; label: string }[] = [
     { id: "overview", label: "Overview" },
+    { id: "document", label: "RFQ Document" },
     { id: "vendors", label: "Vendors" },
-    { id: "bids", label: "Bids" },
+    { id: "bids", label: "Bids & Award" },
   ];
 
   return (
@@ -157,6 +192,11 @@ function RFQDetailPage() {
             </Link>
           </div>
         </div>
+      </div>
+
+      {/* Lifecycle stepper */}
+      <div className="rounded-xl border border-border bg-card px-6 py-5">
+        <StatusStepper current={stage} />
       </div>
 
       {/* Tabs */}
@@ -224,50 +264,62 @@ function RFQDetailPage() {
               </div>
             </div>
           )}
-          {rfqItems && rfqItems.length > 0 && (
-            <div className="rounded-xl border border-border bg-card sm:col-span-2 lg:col-span-3">
-              <div className="px-4 py-3 border-b border-border">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Items ({rfqItems.length})
-                </span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead style={{ backgroundColor: "var(--table-header)" }}>
-                    <tr
-                      className="text-left text-xs font-semibold uppercase tracking-wider"
-                      style={{ color: "var(--table-header-text)" }}
-                    >
-                      <th className="px-4 py-2">#</th>
-                      <th className="px-4 py-2">Description</th>
-                      <th className="px-4 py-2 text-right">Qty</th>
-                      <th className="px-4 py-2">Unit</th>
-                      <th className="px-4 py-2">Delivery Date</th>
-                      <th className="px-4 py-2 text-right">Budget Rate (OMR)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rfqItems.map((item: any) => (
-                      <tr key={item.item_id} className="border-t border-border">
-                        <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
-                          {item.sap_item_number ?? "—"}
-                        </td>
-                        <td className="px-4 py-2 text-xs">{item.description || "—"}</td>
-                        <td className="px-4 py-2 text-right text-xs">{item.quantity ?? "—"}</td>
-                        <td className="px-4 py-2 text-xs">{item.unit || "—"}</td>
-                        <td className="px-4 py-2 text-xs text-muted-foreground">
-                          {item.delivery_date ? item.delivery_date.split("T")[0] : "—"}
-                        </td>
-                        <td className="px-4 py-2 text-right font-mono text-xs text-muted-foreground">
-                          {item.budget_unit_rate_omr ?? "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+        </div>
+      )}
+
+      {/* RFQ Document tab — items + editable covering email */}
+      {tab === "document" && (
+        <div className="space-y-6">
+          <RfqEmailEditor rfqId={rfqId} status={rfq.status} />
+          <div className="rounded-xl border border-border bg-card">
+            <div className="border-b border-border px-4 py-3">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Items ({rfqItems?.length ?? 0})
+              </span>
             </div>
-          )}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead style={{ backgroundColor: "var(--table-header)" }}>
+                  <tr
+                    className="text-left text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: "var(--table-header-text)" }}
+                  >
+                    <th className="px-4 py-2">#</th>
+                    <th className="px-4 py-2">Description</th>
+                    <th className="px-4 py-2 text-right">Qty</th>
+                    <th className="px-4 py-2">Unit</th>
+                    <th className="px-4 py-2">Delivery Date</th>
+                    <th className="px-4 py-2 text-right">Budget Rate (OMR)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(rfqItems ?? []).map((item: any) => (
+                    <tr key={item.item_id} className="border-t border-border">
+                      <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
+                        {item.sap_item_number ?? "—"}
+                      </td>
+                      <td className="px-4 py-2 text-xs">{item.description || "—"}</td>
+                      <td className="px-4 py-2 text-right text-xs">{item.quantity ?? "—"}</td>
+                      <td className="px-4 py-2 text-xs">{item.unit || "—"}</td>
+                      <td className="px-4 py-2 text-xs text-muted-foreground">
+                        {item.delivery_date ? item.delivery_date.split("T")[0] : "—"}
+                      </td>
+                      <td className="px-4 py-2 text-right font-mono text-xs text-muted-foreground">
+                        {item.budget_unit_rate_omr ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
+                  {(rfqItems?.length ?? 0) === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
+                        No items
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
@@ -402,7 +454,6 @@ function VendorsTabPanel({
   const hasSelection = isDraft && savedSelection.size > 0;
   const selectedCount = allVendors.filter((v: any) => savedSelection.has(v.vendor_id)).length;
 
-  const [emailExpanded, setEmailExpanded] = useState(true);
   const [deadline, setDeadline] = useState<string>(rfq.deadline ?? "");
   const [deadlineSaving, setDeadlineSaving] = useState(false);
   const [deadlineSaved, setDeadlineSaved] = useState(false);
@@ -436,7 +487,51 @@ function VendorsTabPanel({
     [rfqId, showToast],
   );
 
+  // Clear the in-flight dispatch flag once the RFQ is actually issued.
+  useEffect(() => {
+    if (!isDraft) {
+      try {
+        sessionStorage.removeItem(`rfq_dispatching_${rfqId}`);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [isDraft, rfqId]);
+
+  let dispatchedAt = 0;
+  try {
+    const v = sessionStorage.getItem(`rfq_dispatching_${rfqId}`);
+    dispatchedAt = v ? Number(v) : 0;
+  } catch {
+    dispatchedAt = 0;
+  }
+  // Just after Send, WF8 takes ~40s to flip status→issued; show a clear "sending" state
+  // instead of re-showing the full select-recipients UI. Parent polls, so this resolves itself.
+  const dispatching = isDraft && dispatchedAt > 0 && Date.now() - dispatchedAt < 90000;
+
   const vendorCount = allVendors.length;
+
+  if (dispatching) {
+    return (
+      <div className="space-y-4">
+        <div
+          className="flex items-center gap-3 rounded-xl border p-5"
+          style={{ borderColor: "#1A3A5C", backgroundColor: "#E8EFF7" }}
+        >
+          <Loader2 className="h-5 w-5 animate-spin" style={{ color: "#1A3A5C" }} />
+          <div>
+            <p className="text-sm font-semibold" style={{ color: "#1A3A5C" }}>
+              Dispatch in progress…
+            </p>
+            <p className="text-xs" style={{ color: "#1A3A5C", opacity: 0.8 }}>
+              Sending this RFQ to your selected vendors. This can take up to ~40 seconds and updates
+              automatically — no need to re-send or re-select recipients.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -664,49 +759,7 @@ function VendorsTabPanel({
           ));
         })()}
 
-      {/* Covering email preview (collapsible) */}
-      {(rfq.covering_email_subject || rfq.covering_email_body) && (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          <button
-            onClick={() => setEmailExpanded((v) => !v)}
-            className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/20"
-            style={{ color: "#1A3A5C" }}
-          >
-            <span>Email that will be sent to each vendor</span>
-            {emailExpanded ? (
-              <ChevronUp className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            )}
-          </button>
-          {emailExpanded && (
-            <div className="border-t border-border p-4 space-y-4">
-              {rfq.covering_email_subject && (
-                <div>
-                  <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Subject
-                  </div>
-                  <div className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
-                    {rfq.covering_email_subject}
-                  </div>
-                </div>
-              )}
-              {rfq.covering_email_body && (
-                <div>
-                  <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Body
-                  </div>
-                  <div
-                    className="prose prose-sm max-w-none text-sm"
-                    style={{ color: "var(--foreground)" }}
-                    dangerouslySetInnerHTML={{ __html: rfq.covering_email_body }}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Covering email now lives on the RFQ Document tab */}
 
       {/* Vendor management has moved to Preview & Select Recipients */}
 
