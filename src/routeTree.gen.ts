@@ -14,6 +14,7 @@ import { Route as RegisterRouteImport } from './routes/register'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as SrBidTokenRouteImport } from './routes/sr-bid.$token'
 import { Route as ComparisonReviewTokenRouteImport } from './routes/comparison-review.$token'
 import { Route as BidTokenRouteImport } from './routes/bid.$token'
 import { Route as AppVendorsRouteImport } from './routes/_app/vendors'
@@ -64,6 +65,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppRoute,
+} as any)
+const SrBidTokenRoute = SrBidTokenRouteImport.update({
+  id: '/sr-bid/$token',
+  path: '/sr-bid/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ComparisonReviewTokenRoute = ComparisonReviewTokenRouteImport.update({
   id: '/comparison-review/$token',
@@ -213,6 +219,7 @@ export interface FileRoutesByFullPath {
   '/vendors': typeof AppVendorsRouteWithChildren
   '/bid/$token': typeof BidTokenRoute
   '/comparison-review/$token': typeof ComparisonReviewTokenRoute
+  '/sr-bid/$token': typeof SrBidTokenRoute
   '/prs/$prNumber': typeof AppPrsPrNumberRoute
   '/rfq/$rfqId': typeof AppRfqRfqIdRouteWithChildren
   '/rfq/bids': typeof AppRfqBidsRoute
@@ -241,6 +248,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AppSettingsRoute
   '/bid/$token': typeof BidTokenRoute
   '/comparison-review/$token': typeof ComparisonReviewTokenRoute
+  '/sr-bid/$token': typeof SrBidTokenRoute
   '/': typeof AppIndexRoute
   '/prs/$prNumber': typeof AppPrsPrNumberRoute
   '/rfq/bids': typeof AppRfqBidsRoute
@@ -274,6 +282,7 @@ export interface FileRoutesById {
   '/_app/vendors': typeof AppVendorsRouteWithChildren
   '/bid/$token': typeof BidTokenRoute
   '/comparison-review/$token': typeof ComparisonReviewTokenRoute
+  '/sr-bid/$token': typeof SrBidTokenRoute
   '/_app/': typeof AppIndexRoute
   '/_app/prs/$prNumber': typeof AppPrsPrNumberRoute
   '/_app/rfq/$rfqId': typeof AppRfqRfqIdRouteWithChildren
@@ -309,6 +318,7 @@ export interface FileRouteTypes {
     | '/vendors'
     | '/bid/$token'
     | '/comparison-review/$token'
+    | '/sr-bid/$token'
     | '/prs/$prNumber'
     | '/rfq/$rfqId'
     | '/rfq/bids'
@@ -337,6 +347,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/bid/$token'
     | '/comparison-review/$token'
+    | '/sr-bid/$token'
     | '/'
     | '/prs/$prNumber'
     | '/rfq/bids'
@@ -369,6 +380,7 @@ export interface FileRouteTypes {
     | '/_app/vendors'
     | '/bid/$token'
     | '/comparison-review/$token'
+    | '/sr-bid/$token'
     | '/_app/'
     | '/_app/prs/$prNumber'
     | '/_app/rfq/$rfqId'
@@ -394,6 +406,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   BidTokenRoute: typeof BidTokenRoute
   ComparisonReviewTokenRoute: typeof ComparisonReviewTokenRoute
+  SrBidTokenRoute: typeof SrBidTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -432,6 +445,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/sr-bid/$token': {
+      id: '/sr-bid/$token'
+      path: '/sr-bid/$token'
+      fullPath: '/sr-bid/$token'
+      preLoaderRoute: typeof SrBidTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/comparison-review/$token': {
       id: '/comparison-review/$token'
@@ -721,6 +741,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   BidTokenRoute: BidTokenRoute,
   ComparisonReviewTokenRoute: ComparisonReviewTokenRoute,
+  SrBidTokenRoute: SrBidTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
