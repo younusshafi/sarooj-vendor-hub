@@ -13,6 +13,7 @@ import { fmtOmr as fmt } from "@/lib/omr";
 import { RfqDocShell, RfqDocSection } from "@/components/rfq-document";
 import { uploadDocument } from "@/lib/subcontract-webhook";
 import { fileToBase64 } from "@/lib/file-utils";
+import { notifyBidSubmitted } from "@/lib/notify";
 
 export const Route = createFileRoute("/sr-bid/$token")({
   head: () => ({ meta: [{ title: "Submit your quotation — Sarooj Construction Company" }] }),
@@ -147,8 +148,16 @@ function SrBidPage() {
       });
     const res = await srBidSubmitByToken(token, { terms, lines: payloadLines });
     setSubmitting(false);
-    if (res.ok) setDone(true);
-    else setSubmitErr(res.error);
+    if (res.ok) {
+      setDone(true);
+      if (found) {
+        notifyBidSubmitted({
+          rfqReference: found.rfq.rfq_reference,
+          vendorName: found.vendor.company_name ?? "Vendor",
+          total: totals.total,
+        });
+      }
+    } else setSubmitErr(res.error);
   };
 
   // Vendor attachments — reuse the existing Drive upload webhook (uploads to the RFQ's

@@ -14,6 +14,7 @@ import {
   type VatTreatment,
 } from "@/lib/bid-link";
 import { fmtOmr as fmt } from "@/lib/omr";
+import { notifyBidSubmitted } from "@/lib/notify";
 
 export const Route = createFileRoute("/bid/$token")({
   head: () => ({
@@ -153,8 +154,16 @@ function BidPage() {
     setSubmitting(true);
     const res = await bidSubmitByToken(token, buildPayload());
     setSubmitting(false);
-    if (res.ok) setDone(true);
-    else setSubmitErr(res.error);
+    if (res.ok) {
+      setDone(true);
+      if (state?.found) {
+        notifyBidSubmitted({
+          rfqReference: state.rfq.rfq_reference,
+          vendorName: state.vendor.company_name ?? "Vendor",
+          total: totals.total,
+        });
+      }
+    } else setSubmitErr(res.error);
   };
 
   // ── Render states ──

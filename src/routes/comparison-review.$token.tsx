@@ -7,6 +7,7 @@ import {
   type ComparisonReviewData,
 } from "@/lib/comparison-approval";
 import { fmtOmr as fmt } from "@/lib/omr";
+import { notifyDecision } from "@/lib/notify";
 
 export const Route = createFileRoute("/comparison-review/$token")({
   head: () => ({ meta: [{ title: "Comparison approval — Sarooj Construction Company" }] }),
@@ -79,8 +80,17 @@ function ReviewPage() {
     setBusy(true);
     try {
       const res = await decideComparison(token, decision, notes);
-      if (res.ok) setDone(decision);
-      else setErr(res.error ?? "Action failed");
+      if (res.ok) {
+        setDone(decision);
+        if (data && data.found) {
+          notifyDecision({
+            to: data.prepared_by,
+            rfqReference: data.rfq.rfq_reference,
+            decision,
+            notes,
+          });
+        }
+      } else setErr(res.error ?? "Action failed");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Action failed");
     } finally {
