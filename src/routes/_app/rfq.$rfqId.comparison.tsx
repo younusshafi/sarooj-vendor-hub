@@ -10,6 +10,7 @@ import { ComparisonAwardPanel } from "@/components/comparison-award-panel";
 import { loadComparisonEval } from "@/lib/comparison-eval";
 import { submitForApproval } from "@/lib/comparison-approval";
 import { fmtOmr } from "@/lib/omr";
+import { ShareableLink } from "@/components/rfq/shareable-link";
 
 export const Route = createFileRoute("/_app/rfq/$rfqId/comparison")({
   component: ComparisonViewPage,
@@ -822,13 +823,12 @@ function ComparisonViewPage() {
           ) : comparison.status === "pending_approval" ? (
             <div className="mt-3 space-y-2">
               <p className="text-sm text-muted-foreground">
-                Awaiting approval from Rabia. Share this single-use review link if needed:
+                Awaiting approval from Rabia. Email automation is pending — copy/send this
+                single-use review link for now:
               </p>
-              <input
-                readOnly
-                onFocus={(e) => e.currentTarget.select()}
-                value={`${window.location.origin}/comparison-review/${comparison.review_token}`}
-                className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-xs outline-none"
+              <ShareableLink
+                url={`${window.location.origin}/comparison-review/${comparison.review_token}`}
+                state="manual"
               />
             </div>
           ) : (

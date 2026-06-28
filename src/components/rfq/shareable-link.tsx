@@ -3,7 +3,7 @@
 // hand-shared ("manual"); when the n8n emails land, the parent flips `state` to "emailed"
 // — no structural rework. See memory ux-redesign-philosophy + handoff items 6 / 7b.
 
-import { Copy, ExternalLink } from "lucide-react";
+import { Copy, ExternalLink, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
@@ -25,6 +25,8 @@ export interface ShareableLinkProps {
   emailedAt?: string | null;
   /** Optional leading label (e.g. vendor / recipient name). */
   label?: string;
+  /** Optional manual "Email" (mailto) button — officer-side send until n8n automates it. */
+  mailto?: { to: string | null; subject?: string; body?: string };
   className?: string;
 }
 
@@ -34,6 +36,7 @@ export function ShareableLink({
   emailedTo,
   emailedAt,
   label,
+  mailto,
   className,
 }: ShareableLinkProps) {
   const chip = STATE_CHIP[state];
@@ -43,6 +46,12 @@ export function ShareableLink({
       () => toast.error("Could not copy link"),
     );
   };
+
+  const mailtoHref = mailto
+    ? `mailto:${mailto.to ?? ""}?subject=${encodeURIComponent(mailto.subject ?? "")}&body=${encodeURIComponent(
+        (mailto.body ? `${mailto.body}\n\n` : "") + url,
+      )}`
+    : null;
 
   return (
     <div
@@ -77,6 +86,16 @@ export function ShareableLink({
       >
         <ExternalLink className="h-3.5 w-3.5" /> Open
       </a>
+      {mailtoHref && (
+        <a
+          href={mailtoHref}
+          className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-white"
+          style={{ backgroundColor: "var(--accent)" }}
+          title={mailto?.to ? `Email ${mailto.to}` : "No email on file"}
+        >
+          <Mail className="h-3.5 w-3.5" /> Email
+        </a>
+      )}
     </div>
   );
 }
