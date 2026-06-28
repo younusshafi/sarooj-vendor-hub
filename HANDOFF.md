@@ -7,7 +7,7 @@
 
 ## 0. Orientation (read first)
 
-- **This repo is frontend only.** React + Vite + TanStack Router + Supabase + TS + Tailwind + shadcn/ui, deployed on Vercel. **Never** edit n8n workflows or Supabase schema/tables/views — backend operator owns those. See `CLAUDE.md` for the non-negotiable rules (schema `scc_procurement`, key on `rfq_id`, no `vendors.email`, empty→null on writes, additive only, `fmtOmr` for money).
+- **Frontend-first, but backend is now in scope — the user (younus@zavia-ai.com) IS the operator.** Repo: React + Vite + TanStack Router + Supabase + TS + Tailwind + shadcn/ui on Vercel. Backend edits ARE allowed when needed: Supabase via MCP, n8n via the **public REST API** (key in `Procurement/.env`). Keep ADDITIVE, BACK UP first (`docs/backups/n8n/`, reference SQL in `docs/applied-migrations/`), confirm before destructive/live edits, touch only `SCC-*` on the shared n8n. See `CLAUDE.md` rule #1 (updated 2026-06-28) + the durable rules (schema `scc_procurement`, key on `rfq_id`, no `vendors.email`, empty→null on writes, `fmtOmr` for money).
 - **Two themes:** green = facilities, **charcoal = procurement** (use `data-theme="charcoal"` + semantic tokens).
 - **Goal of this workstream:** integrate the Python/LLM **BOQ parser** into the **subcontractor (SR) RFQ** flow — upload a real BOQ → parse → officer curates which columns vendors see → issue → each vendor gets a perishable `/sr-bid/<token>` link → vendor submits rates → officer compares + equalizes + awards. **Materials (MR) flow stays as-is** (SAP Excel, deterministic). Parser is **SR-only**.
 
