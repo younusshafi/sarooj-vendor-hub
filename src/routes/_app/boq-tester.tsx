@@ -1,5 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -604,12 +611,10 @@ function BoqTesterPage() {
                               return (
                                 <td key={cIdx} className="px-1 py-0.5 align-top">
                                   {cIdx === descIdx ? (
-                                    <textarea
+                                    <AutoGrowTextarea
                                       value={cell}
-                                      rows={2}
-                                      onChange={(e) => updateCell(rIdx, cIdx, e.target.value)}
-                                      className="w-full min-w-[320px] resize-y whitespace-pre-wrap rounded border px-1.5 py-1 leading-snug outline-none focus:border-[var(--accent)]"
-                                      style={{ ...cellStyle, minHeight: 52 }}
+                                      onChange={(v) => updateCell(rIdx, cIdx, v)}
+                                      style={cellStyle}
                                     />
                                   ) : (
                                     <input
@@ -1067,6 +1072,36 @@ function DocField({ label, children }: { label: string; children: ReactNode }) {
       <label className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</label>
       {children}
     </div>
+  );
+}
+
+// Textarea that grows to fit its content (no scrollbar, no manual resize) — used for
+// long BOQ description cells so the officer can read the full work-scope passage.
+function AutoGrowTextarea({
+  value,
+  onChange,
+  style,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  style?: CSSProperties;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      rows={1}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full min-w-[320px] resize-none overflow-hidden whitespace-pre-wrap rounded border px-1.5 py-1 leading-snug outline-none focus:border-[var(--accent)]"
+      style={style}
+    />
   );
 }
 
