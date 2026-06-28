@@ -597,17 +597,28 @@ function BoqTesterPage() {
                             {cells.map((cell, cIdx) => {
                               const flagged =
                                 cell.includes("?") || (incomplete && cIdx === descIdx);
+                              const cellStyle = {
+                                borderColor: flagged ? "#F59E0B" : "var(--border)",
+                                backgroundColor: flagged ? "#FEF3C7" : "white",
+                              };
                               return (
-                                <td key={cIdx} className="px-1 py-0.5">
-                                  <input
-                                    value={cell}
-                                    onChange={(e) => updateCell(rIdx, cIdx, e.target.value)}
-                                    className="w-full rounded border px-1.5 py-1 outline-none focus:border-[var(--accent)]"
-                                    style={{
-                                      borderColor: flagged ? "#F59E0B" : "var(--border)",
-                                      backgroundColor: flagged ? "#FEF3C7" : "white",
-                                    }}
-                                  />
+                                <td key={cIdx} className="px-1 py-0.5 align-top">
+                                  {cIdx === descIdx ? (
+                                    <textarea
+                                      value={cell}
+                                      rows={2}
+                                      onChange={(e) => updateCell(rIdx, cIdx, e.target.value)}
+                                      className="w-full min-w-[320px] resize-y whitespace-pre-wrap rounded border px-1.5 py-1 leading-snug outline-none focus:border-[var(--accent)]"
+                                      style={{ ...cellStyle, minHeight: 52 }}
+                                    />
+                                  ) : (
+                                    <input
+                                      value={cell}
+                                      onChange={(e) => updateCell(rIdx, cIdx, e.target.value)}
+                                      className="w-full rounded border px-1.5 py-1 outline-none focus:border-[var(--accent)]"
+                                      style={cellStyle}
+                                    />
+                                  )}
                                 </td>
                               );
                             })}
