@@ -10,6 +10,7 @@ import {
   type SrBidLineInput,
 } from "@/lib/sr-boq";
 import { fmtOmr as fmt } from "@/lib/omr";
+import { RfqDocShell, RfqDocSection } from "@/components/rfq-document";
 
 export const Route = createFileRoute("/sr-bid/$token")({
   head: () => ({ meta: [{ title: "Submit your quotation — Sarooj Construction Company" }] }),
@@ -140,311 +141,296 @@ function SrBidPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background" data-theme="charcoal">
-      <header className="w-full bg-header text-header-foreground">
-        <div className="mx-auto flex h-16 max-w-[1100px] items-center justify-between px-6 md:px-10">
-          <span className="font-serif text-[20px] leading-none">Sarooj Construction Company</span>
-          <span className="text-[13px] opacity-80">Subcontract Quotation</span>
+    <RfqDocShell subtitle="Subcontract Quotation">
+      {state === null && !loadError && (
+        <div className="flex items-center justify-center gap-2 py-24 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" /> Loading…
         </div>
-      </header>
+      )}
 
-      <main className="mx-auto max-w-[1100px] px-4 py-8 md:px-8">
-        {state === null && !loadError && (
-          <div className="flex items-center justify-center gap-2 py-24 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" /> Loading…
-          </div>
-        )}
+      {loadError && (
+        <CenterCard icon="error" title="Something went wrong">
+          Please try the link again, or contact Sarooj procurement.
+        </CenterCard>
+      )}
 
-        {loadError && (
-          <CenterCard icon="error" title="Something went wrong">
-            Please try the link again, or contact Sarooj procurement.
-          </CenterCard>
-        )}
+      {state && !state.found && (
+        <CenterCard icon="error" title="Invalid or expired link">
+          This quotation link is not valid. It may have already closed, or the link is incomplete.
+          Please contact Sarooj procurement.
+        </CenterCard>
+      )}
 
-        {state && !state.found && (
-          <CenterCard icon="error" title="Invalid or expired link">
-            This quotation link is not valid. It may have already closed, or the link is incomplete.
-            Please contact Sarooj procurement.
-          </CenterCard>
-        )}
+      {done && (
+        <CenterCard icon="ok" title="Quotation submitted">
+          Thank you — your quotation has been received. You may close this page.
+        </CenterCard>
+      )}
 
-        {done && (
-          <CenterCard icon="ok" title="Quotation submitted">
-            Thank you — your quotation has been received. You may close this page.
-          </CenterCard>
-        )}
-
-        {found && !done && (
-          <>
-            <div className="mb-6 rounded-xl border border-border bg-card p-6">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h1 className="font-serif text-[26px] leading-tight text-foreground">
-                    {found.rfq.rfq_reference}
-                    {found.rfq.title ? ` — ${found.rfq.title}` : ""}
-                  </h1>
-                  <p className="mt-1 text-[14px] text-muted-foreground">
-                    {found.vendor.company_name ?? "Vendor"}
-                    {found.rfq.scope ? ` · ${found.rfq.scope}` : ""}
-                  </p>
-                </div>
-                <div className="text-right text-[13px] text-muted-foreground">
-                  {found.rfq.deadline && (
-                    <div>
-                      Response deadline: <span className="font-medium">{found.rfq.deadline}</span>
-                    </div>
-                  )}
-                  {found.existing_bid && (
-                    <div className="mt-1">Revision {found.existing_bid.revision} on file</div>
-                  )}
-                </div>
+      {found && !done && (
+        <>
+          <div className="mb-6 rounded-xl border border-border bg-card p-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h1 className="font-serif text-[26px] leading-tight text-foreground">
+                  {found.rfq.rfq_reference}
+                  {found.rfq.title ? ` — ${found.rfq.title}` : ""}
+                </h1>
+                <p className="mt-1 text-[14px] text-muted-foreground">
+                  {found.vendor.company_name ?? "Vendor"}
+                  {found.rfq.scope ? ` · ${found.rfq.scope}` : ""}
+                </p>
               </div>
-              {readOnly && (
-                <div className="mt-4 flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-[13px] font-medium text-foreground">
-                  <Lock className="h-4 w-4" /> This RFQ has closed — your submitted quotation is
-                  shown below, read-only.
-                </div>
-              )}
+              <div className="text-right text-[13px] text-muted-foreground">
+                {found.rfq.deadline && (
+                  <div>
+                    Response deadline: <span className="font-medium">{found.rfq.deadline}</span>
+                  </div>
+                )}
+                {found.existing_bid && (
+                  <div className="mt-1">Revision {found.existing_bid.revision} on file</div>
+                )}
+              </div>
             </div>
-
-            {/* Bill of Quantities */}
-            <div className="mb-6 overflow-hidden rounded-xl border border-border bg-card">
-              <div className="bg-primary px-4 py-2.5 text-[14px] font-semibold text-primary-foreground">
-                Bill of Quantities — enter your unit rates
+            {readOnly && (
+              <div className="mt-4 flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-[13px] font-medium text-foreground">
+                <Lock className="h-4 w-4" /> This RFQ has closed — your submitted quotation is shown
+                below, read-only.
               </div>
-              <div className="overflow-x-auto p-2">
-                <table className="w-full border-collapse text-[13px]">
-                  <thead>
-                    <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                      <th className="px-2 py-2">#</th>
-                      {columns.map((c, i) => (
-                        <th key={i} className="px-2 py-2">
-                          {c.name || `Col ${i + 1}`}
-                        </th>
-                      ))}
-                      <th className="px-2 py-2 text-right">Unit Rate (RO)</th>
-                      <th className="px-2 py-2 text-right">Amount (RO)</th>
-                      <th className="px-2 py-2" style={{ minWidth: 160 }}>
-                        Remark / Exclusion
+            )}
+          </div>
+
+          {/* Bill of Quantities */}
+          <RfqDocSection title="Bill of Quantities — enter your unit rates">
+            <div className="overflow-x-auto p-2">
+              <table className="w-full border-collapse text-[13px]">
+                <thead>
+                  <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <th className="px-2 py-2">#</th>
+                    {columns.map((c, i) => (
+                      <th key={i} className="px-2 py-2">
+                        {c.name || `Col ${i + 1}`}
                       </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lines.map((l) => {
-                      const totalCols = columns.length + 4;
-                      if (l.role !== "ITEM") {
-                        const text = l.cells.filter((c) => c.trim()).join(" ");
-                        const isSection = l.role === "SECTION";
-                        return (
-                          <tr key={l.line_id}>
-                            <td
-                              colSpan={totalCols}
-                              className={
-                                isSection
-                                  ? "bg-primary px-2 py-1.5 font-semibold text-primary-foreground"
-                                  : "bg-secondary px-2 py-1.5 text-[12px] italic text-muted-foreground"
-                              }
-                            >
-                              {text || " "}
-                            </td>
-                          </tr>
-                        );
-                      }
-                      const r = rows[l.line_id] ?? { rate: "", remark: "" };
-                      const rateBad = r.rate !== "" && !RATE_RE.test(r.rate);
-                      const amt = amountOf(l);
+                    ))}
+                    <th className="px-2 py-2 text-right">Unit Rate (RO)</th>
+                    <th className="px-2 py-2 text-right">Amount (RO)</th>
+                    <th className="px-2 py-2" style={{ minWidth: 160 }}>
+                      Remark / Exclusion
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((l) => {
+                    const totalCols = columns.length + 4;
+                    if (l.role !== "ITEM") {
+                      const text = l.cells.filter((c) => c.trim()).join(" ");
+                      const isSection = l.role === "SECTION";
                       return (
-                        <tr key={l.line_id} className="border-b border-border align-top">
-                          <td className="px-2 py-1.5 text-muted-foreground">{l.seq}</td>
-                          {l.cells.map((cell, i) => {
-                            const isDesc =
-                              columns[i]?.role === "desc" || /desc/i.test(columns[i]?.name ?? "");
-                            return (
-                              <td key={i} className="px-2 py-1.5">
-                                <div
-                                  className={`whitespace-pre-wrap break-words ${
-                                    isDesc ? "min-w-[460px] max-w-[720px]" : "max-w-[150px]"
-                                  }`}
-                                >
-                                  {cell}
-                                </div>
-                              </td>
-                            );
-                          })}
-                          <td className="px-2 py-1.5">
-                            <input
-                              inputMode="decimal"
-                              value={r.rate}
-                              disabled={readOnly || l.qty == null}
-                              placeholder={l.qty == null ? "—" : "0.000"}
-                              onChange={(e) =>
-                                RATE_RE.test(e.target.value) &&
-                                setRow(l.line_id, { rate: e.target.value })
-                              }
-                              className={`w-28 rounded-md border bg-card px-2 py-1.5 text-right text-sm tabular-nums outline-none ${
-                                rateBad ? "border-destructive" : "border-input"
-                              }`}
-                            />
-                          </td>
-                          <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
-                            {amt == null ? "—" : fmt(amt)}
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <input
-                              value={r.remark}
-                              disabled={readOnly}
-                              placeholder="e.g. excludes scaffolding"
-                              onChange={(e) => setRow(l.line_id, { remark: e.target.value })}
-                              className={cellInput}
-                            />
+                        <tr key={l.line_id}>
+                          <td
+                            colSpan={totalCols}
+                            className={
+                              isSection
+                                ? "bg-primary px-2 py-1.5 font-semibold text-primary-foreground"
+                                : "bg-secondary px-2 py-1.5 text-[12px] italic text-muted-foreground"
+                            }
+                          >
+                            {text || " "}
                           </td>
                         </tr>
                       );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-secondary">
-                      <td colSpan={columns.length + 2} className="px-2 py-2 text-right font-medium">
-                        Subtotal (excl. VAT)
-                      </td>
-                      <td className="px-2 py-2 text-right font-medium tabular-nums">
-                        {fmt(totals.subEx)}
-                      </td>
-                      <td />
-                    </tr>
-                    <tr className="bg-secondary">
-                      <td
-                        colSpan={columns.length + 2}
-                        className="px-2 py-2 text-right text-muted-foreground"
-                      >
-                        VAT @ 5%
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums">{fmt(totals.vat)}</td>
-                      <td />
-                    </tr>
-                    <tr className="bg-muted">
-                      <td colSpan={columns.length + 2} className="px-2 py-2.5 text-right font-bold">
-                        GRAND TOTAL (incl. VAT)
-                      </td>
-                      <td className="px-2 py-2.5 text-right font-bold tabular-nums">
-                        {fmt(totals.total)}
-                      </td>
-                      <td />
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-              <div className="px-4 py-2 text-[12px] text-muted-foreground">
-                {totals.priced} of {totals.items} lines priced · amounts in OMR to 3 decimals
-                (baisa) · totals indicative, finalised on submit.
-              </div>
-            </div>
-
-            {/* Commercial terms */}
-            <div className="mb-6 overflow-hidden rounded-xl border border-border bg-card">
-              <div className="bg-primary px-4 py-2.5 text-[14px] font-semibold text-primary-foreground">
-                Commercial Terms
-              </div>
-              <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
-                <Field label="VAT treatment">
-                  <select
-                    value={terms.vat_treatment}
-                    disabled={readOnly}
-                    onChange={(e) =>
-                      setT({ vat_treatment: e.target.value as "exclusive" | "inclusive" })
                     }
-                    className={cellInput}
-                  >
-                    <option value="exclusive">Rates exclusive of VAT</option>
-                    <option value="inclusive">Rates inclusive of VAT</option>
-                  </select>
-                </Field>
-                <Field label="Quotation reference">
-                  <input
-                    value={terms.quotation_ref}
-                    disabled={readOnly}
-                    onChange={(e) => setT({ quotation_ref: e.target.value })}
-                    className={cellInput}
-                  />
-                </Field>
-                <Field label="Payment terms">
-                  <input
-                    value={terms.payment_terms}
-                    disabled={readOnly}
-                    onChange={(e) => setT({ payment_terms: e.target.value })}
-                    placeholder="e.g. 30 days, advance %"
-                    className={cellInput}
-                  />
-                </Field>
-                <Field label="Quote validity (days)">
-                  <input
-                    inputMode="numeric"
-                    value={terms.validity_days}
-                    disabled={readOnly}
-                    onChange={(e) =>
-                      INT_RE.test(e.target.value) && setT({ validity_days: e.target.value })
-                    }
-                    className={cellInput}
-                  />
-                </Field>
-                <Field label="Proposed subcontract period">
-                  <input
-                    value={terms.subcontract_period}
-                    disabled={readOnly}
-                    onChange={(e) => setT({ subcontract_period: e.target.value })}
-                    placeholder="e.g. 12 weeks"
-                    className={cellInput}
-                  />
-                </Field>
-              </div>
-              <div className="grid grid-cols-1 gap-4 px-4 pb-4">
-                <Field label="Overall exclusions">
-                  <textarea
-                    rows={2}
-                    value={terms.exclusions}
-                    disabled={readOnly}
-                    onChange={(e) => setT({ exclusions: e.target.value })}
-                    placeholder="Anything not covered by this quotation"
-                    className={cellInput}
-                  />
-                </Field>
-                <Field label="Key conditions / notes">
-                  <textarea
-                    rows={2}
-                    value={terms.notes}
-                    disabled={readOnly}
-                    onChange={(e) => setT({ notes: e.target.value })}
-                    className={cellInput}
-                  />
-                </Field>
-              </div>
+                    const r = rows[l.line_id] ?? { rate: "", remark: "" };
+                    const rateBad = r.rate !== "" && !RATE_RE.test(r.rate);
+                    const amt = amountOf(l);
+                    return (
+                      <tr key={l.line_id} className="border-b border-border align-top">
+                        <td className="px-2 py-1.5 text-muted-foreground">{l.seq}</td>
+                        {l.cells.map((cell, i) => {
+                          const isDesc =
+                            columns[i]?.role === "desc" || /desc/i.test(columns[i]?.name ?? "");
+                          return (
+                            <td key={i} className="px-2 py-1.5">
+                              <div
+                                className={`whitespace-pre-wrap break-words ${
+                                  isDesc ? "min-w-[460px] max-w-[720px]" : "max-w-[150px]"
+                                }`}
+                              >
+                                {cell}
+                              </div>
+                            </td>
+                          );
+                        })}
+                        <td className="px-2 py-1.5">
+                          <input
+                            inputMode="decimal"
+                            value={r.rate}
+                            disabled={readOnly || l.qty == null}
+                            placeholder={l.qty == null ? "—" : "0.000"}
+                            onChange={(e) =>
+                              RATE_RE.test(e.target.value) &&
+                              setRow(l.line_id, { rate: e.target.value })
+                            }
+                            className={`w-28 rounded-md border bg-card px-2 py-1.5 text-right text-sm tabular-nums outline-none ${
+                              rateBad ? "border-destructive" : "border-input"
+                            }`}
+                          />
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
+                          {amt == null ? "—" : fmt(amt)}
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <input
+                            value={r.remark}
+                            disabled={readOnly}
+                            placeholder="e.g. excludes scaffolding"
+                            onChange={(e) => setRow(l.line_id, { remark: e.target.value })}
+                            className={cellInput}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-secondary">
+                    <td colSpan={columns.length + 2} className="px-2 py-2 text-right font-medium">
+                      Subtotal (excl. VAT)
+                    </td>
+                    <td className="px-2 py-2 text-right font-medium tabular-nums">
+                      {fmt(totals.subEx)}
+                    </td>
+                    <td />
+                  </tr>
+                  <tr className="bg-secondary">
+                    <td
+                      colSpan={columns.length + 2}
+                      className="px-2 py-2 text-right text-muted-foreground"
+                    >
+                      VAT @ 5%
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums">{fmt(totals.vat)}</td>
+                    <td />
+                  </tr>
+                  <tr className="bg-muted">
+                    <td colSpan={columns.length + 2} className="px-2 py-2.5 text-right font-bold">
+                      GRAND TOTAL (incl. VAT)
+                    </td>
+                    <td className="px-2 py-2.5 text-right font-bold tabular-nums">
+                      {fmt(totals.total)}
+                    </td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
             </div>
+            <div className="px-4 py-2 text-[12px] text-muted-foreground">
+              {totals.priced} of {totals.items} lines priced · amounts in OMR to 3 decimals (baisa)
+              · totals indicative, finalised on submit.
+            </div>
+          </RfqDocSection>
 
-            {!readOnly && (
-              <div className="flex flex-col items-end gap-2 pb-12">
-                {submitErr && (
-                  <p className="flex items-center gap-1.5 text-[14px] text-destructive">
-                    <AlertCircle className="h-4 w-4" /> {submitErr}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                  className="inline-flex h-12 items-center gap-2 rounded-lg bg-primary px-8 text-[15px] font-semibold text-primary-foreground hover:bg-[var(--primary-hover)] disabled:opacity-50"
+          {/* Commercial terms */}
+          <RfqDocSection title="Commercial Terms">
+            <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
+              <Field label="VAT treatment">
+                <select
+                  value={terms.vat_treatment}
+                  disabled={readOnly}
+                  onChange={(e) =>
+                    setT({ vat_treatment: e.target.value as "exclusive" | "inclusive" })
+                  }
+                  className={cellInput}
                 >
-                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Submit quotation
-                </button>
-                <p className="text-[12px] text-muted-foreground">
-                  You can revise and re-submit until the deadline.
+                  <option value="exclusive">Rates exclusive of VAT</option>
+                  <option value="inclusive">Rates inclusive of VAT</option>
+                </select>
+              </Field>
+              <Field label="Quotation reference">
+                <input
+                  value={terms.quotation_ref}
+                  disabled={readOnly}
+                  onChange={(e) => setT({ quotation_ref: e.target.value })}
+                  className={cellInput}
+                />
+              </Field>
+              <Field label="Payment terms">
+                <input
+                  value={terms.payment_terms}
+                  disabled={readOnly}
+                  onChange={(e) => setT({ payment_terms: e.target.value })}
+                  placeholder="e.g. 30 days, advance %"
+                  className={cellInput}
+                />
+              </Field>
+              <Field label="Quote validity (days)">
+                <input
+                  inputMode="numeric"
+                  value={terms.validity_days}
+                  disabled={readOnly}
+                  onChange={(e) =>
+                    INT_RE.test(e.target.value) && setT({ validity_days: e.target.value })
+                  }
+                  className={cellInput}
+                />
+              </Field>
+              <Field label="Proposed subcontract period">
+                <input
+                  value={terms.subcontract_period}
+                  disabled={readOnly}
+                  onChange={(e) => setT({ subcontract_period: e.target.value })}
+                  placeholder="e.g. 12 weeks"
+                  className={cellInput}
+                />
+              </Field>
+            </div>
+            <div className="grid grid-cols-1 gap-4 px-4 pb-4">
+              <Field label="Overall exclusions">
+                <textarea
+                  rows={2}
+                  value={terms.exclusions}
+                  disabled={readOnly}
+                  onChange={(e) => setT({ exclusions: e.target.value })}
+                  placeholder="Anything not covered by this quotation"
+                  className={cellInput}
+                />
+              </Field>
+              <Field label="Key conditions / notes">
+                <textarea
+                  rows={2}
+                  value={terms.notes}
+                  disabled={readOnly}
+                  onChange={(e) => setT({ notes: e.target.value })}
+                  className={cellInput}
+                />
+              </Field>
+            </div>
+          </RfqDocSection>
+
+          {!readOnly && (
+            <div className="flex flex-col items-end gap-2 pb-12">
+              {submitErr && (
+                <p className="flex items-center gap-1.5 text-[14px] text-destructive">
+                  <AlertCircle className="h-4 w-4" /> {submitErr}
                 </p>
-              </div>
-            )}
-          </>
-        )}
-      </main>
-    </div>
+              )}
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="inline-flex h-12 items-center gap-2 rounded-lg bg-primary px-8 text-[15px] font-semibold text-primary-foreground hover:bg-[var(--primary-hover)] disabled:opacity-50"
+              >
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Submit quotation
+              </button>
+              <p className="text-[12px] text-muted-foreground">
+                You can revise and re-submit until the deadline.
+              </p>
+            </div>
+          )}
+        </>
+      )}
+    </RfqDocShell>
   );
 }
 

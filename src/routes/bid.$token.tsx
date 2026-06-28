@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, AlertCircle, CheckCircle2, Lock } from "lucide-react";
-import { SectionCard } from "@/components/vendor-form/SectionCard";
 import { Field, inputClass, textareaClass } from "@/components/vendor-form/Field";
+import { RfqDocShell, RfqDocSection } from "@/components/rfq-document";
 import {
   bidGetByToken,
   bidSubmitByToken,
@@ -159,7 +159,7 @@ function BidPage() {
 
   // ── Render states ──
   return (
-    <div className="min-h-screen bg-background" data-theme="charcoal">
+    <RfqDocShell subtitle="Quotation Submission">
       {BID_LINK_STUBBED && (
         <div className="bg-amber-100 px-4 py-1.5 text-center text-[12px] font-medium text-amber-900">
           DEMO MODE — stubbed data, no backend. Try tokens: <code>/bid/revise</code>,{" "}
@@ -167,77 +167,68 @@ function BidPage() {
         </div>
       )}
 
-      <header className="w-full bg-header text-header-foreground">
-        <div className="mx-auto flex h-16 max-w-[1100px] items-center justify-between px-6 md:px-10">
-          <span className="font-serif text-[20px] leading-none">Sarooj Construction Company</span>
-          <span className="text-[13px]" style={{ color: "var(--sidebar-foreground)" }}>
-            Quotation Submission
-          </span>
+      {state === null && !loadError && (
+        <div className="flex items-center justify-center gap-2 py-24 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" /> Loading…
         </div>
-      </header>
+      )}
 
-      <main className="mx-auto max-w-[1100px] px-4 py-8 md:px-8">
-        {state === null && !loadError && (
-          <div className="flex items-center justify-center gap-2 py-24 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" /> Loading…
-          </div>
-        )}
+      {loadError && (
+        <CenterCard icon="error" title="Something went wrong">
+          Please try the link again, or contact procurement.
+        </CenterCard>
+      )}
 
-        {loadError && (
-          <CenterCard icon="error" title="Something went wrong">
-            Please try the link again, or contact procurement.
-          </CenterCard>
-        )}
+      {state && !state.found && (
+        <CenterCard icon="error" title="Invalid or expired link">
+          This quotation link is not valid. It may have already closed, or the link is incomplete.
+          Please contact Sarooj procurement.
+        </CenterCard>
+      )}
 
-        {state && !state.found && (
-          <CenterCard icon="error" title="Invalid or expired link">
-            This quotation link is not valid. It may have already closed, or the link is incomplete.
-            Please contact Sarooj procurement.
-          </CenterCard>
-        )}
+      {done && (
+        <CenterCard icon="ok" title="Quotation submitted">
+          Thank you — your quotation has been received. A confirmation has been sent to your email.
+          You may close this page.
+        </CenterCard>
+      )}
 
-        {done && (
-          <CenterCard icon="ok" title="Quotation submitted">
-            Thank you — your quotation has been received. A confirmation has been sent to your
-            email. You may close this page.
-          </CenterCard>
-        )}
-
-        {state?.found && !done && (
-          <>
-            {/* RFQ summary */}
-            <div className="mb-6 rounded-xl border border-border bg-card p-6">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h1 className="font-serif text-[26px] leading-tight text-foreground">
-                    {state.rfq.rfq_reference} — {state.rfq.title}
-                  </h1>
-                  <p className="mt-1 text-[14px] text-muted-foreground">
-                    {state.vendor.company_name}
-                    {state.rfq.project_name ? ` · ${state.rfq.project_name}` : ""}
-                  </p>
-                </div>
-                <div className="text-right text-[13px] text-muted-foreground">
-                  {state.rfq.deadline && (
-                    <div>
-                      Response deadline: <span className="font-medium">{state.rfq.deadline}</span>
-                    </div>
-                  )}
-                  {state.existing_bid && (
-                    <div className="mt-1">Revision {state.existing_bid.revision} on file</div>
-                  )}
-                </div>
+      {state?.found && !done && (
+        <>
+          {/* RFQ summary */}
+          <div className="mb-6 rounded-xl border border-border bg-card p-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h1 className="font-serif text-[26px] leading-tight text-foreground">
+                  {state.rfq.rfq_reference} — {state.rfq.title}
+                </h1>
+                <p className="mt-1 text-[14px] text-muted-foreground">
+                  {state.vendor.company_name}
+                  {state.rfq.project_name ? ` · ${state.rfq.project_name}` : ""}
+                </p>
               </div>
-              {readOnly && (
-                <div className="mt-4 flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-[13px] font-medium text-foreground">
-                  <Lock className="h-4 w-4" /> This RFQ has closed — your submitted quotation is
-                  shown below, read-only.
-                </div>
-              )}
+              <div className="text-right text-[13px] text-muted-foreground">
+                {state.rfq.deadline && (
+                  <div>
+                    Response deadline: <span className="font-medium">{state.rfq.deadline}</span>
+                  </div>
+                )}
+                {state.existing_bid && (
+                  <div className="mt-1">Revision {state.existing_bid.revision} on file</div>
+                )}
+              </div>
             </div>
+            {readOnly && (
+              <div className="mt-4 flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-[13px] font-medium text-foreground">
+                <Lock className="h-4 w-4" /> This RFQ has closed — your submitted quotation is shown
+                below, read-only.
+              </div>
+            )}
+          </div>
 
-            {/* Line items */}
-            <SectionCard number={1} title="Material list — enter your rates">
+          {/* Line items */}
+          <RfqDocSection title="1. Material list — enter your rates">
+            <div className="space-y-5 p-4 md:p-6">
               <p className="-mt-2 text-[13px] text-muted-foreground">
                 Quantity and unit are fixed by the RFQ. Leave a rate blank to mark a line “no
                 quote”. Add a remark per line for any exclusion or deviation.
@@ -343,10 +334,12 @@ function BidPage() {
                   * All amounts in OMR, shown to 3 decimals (baisa).
                 </div>
               </div>
-            </SectionCard>
+            </div>
+          </RfqDocSection>
 
-            {/* Commercial terms */}
-            <SectionCard number={2} title="Commercial terms">
+          {/* Commercial terms */}
+          <RfqDocSection title="2. Commercial terms">
+            <div className="space-y-5 p-4 md:p-6">
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <Field label="VAT treatment" htmlFor="vat" required>
                   <select
@@ -483,33 +476,33 @@ function BidPage() {
                   className={textareaClass}
                 />
               </Field>
-            </SectionCard>
+            </div>
+          </RfqDocSection>
 
-            {!readOnly && (
-              <div className="flex flex-col items-end gap-2 pb-12">
-                {submitErr && (
-                  <p className="flex items-center gap-1.5 text-[14px] text-destructive">
-                    <AlertCircle className="h-4 w-4" /> {submitErr}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                  className="inline-flex h-12 items-center gap-2 rounded-lg bg-primary px-8 text-[15px] font-semibold text-primary-foreground disabled:opacity-50"
-                >
-                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Submit quotation
-                </button>
-                <p className="text-[12px] text-muted-foreground">
-                  You can revise and re-submit until the deadline.
+          {!readOnly && (
+            <div className="flex flex-col items-end gap-2 pb-12">
+              {submitErr && (
+                <p className="flex items-center gap-1.5 text-[14px] text-destructive">
+                  <AlertCircle className="h-4 w-4" /> {submitErr}
                 </p>
-              </div>
-            )}
-          </>
-        )}
-      </main>
-    </div>
+              )}
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="inline-flex h-12 items-center gap-2 rounded-lg bg-primary px-8 text-[15px] font-semibold text-primary-foreground disabled:opacity-50"
+              >
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Submit quotation
+              </button>
+              <p className="text-[12px] text-muted-foreground">
+                You can revise and re-submit until the deadline.
+              </p>
+            </div>
+          )}
+        </>
+      )}
+    </RfqDocShell>
   );
 }
 
