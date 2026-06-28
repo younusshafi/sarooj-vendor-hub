@@ -10,12 +10,14 @@ Three independent pieces:
 
 The parser **cannot run on Vercel** (Python + PyMuPDF + OpenAI vision; Hobby bans commercial use + 300s cap). It lives on the VPS permanently. The browser calls it directly; n8n is **not** in the parse path.
 
+> **⚠️ Two Vercel projects deploy this same repo** (`younusshafi/sarooj-vendor-hub`, `main`): **`sarooj-vendor-hub-code`** (framework **Vite** — matches this codebase; domains `procurement.scc.zavia-ai.com` + `sarooj-vendor-hub-code.vercel.app`) is the **canonical** one — set env vars there. `sarooj-vendor-hub` (framework tanstack-start; `sarooj-vendor-hub.vercel.app`) is a leftover parallel project; consider deleting it to stop double-builds/confusion. The parser CORS allows **all** of these origins (`sarooj-vendor-hub*.vercel.app`, `procurement.scc.zavia-ai.com`, `localhost:*`) so parsing works whichever you open.
+
 ## BOQ parser service (VPS)
 
 - Code: `/opt/boq-parser/` (venv + `api.py` + the 4 parser modules + `.env`). FastAPI/uvicorn on `127.0.0.1:8001`.
 - **systemd:** unit `boq-parser.service` (`enabled` → starts on boot; `Restart=always` → auto-restarts on crash). Manage with `systemctl {status,restart} boq-parser`; logs `journalctl -u boq-parser -f`. `/opt/boq-parser/start.sh` now just runs `systemctl restart boq-parser`.
 - **Public endpoint:** host **nginx** adds a `location /boq/` to the `n8n.zavia-ai.com` server (`/etc/nginx/sites-enabled/n8n`) → `proxy_pass http://127.0.0.1:8001/` (strips `/boq/`). Reuses n8n's Let's Encrypt cert. ⚠️ `sites-enabled/n8n` is a **real file, not a symlink** — edit it (not `sites-available`) and keep them in sync. Timestamped backups: `n8n.bak.<ts>`.
-- **Security:** CORS locked (FastAPI `allow_origin_regex`) to `https://sarooj-vendor-hub-code*.vercel.app` + `http://localhost:*`. `/parse-*` require header **`X-BOQ-Key`** = `BOQ_API_KEY` in `/opt/boq-parser/.env` (fail-closed; `/health` stays open). nginx `limit_req zone=boq_rl` (20 req/min/IP, `/etc/nginx/conf.d/boq_ratelimit.conf`) caps OpenAI-cost abuse.
+- **Security:** CORS (FastAPI `allow_origin_regex`) allows `https://sarooj-vendor-hub*.vercel.app` (both Vercel projects + previews), `https://procurement.scc.zavia-ai.com`, and `http://localhost:*`. `/parse-*` require header **`X-BOQ-Key`** = `BOQ_API_KEY` in `/opt/boq-parser/.env` (fail-closed; `/health` stays open). nginx `limit_req zone=boq_rl` (20 req/min/IP, `/etc/nginx/conf.d/boq_ratelimit.conf`) caps OpenAI-cost abuse.
 - Endpoints: `GET /boq/health` (open) · `POST /boq/parse-pdf` · `POST /boq/parse-xlsx` (both need the key).
 
 ## Frontend env vars
