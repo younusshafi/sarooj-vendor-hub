@@ -13,6 +13,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as RegisterIndexRouteImport } from './routes/register.index'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as SrComparisonReviewTokenRouteImport } from './routes/sr-comparison-review.$token'
 import { Route as SrBidTokenRouteImport } from './routes/sr-bid.$token'
@@ -62,6 +63,11 @@ const LoginRoute = LoginRouteImport.update({
 const AppRoute = AppRouteImport.update({
   id: '/_app',
   getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterIndexRoute = RegisterIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => RegisterRoute,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
@@ -234,6 +240,7 @@ export interface FileRoutesByFullPath {
   '/register/$token': typeof RegisterTokenRoute
   '/sr-bid/$token': typeof SrBidTokenRoute
   '/sr-comparison-review/$token': typeof SrComparisonReviewTokenRoute
+  '/register/': typeof RegisterIndexRoute
   '/prs/$prNumber': typeof AppPrsPrNumberRoute
   '/rfq/$rfqId': typeof AppRfqRfqIdRouteWithChildren
   '/rfq/bids': typeof AppRfqBidsRoute
@@ -252,7 +259,6 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
-  '/register': typeof RegisterRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/boq-tester': typeof AppBoqTesterRoute
   '/categories': typeof AppCategoriesRoute
@@ -266,6 +272,7 @@ export interface FileRoutesByTo {
   '/sr-bid/$token': typeof SrBidTokenRoute
   '/sr-comparison-review/$token': typeof SrComparisonReviewTokenRoute
   '/': typeof AppIndexRoute
+  '/register': typeof RegisterIndexRoute
   '/prs/$prNumber': typeof AppPrsPrNumberRoute
   '/rfq/bids': typeof AppRfqBidsRoute
   '/rfq/new': typeof AppRfqNewRoute
@@ -302,6 +309,7 @@ export interface FileRoutesById {
   '/sr-bid/$token': typeof SrBidTokenRoute
   '/sr-comparison-review/$token': typeof SrComparisonReviewTokenRoute
   '/_app/': typeof AppIndexRoute
+  '/register/': typeof RegisterIndexRoute
   '/_app/prs/$prNumber': typeof AppPrsPrNumberRoute
   '/_app/rfq/$rfqId': typeof AppRfqRfqIdRouteWithChildren
   '/_app/rfq/bids': typeof AppRfqBidsRoute
@@ -339,6 +347,7 @@ export interface FileRouteTypes {
     | '/register/$token'
     | '/sr-bid/$token'
     | '/sr-comparison-review/$token'
+    | '/register/'
     | '/prs/$prNumber'
     | '/rfq/$rfqId'
     | '/rfq/bids'
@@ -357,7 +366,6 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
-    | '/register'
     | '/reset-password'
     | '/boq-tester'
     | '/categories'
@@ -371,6 +379,7 @@ export interface FileRouteTypes {
     | '/sr-bid/$token'
     | '/sr-comparison-review/$token'
     | '/'
+    | '/register'
     | '/prs/$prNumber'
     | '/rfq/bids'
     | '/rfq/new'
@@ -406,6 +415,7 @@ export interface FileRouteTypes {
     | '/sr-bid/$token'
     | '/sr-comparison-review/$token'
     | '/_app/'
+    | '/register/'
     | '/_app/prs/$prNumber'
     | '/_app/rfq/$rfqId'
     | '/_app/rfq/bids'
@@ -463,6 +473,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/register/': {
+      id: '/register/'
+      path: '/'
+      fullPath: '/register/'
+      preLoaderRoute: typeof RegisterIndexRouteImport
+      parentRoute: typeof RegisterRoute
     }
     '/_app/': {
       id: '/_app/'
@@ -775,10 +792,12 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 interface RegisterRouteChildren {
   RegisterTokenRoute: typeof RegisterTokenRoute
+  RegisterIndexRoute: typeof RegisterIndexRoute
 }
 
 const RegisterRouteChildren: RegisterRouteChildren = {
   RegisterTokenRoute: RegisterTokenRoute,
+  RegisterIndexRoute: RegisterIndexRoute,
 }
 
 const RegisterRouteWithChildren = RegisterRoute._addFileChildren(

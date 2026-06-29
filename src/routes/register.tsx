@@ -1,40 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { Header } from "@/components/vendor-form/Header";
-import { Footer } from "@/components/vendor-form/Footer";
-import { VendorRegistrationForm } from "@/components/vendor-form/VendorRegistrationForm";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
-// Generic (un-tokenized) onboarding: submissions go to the n8n registration pipeline as before.
-// Tokenized capture (pre-filled, pending-approval) lives at /register/$token.
-const WEBHOOK_URL = "https://n8n.zavia-ai.com/webhook/scc-vendor-registration";
-
+// Layout for the /register segment. Children (register.index = generic onboarding,
+// register.$token = pre-filled tokenized capture) render their own chrome, so this is a
+// pure pass-through. Without this Outlet, /register/$token would render this route instead
+// of the token child.
 export const Route = createFileRoute("/register")({
-  head: () => ({
-    meta: [
-      { title: "Vendor Registration — Sarooj Construction Company" },
-      {
-        name: "description",
-        content: "Register your company to join Sarooj Construction's approved vendor network.",
-      },
-    ],
-  }),
-  component: VendorRegistrationPage,
+  component: () => <Outlet />,
 });
-
-function VendorRegistrationPage() {
-  const onSubmit = async (payload: Record<string, unknown>) => {
-    const res = await fetch(WEBHOOK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  };
-
-  return (
-    <div className="min-h-screen bg-background" data-theme="crimson">
-      <Header />
-      <VendorRegistrationForm onSubmit={onSubmit} />
-      <Footer />
-    </div>
-  );
-}
