@@ -17,29 +17,31 @@ interface Row {
   vendors: { company_name: string | null } | null;
 }
 
-// Rich HTML covering email (Sarooj-branded), mirroring the materials invite: a short
-// intro, a mid-body call-to-action button with the vendor's unique link, then the
-// submit-only note. Inline styles only (email clients strip <style>/classes).
+// Rich HTML covering email in the project's CHARCOAL theme (matches the vendor /sr-bid
+// document chrome: charcoal #232227 header with the serif company name, crimson #98191D
+// action band, border #D5D3D2). Inline styles only — email clients strip <style>/classes.
 function buildInviteHtml(company: string, link: string, deadline?: string | null): string {
-  const ink = "#0D3D2E";
-  const accent = "#0D7A5A";
+  const ink = "#232227"; // --foreground / --header
+  const accent = "#98191D"; // --primary / --accent (crimson)
+  const border = "#D5D3D2"; // --border
+  const muted = "#6B696E"; // --muted-foreground
   const deadlineSentence = deadline ? ` Quotations are due by <strong>${deadline}</strong>.` : "";
   return `<div style="font-family:Arial,Helvetica,sans-serif;color:${ink};max-width:600px;margin:0 auto;">
   <div style="background:${ink};padding:18px 24px;border-radius:8px 8px 0 0;">
-    <div style="color:#ffffff;font-size:18px;font-weight:bold;letter-spacing:.5px;">SAROOJ CONSTRUCTION</div>
-    <div style="color:#9FC7B8;font-size:12px;margin-top:2px;">Procurement &mdash; Invitation to Quote (Subcontract)</div>
+    <div style="font-family:Georgia,'Times New Roman',serif;color:#ffffff;font-size:20px;line-height:1.2;">Sarooj Construction Company</div>
+    <div style="color:#ffffff;opacity:.8;font-size:12px;margin-top:4px;">Invitation to Quote &mdash; Subcontract</div>
   </div>
-  <div style="padding:24px;background:#ffffff;border:1px solid #C8DDD7;border-top:none;border-radius:0 0 8px 8px;">
+  <div style="padding:24px;background:#ffffff;border:1px solid ${border};border-top:none;border-radius:0 0 8px 8px;">
     <p style="margin:0 0 14px;">Dear ${company},</p>
     <p style="margin:0 0 16px;line-height:1.6;">Sarooj Construction invites you to submit a quotation for our subcontract package.${deadlineSentence} The full bill of quantities and scope of works are in your secure online quotation form &mdash; please review them there and enter your rates.</p>
     <div style="text-align:center;margin:26px 0;">
       <a href="${link}" style="background:${accent};color:#ffffff;text-decoration:none;padding:13px 30px;border-radius:6px;font-weight:bold;font-size:15px;display:inline-block;">Open your quotation form &rarr;</a>
     </div>
-    <p style="margin:0 0 16px;line-height:1.6;font-size:13px;color:#555555;">This link is unique to you and is the only way your quotation can be recorded. Submissions through any other channel will not be accepted.</p>
+    <p style="margin:0 0 16px;line-height:1.6;font-size:13px;color:${muted};">This link is unique to you and is the only way your quotation can be recorded. Submissions through any other channel will not be accepted.</p>
     <p style="margin:0 0 6px;line-height:1.6;">If you have any questions about the scope, simply reply to this email.</p>
     <p style="margin:18px 0 0;font-weight:bold;">Sarooj Construction &mdash; Procurement</p>
   </div>
-  <div style="padding:10px 24px;font-size:11px;color:#8AA399;">This is an automated message from the Sarooj Procurement system.</div>
+  <div style="padding:10px 24px;font-size:11px;color:${muted};">This is an automated message from the Sarooj Procurement system.</div>
 </div>`;
 }
 
