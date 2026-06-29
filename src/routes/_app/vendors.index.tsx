@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { StatusGlossary } from "@/components/vendor-form/StatusGlossary";
 
 const PAGE_SIZE = 50;
 
@@ -173,6 +174,8 @@ function VendorsPage() {
           </button>
         </div>
       </div>
+
+      <StatusGlossary />
 
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="flex flex-wrap items-center gap-3">
