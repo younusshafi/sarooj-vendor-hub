@@ -50,8 +50,6 @@ export function PendingVendorUpdates() {
   const [busy, setBusy] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState<PendingUpdate | null>(null);
 
-  if (isLoading || pending.length === 0) return null;
-
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["vendor-pending-updates"] });
     qc.invalidateQueries({ queryKey: ["vendors"] });
@@ -87,53 +85,62 @@ export function PendingVendorUpdates() {
   };
 
   return (
-    <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-5">
-      <h2 className="mb-1 text-base font-semibold" style={{ color: "#7A5200" }}>
-        Pending vendor updates ({pending.length})
-      </h2>
-      <p className="mb-4 text-xs text-muted-foreground">
-        Submitted by vendors through a re-confirmation or onboarding link. Open each to review the
-        details and documents before applying them to the vendor record.
+    <div>
+      <p className="mb-4 text-sm text-muted-foreground">
+        Vendor submissions from re-confirmation / onboarding links. Open each to review the details
+        and documents, then apply to the vendor record or reject.
       </p>
-      <div className="space-y-3">
-        {pending.map((p) => {
-          const pl = p.payload as any;
-          const docs: any[] = Array.isArray(pl.uploaded_documents) ? pl.uploaded_documents : [];
-          return (
-            <div
-              key={p.request_id}
-              className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-card p-4"
-            >
-              <div className="min-w-0 text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-foreground">{pl.company_name || "—"}</span>
-                  <span
-                    className="rounded-full px-2 py-0.5 text-[11px] font-medium"
-                    style={{ backgroundColor: "#E8EFF7", color: "#1A3A5C" }}
-                  >
-                    {p.kind === "reconfirm" ? "Update to existing vendor" : "New vendor"}
-                  </span>
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {pl.contact_person || "—"}
-                  {pl.email ? ` · ${pl.email}` : ""}
-                </div>
-                <div className="mt-0.5 text-xs text-muted-foreground">
-                  {docs.length} document{docs.length !== 1 ? "s" : ""} · submitted{" "}
-                  {formatDate(p.submitted_at)}
-                </div>
-              </div>
-              <button
-                onClick={() => setReviewing(p)}
-                className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-white"
-                style={{ backgroundColor: "#1A3A5C" }}
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-10 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+        </div>
+      ) : pending.length === 0 ? (
+        <div className="rounded-xl border border-border bg-card px-4 py-12 text-center text-sm text-muted-foreground">
+          No pending responses yet. When a vendor submits via an outreach or onboarding link, it
+          appears here for review.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {pending.map((p) => {
+            const pl = p.payload as any;
+            const docs: any[] = Array.isArray(pl.uploaded_documents) ? pl.uploaded_documents : [];
+            return (
+              <div
+                key={p.request_id}
+                className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-card p-4"
               >
-                Review submission
-              </button>
-            </div>
-          );
-        })}
-      </div>
+                <div className="min-w-0 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-foreground">{pl.company_name || "—"}</span>
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                      style={{ backgroundColor: "#E8EFF7", color: "#1A3A5C" }}
+                    >
+                      {p.kind === "reconfirm" ? "Update to existing vendor" : "New vendor"}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {pl.contact_person || "—"}
+                    {pl.email ? ` · ${pl.email}` : ""}
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    {docs.length} document{docs.length !== 1 ? "s" : ""} · submitted{" "}
+                    {formatDate(p.submitted_at)}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setReviewing(p)}
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-white"
+                  style={{ backgroundColor: "#1A3A5C" }}
+                >
+                  Review submission
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {reviewing && (
         <ReviewModal
