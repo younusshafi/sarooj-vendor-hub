@@ -43,14 +43,24 @@ export async function sendApprovalEmail(args: ApprovalEmailArgs): Promise<void> 
   await sendEmail(args.to, subject, text);
 }
 
-/** Generic fire-and-forget transactional email via the WF15 webhook. */
-export async function sendEmail(to: string, subject: string, text: string): Promise<void> {
+/**
+ * Generic fire-and-forget transactional email via the WF15 webhook.
+ * Pass `html` to send a rich HTML email; WF15's Gmail node switches to emailType=html
+ * when an `html` field is present, else it sends `text` as plain text (unchanged for
+ * existing callers). `text` is kept as a sensible fallback body.
+ */
+export async function sendEmail(
+  to: string,
+  subject: string,
+  text: string,
+  html?: string,
+): Promise<void> {
   if (!to) return;
   try {
     await fetch(N8N_APPROVAL_EMAIL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to, subject, text }),
+      body: JSON.stringify({ to, subject, text, ...(html ? { html } : {}) }),
     });
   } catch {
     /* fire-and-forget */

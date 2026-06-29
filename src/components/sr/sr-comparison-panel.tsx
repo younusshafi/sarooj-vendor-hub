@@ -393,9 +393,10 @@ export function SrComparisonPanel({
           )}
         </div>
         <p className="mb-4 text-xs text-muted-foreground">
-          Lowest <span style={{ color: GREEN_FG }}>equalized</span> amount is highlighted. Add an
-          equalization to a vendor’s line to budget for an exclusion in their remark; award each
-          line (default = lowest equalized). Amounts in OMR (3 dp).
+          Lowest <span style={{ color: GREEN_FG }}>equalized</span> amount is highlighted. Any
+          remark the vendor left on a line shows in italics under their amount. Add an equalization
+          to a vendor’s line to budget for an exclusion in their remark; award each line (default =
+          lowest equalized). Amounts in OMR (3 dp).
         </p>
 
         <div className="overflow-x-auto">
@@ -436,7 +437,6 @@ export function SrComparisonPanel({
                           style={
                             isLowest ? { backgroundColor: GREEN_BG, color: GREEN_FG } : undefined
                           }
-                          title={c.remark ?? undefined}
                         >
                           {c.equalized == null ? (
                             <span className="italic text-muted-foreground">NQ</span>
@@ -466,6 +466,11 @@ export function SrComparisonPanel({
                                   <Pencil className="h-3 w-3" />
                                 </button>
                               )}
+                            </div>
+                          )}
+                          {c.remark && (
+                            <div className="mt-1 whitespace-normal text-left font-sans text-[10px] italic leading-snug text-muted-foreground">
+                              “{c.remark}”
                             </div>
                           )}
                         </td>
