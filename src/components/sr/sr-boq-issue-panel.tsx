@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   UploadCloud,
   Loader2,
@@ -7,8 +7,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   XCircle,
-  Copy,
-  ExternalLink,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,25 +39,17 @@ function detectRole(name: string, hidden: boolean): SrBoqColumn["role"] {
   return "data";
 }
 
-interface VendorLink {
-  id: string;
-  company: string;
-  email: string | null;
-  token: string | null;
-}
-
 /**
  * Officer panel on the SR RFQ detail page: upload a BOQ → parse (external service) →
- * curate which columns the vendor sees → Issue (creates the sr_boq skeleton) → hand
- * out each vendor's /sr-bid/<token> link. Additive — uses the sr_* flow, doesn't touch
- * the existing frame/rfq_items path.
+ * curate which columns the vendor sees → Lock (creates the sr_boq skeleton + makes the
+ * per-vendor /sr-bid/<token> links live). Vendors are emailed their link from the Vendors
+ * tab. Additive — uses the sr_* flow, doesn't touch the existing frame/rfq_items path.
  */
 export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqReference: string }) {
   const { user } = useAuth();
   const [loadingExisting, setLoadingExisting] = useState(true);
   const qc = useQueryClient();
   const [issuedBoqId, setIssuedBoqId] = useState<string | null>(null);
-  const [vendors, setVendors] = useState<VendorLink[]>([]);
 
   const [health, setHealth] = useState<{ ok: boolean; keySet: boolean } | null>(null);
   const [parsing, setParsing] = useState(false);
@@ -75,23 +65,7 @@ export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqRef
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const loadVendors = useCallback(async () => {
-    const { data } = await supabase
-      .from("rfq_vendors")
-      .select("id, email_to, bid_token, vendors(company_name)")
-      .eq("rfq_id", rfqId);
-    setVendors(
-      (data ?? []).map((v: Record<string, unknown>) => ({
-        id: v.id as string,
-        company: ((v.vendors as { company_name?: string } | null)?.company_name ??
-          "Vendor") as string,
-        email: (v.email_to as string | null) ?? null,
-        token: (v.bid_token as string | null) ?? null,
-      })),
-    );
-  }, [rfqId]);
-
-  // On mount: is a BOQ already issued for this RFQ? + load vendors + service health.
+  // On mount: is a BOQ already issued for this RFQ? + service health.
   useEffect(() => {
     (async () => {
       const { data } = await supabase
@@ -102,11 +76,10 @@ export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqRef
         .order("issued_at", { ascending: false })
         .limit(1);
       if (data && data.length) setIssuedBoqId((data[0] as { boq_id: string }).boq_id);
-      await loadVendors();
       setLoadingExisting(false);
     })();
     checkBoqService(getBoqServiceUrl()).then(setHealth);
-  }, [rfqId, loadVendors]);
+  }, [rfqId]);
 
   const processFile = async (f: File) => {
     const ext = f.name.split(".").pop()?.toLowerCase();
@@ -203,8 +176,7 @@ export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqRef
           .eq("rfq_id", rfqId)
           .eq("status", "draft");
         qc.invalidateQueries();
-        toast.success("BOQ issued — invite vendors from the Vendors tab.");
-        await loadVendors();
+        toast.success("BOQ locked — invite vendors from the Vendors tab.");
       } else {
         setError(res.error);
       }
@@ -213,11 +185,6 @@ export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqRef
     } finally {
       setIssuing(false);
     }
-  };
-
-  const copyLink = (token: string) => {
-    const url = `${window.location.origin}/sr-bid/${token}`;
-    navigator.clipboard.writeText(url).then(() => toast.success("Link copied"));
   };
 
   // ── Source-price leak (numeric only) ──
@@ -245,64 +212,21 @@ export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqRef
     );
   }
 
-  // ── Issued state: show the vendor links ──
+  // ── Locked state ──
   if (issuedBoqId) {
     return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
-            <CheckCircle2 className="h-5 w-5 text-[var(--accent)]" /> BOQ issued — {rfqReference}
+            <CheckCircle2 className="h-5 w-5 text-[var(--accent)]" /> BOQ locked — {rfqReference}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent>
           <p className="text-sm text-muted-foreground">
-            The BOQ is live and each invited vendor has a private quotation link. To email these
-            links, go to the <strong>Vendors</strong> tab — the copies below are for sending a link
-            manually (e.g. WhatsApp). Links expire at the RFQ deadline; you can re-open one for
-            negotiation from the comparison later.
+            The BOQ is finalised and each invited vendor&apos;s quotation link is live. Go to the{" "}
+            <strong>Vendors</strong> tab to email vendors their invitation. Links expire at the RFQ
+            deadline; you can re-open one for negotiation from the comparison later.
           </p>
-          {vendors.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No vendors invited yet — add vendors on the Vendors tab, then their links appear here.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {vendors.map((v) => (
-                <div
-                  key={v.id}
-                  className="flex flex-wrap items-center gap-3 rounded-md border border-border p-3"
-                >
-                  <span className="flex-1 text-sm font-medium text-foreground">{v.company}</span>
-                  <span className="text-xs text-muted-foreground">{v.email ?? "no email"}</span>
-                  {v.token ? (
-                    <div className="flex items-center gap-1">
-                      <code className="rounded bg-muted px-2 py-1 text-xs">
-                        /sr-bid/{v.token.slice(0, 8)}…
-                      </code>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => copyLink(v.token!)}
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                      <a
-                        href={`/sr-bid/${v.token}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs font-medium text-[var(--accent)] hover:underline"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" /> Open
-                      </a>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-destructive">no link token</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
         </CardContent>
       </Card>
     );
@@ -313,7 +237,7 @@ export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqRef
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-lg">Issue BOQ for pricing</CardTitle>
+          <CardTitle className="text-lg">Lock BOQ</CardTitle>
           {health && (
             <span className="flex items-center gap-1.5 text-xs">
               {health.ok ? (
@@ -331,8 +255,8 @@ export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqRef
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-xs text-muted-foreground">
-          Issuing locks the priced BOQ and makes each vendor&apos;s quotation link go live. It does
-          not send anything — you choose which vendors to email on the <strong>Vendors</strong> tab.
+          Locking finalises the BOQ and makes each vendor&apos;s quotation link go live. It does not
+          send anything — you email vendors their link from the <strong>Vendors</strong> tab.
         </p>
         {!parsed ? (
           <div
@@ -562,7 +486,7 @@ export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqRef
                 className="gap-2 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
               >
                 {issuing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Issue BOQ for pricing
+                Lock BOQ
               </Button>
             </div>
           </>

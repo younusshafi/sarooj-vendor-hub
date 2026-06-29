@@ -1,14 +1,13 @@
-// SR vendor link hand-out + dispatch. Lists each invited vendor's single-use
-// /sr-bid/<token> link (copy/open via <ShareableLink>) with a checkbox, and an
-// "Email N vendors" action that sends each SELECTED vendor their link via the generic
-// WF15 webhook (src/lib/notify). Honors Dispatch Test Mode (when ON, routes to the
-// officer instead of real vendors). SR dispatch is otherwise manual; this is the auto-send.
+// SR vendor invite + dispatch. Lists each invited vendor (name + email) with a
+// checkbox, and an "Email N vendors" action that emails each SELECTED vendor their
+// single-use /sr-bid/<token> link via the generic WF15 webhook (src/lib/notify). The
+// link is delivered only in the email — it is not shown/copied in the UI. Honors
+// Dispatch Test Mode (when ON, routes to the officer instead of real vendors).
 
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase-external/client";
-import { ShareableLink } from "@/components/rfq/shareable-link";
 import { sendEmail, getDispatchTestMode, getOfficerEmails } from "@/lib/notify";
 
 interface Row {
@@ -131,8 +130,8 @@ export function SrBidLinksPanel({ rfqId, deadline }: { rfqId: string; deadline?:
         </button>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
-        Tick the vendors to contact, then send — each gets their single-use quotation link (issue
-        the BOQ first so the links are live). Honors Dispatch Test Mode.
+        Tick the vendors to contact, then send — each receives an email with their single-use
+        quotation link (lock the BOQ first so the links are live). Honors Dispatch Test Mode.
       </p>
 
       <div className="mt-3 mb-2 flex items-center gap-3">
@@ -159,13 +158,12 @@ export function SrBidLinksPanel({ rfqId, deadline }: { rfqId: string; deadline?:
               className="h-4 w-4 shrink-0 rounded accent-[var(--accent)]"
               aria-label={`Select ${r.vendors?.company_name ?? "vendor"}`}
             />
-            <div className="min-w-0 flex-1">
-              <ShareableLink
-                label={r.vendors?.company_name ?? "Vendor"}
-                url={`${origin}/sr-bid/${r.bid_token}`}
-                state="manual"
-              />
-            </div>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+              {r.vendors?.company_name ?? "Vendor"}
+            </span>
+            <span className="truncate text-xs text-muted-foreground">
+              {r.email_to ?? "no email"}
+            </span>
           </div>
         ))}
       </div>
