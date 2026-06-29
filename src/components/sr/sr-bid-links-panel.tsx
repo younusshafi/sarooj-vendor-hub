@@ -19,7 +19,7 @@ interface Row {
   vendors: { company_name: string | null } | null;
 }
 
-export function SrBidLinksPanel({ rfqId }: { rfqId: string }) {
+export function SrBidLinksPanel({ rfqId, deadline }: { rfqId: string; deadline?: string | null }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -57,11 +57,18 @@ export function SrBidLinksPanel({ rfqId }: { rfqId: string }) {
         const subject = testMode
           ? `[TEST] Subcontract RFQ — link for ${company}`
           : `Invitation to quote — subcontract RFQ`;
+        // Link sits MID-BODY (after the intro), not pinned at the top — mirrors the
+        // [SUBMIT_LINK] convention used for the materials covering email.
+        const deadlineLine = deadline ? ` Quotations are due by ${deadline}.` : "";
         const text =
           `Dear ${company},\n\n` +
-          `You are invited to submit a quotation for our subcontract package. ` +
-          `Please submit online using your secure link:\n${link}\n\n` +
-          `This link is unique to you and is the only way to submit your quote.\n\n` +
+          `Sarooj Construction invites you to submit a quotation for our subcontract package.` +
+          `${deadlineLine} The full bill of quantities and scope are in your online quotation ` +
+          `form — please review them there and enter your rates.\n\n` +
+          `Submit your quotation online:\n${link}\n\n` +
+          `This link is unique to you and is the only way your quote can be recorded; ` +
+          `submissions through any other channel will not be accepted.\n\n` +
+          `If you have any questions about the scope, please reply to this email.\n\n` +
           `Sarooj Construction — Procurement`;
         await sendEmail(to, subject, text);
         await supabase
@@ -105,19 +112,25 @@ export function SrBidLinksPanel({ rfqId }: { rfqId: string }) {
         </button>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
-        Each vendor’s single-use link to the BOQ quotation document. “Email all vendors” sends each
-        their link (issue the BOQ first so the links are live). Honors Dispatch Test Mode.
+        “Email all vendors” sends each invited vendor their single-use quotation link (issue the BOQ
+        first so the links are live). Honors Dispatch Test Mode.
       </p>
-      <div className="mt-3 space-y-2">
-        {withToken.map((r) => (
-          <ShareableLink
-            key={r.id}
-            label={r.vendors?.company_name ?? "Vendor"}
-            url={`${origin}/sr-bid/${r.bid_token}`}
-            state="manual"
-          />
-        ))}
-      </div>
+      {/* Per-vendor copy links — secondary fallback for manual hand-out, not the headline. */}
+      <details className="mt-3">
+        <summary className="cursor-pointer text-xs font-medium" style={{ color: "var(--accent)" }}>
+          Individual vendor links ({withToken.length}) — copy &amp; send manually
+        </summary>
+        <div className="mt-3 space-y-2">
+          {withToken.map((r) => (
+            <ShareableLink
+              key={r.id}
+              label={r.vendors?.company_name ?? "Vendor"}
+              url={`${origin}/sr-bid/${r.bid_token}`}
+              state="manual"
+            />
+          ))}
+        </div>
+      </details>
     </div>
   );
 }

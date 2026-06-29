@@ -22,6 +22,7 @@ import {
   type ParsedBoq,
   type ParsedBoqRow,
 } from "@/lib/boq-service";
+import { useQueryClient } from "@tanstack/react-query";
 import { srBoqIssue, type SrBoqColumn, type SrIssueLine } from "@/lib/sr-boq";
 
 const PRICE_HINT = /rate|price|amount|total|value|budget|cost/i;
@@ -56,6 +57,7 @@ interface VendorLink {
 export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqReference: string }) {
   const { user } = useAuth();
   const [loadingExisting, setLoadingExisting] = useState(true);
+  const qc = useQueryClient();
   const [issuedBoqId, setIssuedBoqId] = useState<string | null>(null);
   const [vendors, setVendors] = useState<VendorLink[]>([]);
 
@@ -192,6 +194,15 @@ export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqRef
       });
       if (res.ok) {
         setIssuedBoqId(res.boq_id);
+        // Issuing the BOQ is the RFQ's go-live moment (vendor links work now). Mark the RFQ
+        // 'issued' so the header badge + gating match the stepper (which already advances on
+        // boqIssued), then refresh the detail page's queries.
+        await supabase
+          .from("rfqs")
+          .update({ status: "issued" })
+          .eq("rfq_id", rfqId)
+          .eq("status", "draft");
+        qc.invalidateQueries();
         toast.success("BOQ issued — vendor links are ready below.");
         await loadVendors();
       } else {

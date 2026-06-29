@@ -1,11 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getDraft, clearFiles } from "@/lib/subcontract-draft";
 import { supabase } from "@/integrations/supabase-external/client";
-import { uploadDocument, postWebhook } from "@/lib/subcontract-webhook";
+import { uploadDocument } from "@/lib/subcontract-webhook";
 import { fileToBase64 } from "@/lib/file-utils";
 import { toast } from "sonner";
 import {
@@ -21,18 +21,11 @@ import {
 import { RfqEditableFields } from "@/components/rfq-editable-fields";
 import { RfqVendorList, type SelectedVendor } from "@/components/rfq-vendor-list";
 import { RfqEmailEditor } from "@/components/rfq-email-editor";
-import { RfqDispatchPanel } from "@/components/rfq-dispatch-panel";
 import { SrBidLinksPanel } from "@/components/sr/sr-bid-links-panel";
 import { SrBoqIssuePanel } from "@/components/sr/sr-boq-issue-panel";
 import { SrComparisonPanel } from "@/components/sr/sr-comparison-panel";
 import { StatusStepper } from "@/components/rfq/status-stepper";
 import { deriveSrStage, type RfqStage } from "@/lib/rfq-stage";
-import { BoqUploadStep } from "@/components/frame/BoqUploadStep";
-import { FrameGrid } from "@/components/frame/FrameGrid";
-import { FrameView } from "@/components/frame/FrameView";
-import { injectScheduleIntoBody, updateBoqFlag, updateIntroLine } from "@/lib/frame-email";
-import type { BoqLine, ParseResult } from "@/lib/boq-parse";
-import type { FrameData, FrameRfqRow, FrameItemRow } from "@/lib/subcontract-types";
 
 const ACCEPTED_EXTENSIONS = ".pdf,.xlsx,.xls,.doc,.docx,.png,.jpg";
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
@@ -48,6 +41,7 @@ interface RfqHeader {
   vendor_count: number;
   drive_folder_url: string | null;
   status: string;
+  deadline: string | null;
   covering_email_subject: string | null;
   covering_email_body: string | null;
 }
@@ -344,155 +338,108 @@ function DocumentsList({ rfqId }: { rfqId: string }) {
   );
 }
 
-// ── Frame tab orchestration ─────────────────────────────────────────────────
+// ── Response deadline editor ─────────────────────────────────────────────────
+// Mirrors the materials RfqDeadlineEditor (rfq.$rfqId.index.tsx): a fresh draft with
+// no deadline is pre-filled to today + system_settings.rfq_default_deadline_days (30),
+// editable while draft, read-only once issued. Empty string is coerced to null on write
+// (deadline is a date column).
 
-type FrameStage = "loading" | "upload" | "grid" | "locking" | "view";
+function SrDeadlineEditor({
+  rfqId,
+  initial,
+  readOnly,
+}: {
+  rfqId: string;
+  initial: string;
+  readOnly: boolean;
+}) {
+  const [deadline, setDeadline] = useState(initial);
+  const [defaultDays, setDefaultDays] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const defaultedRef = useRef(false);
 
-function FrameTab({ rfqId }: { rfqId: string }) {
-  const [stage, setStage] = useState<FrameStage>("loading");
-  const [rfqRow, setRfqRow] = useState<FrameRfqRow | null>(null);
-  const [rfqItems, setRfqItems] = useState<FrameItemRow[]>([]);
-  const [parseResult, setParseResult] = useState<ParseResult | null>(null);
-  const [frameData, setFrameData] = useState<FrameData | null>(null);
-
-  // On mount, check if rfq_items already exist for this RFQ
+  // Configurable default window (system_settings.rfq_default_deadline_days, default 30).
   useEffect(() => {
+    let alive = true;
     (async () => {
-      const [{ data: rfq }, { data: items }] = await Promise.all([
-        supabase
-          .from("rfqs")
-          .select("rfq_id, rfq_reference, subject_works, template, template_variant")
-          .eq("rfq_id", rfqId)
-          .single(),
-        supabase
-          .from("rfq_items")
-          .select("*")
-          .eq("rfq_id", rfqId)
-          .order("item_number", { ascending: true }),
-      ]);
-
-      setRfqRow(rfq);
-      const rows = items ?? [];
-      setRfqItems(rows);
-      setStage(rows.length > 0 ? "view" : "upload");
+      const { data } = await supabase
+        .from("system_settings")
+        .select("setting_value")
+        .eq("setting_key", "rfq_default_deadline_days")
+        .maybeSingle();
+      const n = parseInt((data?.setting_value as string) ?? "30", 10);
+      if (alive) setDefaultDays(Number.isFinite(n) ? n : 30);
     })();
-  }, [rfqId]);
-
-  // After parse, move to grid
-  const handleParsed = (result: ParseResult) => {
-    setParseResult(result);
-    setStage("grid");
-  };
-
-  // Lock & Build Frame → POST webhook, then reload items
-  const handleLock = async (lines: BoqLine[], preamble: string) => {
-    setStage("locking");
-
-    const confidence = parseResult?.source_confidence ?? "manual";
-    const remark = parseResult?.source_remark ?? "";
-
-    const payload = {
-      rfq_id: rfqId,
-      locked_lines: lines,
-      boq_preamble: preamble,
-      requisition_text: "",
-      spec_text: "",
-      source_confidence: confidence,
-      source_remark: remark,
+    return () => {
+      alive = false;
     };
+  }, []);
 
-    const result = await postWebhook<FrameData>("/webhook/scc-frame-generate", payload);
-
-    if (!result.ok) {
-      toast.error(`Frame generation failed: ${result.error}`);
-      setStage("grid");
-      return;
-    }
-
-    setFrameData(result.data);
-
-    // Reload rfq_items from Supabase
-    const { data: items } = await supabase
-      .from("rfq_items")
-      .select("*")
-      .eq("rfq_id", rfqId)
-      .order("item_number", { ascending: true });
-
-    const { data: rfq } = await supabase
-      .from("rfqs")
-      .select("rfq_id, rfq_reference, subject_works, template, template_variant")
-      .eq("rfq_id", rfqId)
-      .single();
-
-    setRfqItems(items ?? []);
-    if (rfq) setRfqRow(rfq);
-
-    // Inject schedule table into covering email body
-    try {
-      const { data: emailRow } = await supabase
-        .from("rfqs")
-        .select("covering_email_body")
-        .eq("rfq_id", rfqId)
-        .single();
-
-      if (emailRow?.covering_email_body != null && (items ?? []).length > 0) {
-        let updatedBody = injectScheduleIntoBody(
-          emailRow.covering_email_body,
-          (items ?? []).map((it) => ({
-            item_number: it.item_number,
-            description: it.description ?? "",
-            unit: it.unit,
-            quantity: it.quantity,
-          })),
-        );
-        updatedBody = updateBoqFlag(updatedBody);
-        updatedBody = updateIntroLine(updatedBody);
-
-        await supabase
+  const save = useCallback(
+    async (value: string) => {
+      setDeadline(value);
+      setSaving(true);
+      setSaved(false);
+      try {
+        const { error } = await supabase
           .from("rfqs")
-          .update({ covering_email_body: updatedBody })
+          .update({ deadline: value || null }) // empty → null for the date column
           .eq("rfq_id", rfqId);
+        if (error) throw error;
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      } catch {
+        /* non-fatal */
+      } finally {
+        setSaving(false);
       }
-    } catch {
-      // Non-fatal — frame is locked even if email injection fails
-      console.error("Failed to inject schedule into email body");
-    }
+    },
+    [rfqId],
+  );
 
-    setStage("view");
-    toast.success("Frame locked successfully");
-  };
+  // Fresh draft with no deadline yet → pre-fill (and persist) today + default days.
+  useEffect(() => {
+    if (defaultedRef.current || readOnly || initial || defaultDays == null) return;
+    defaultedRef.current = true;
+    const d = new Date();
+    d.setDate(d.getDate() + defaultDays);
+    save(d.toISOString().split("T")[0]);
+  }, [defaultDays, initial, readOnly, save]);
 
-  if (stage === "loading") {
-    return <p className="text-sm text-muted-foreground">Loading frame data...</p>;
-  }
-
-  if (stage === "upload") {
-    return <BoqUploadStep onParsed={handleParsed} />;
-  }
-
-  if (stage === "grid" && parseResult) {
-    return (
-      <FrameGrid
-        initialLines={parseResult.lines}
-        preamble={parseResult.preamble}
-        sourceConfidence={parseResult.source_confidence}
-        sourceRemark={parseResult.source_remark}
-        onLock={handleLock}
-      />
-    );
-  }
-
-  if (stage === "locking") {
-    return (
-      <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-8">
-        <Loader2 className="h-5 w-5 animate-spin text-[var(--accent)]" />
-        <span className="text-sm text-muted-foreground">Building frame...</span>
-      </div>
-    );
-  }
-
-  // stage === "view"
-  return <FrameView rfq={rfqRow ?? {}} rfqItems={rfqItems} frameData={frameData} />;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">Response Deadline</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center gap-3">
+          {readOnly ? (
+            <span className="text-sm font-medium">{initial || "—"}</span>
+          ) : (
+            <>
+              <input
+                type="date"
+                value={deadline}
+                onChange={(e) => save(e.target.value)}
+                className="rounded-lg border border-border px-3 py-1.5 text-sm outline-none"
+              />
+              {saving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+              {saved && !saving && (
+                <span className="text-xs font-medium" style={{ color: "var(--accent)" }}>
+                  Saved
+                </span>
+              )}
+            </>
+          )}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Shown to vendors as the last date for submission in the invite email and on their bid
+          portal.
+        </p>
+      </CardContent>
+    </Card>
+  );
 }
 
 function RfqPreviewPage() {
@@ -501,9 +448,9 @@ function RfqPreviewPage() {
   const [header, setHeader] = useState<RfqHeader | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<
-    "overview" | "vendors" | "documents" | "boq" | "bids" | "frame"
-  >("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "boqdocs" | "vendors" | "bids">(
+    "overview",
+  );
   // Vendor selection lives here (not in RfqVendorList) so it persists across
   // Overview/Vendors tab switches and is available to the dispatch panel.
   const [selectedVendors, setSelectedVendors] = useState<SelectedVendor[]>([]);
@@ -520,6 +467,7 @@ function RfqPreviewPage() {
         vendor_count: r.vendor_count,
         drive_folder_url: r.drive_folder_url,
         status: "draft",
+        deadline: null,
         covering_email_subject: r.covering_email_subject,
         covering_email_body: r.covering_email_body,
       });
@@ -532,7 +480,7 @@ function RfqPreviewPage() {
       const { data: rfq, error: rfqErr } = await supabase
         .from("rfqs")
         .select(
-          "rfq_reference, subject_works, ai_notes, drive_folder_url, status, covering_email_subject, covering_email_body",
+          "rfq_reference, subject_works, ai_notes, drive_folder_url, status, deadline, covering_email_subject, covering_email_body",
         )
         .eq("rfq_id", rfqId)
         .single();
@@ -555,6 +503,7 @@ function RfqPreviewPage() {
         vendor_count: count ?? 0,
         drive_folder_url: rfq.drive_folder_url,
         status: rfq.status,
+        deadline: rfq.deadline,
         covering_email_subject: rfq.covering_email_subject,
         covering_email_body: rfq.covering_email_body,
       });
@@ -641,11 +590,9 @@ function RfqPreviewPage() {
 
   const tabs = [
     { key: "overview" as const, label: "Overview" },
+    { key: "boqdocs" as const, label: "BOQ & Documents" },
     { key: "vendors" as const, label: "Vendors" },
-    { key: "documents" as const, label: "Documents" },
-    { key: "boq" as const, label: "Issue BOQ" },
     { key: "bids" as const, label: "Bids & Award" },
-    { key: "frame" as const, label: "BoQ Upload" },
   ];
 
   return (
@@ -737,13 +684,41 @@ function RfqPreviewPage() {
 
           <RfqEmailEditor rfqId={rfqId} status={header.status} />
 
-          <RfqDispatchPanel rfqId={rfqId} selectedVendors={selectedVendors} />
+          <SrDeadlineEditor
+            rfqId={rfqId}
+            initial={header.deadline ?? ""}
+            readOnly={header.status !== "draft"}
+          />
+        </div>
+      )}
+
+      {activeTab === "boqdocs" && (
+        <div className="space-y-6">
+          {/* The single BOQ upload + parse step (remote parser) → issue to vendors. */}
+          <SrBoqIssuePanel rfqId={rfqId} rfqReference={header.rfq_reference} />
+          {/* Scope documents library (drawings / specs). */}
+          {storeFiles.length > 0 && (
+            <FileUploadProgress rfqId={rfqId} files={storeFiles} fileTypes={storeFileTypes} />
+          )}
+          <DocumentsList rfqId={rfqId} />
         </div>
       )}
 
       {activeTab === "vendors" && (
         <div className="space-y-6">
-          <SrBidLinksPanel rfqId={rfqId} />
+          {/* Response deadline (read-only here; edit it on the Overview tab). */}
+          <div className="flex items-center gap-4 rounded-xl border border-border bg-card px-4 py-3">
+            <span className="w-36 shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Response Deadline
+            </span>
+            <span className="text-sm font-medium">{header.deadline || "Not set"}</span>
+            {!header.deadline && (
+              <span className="text-xs text-muted-foreground">— set it on the Overview tab</span>
+            )}
+          </div>
+          {/* Primary select + send action: emails each invited vendor their link (honors
+              Dispatch Test Mode). Per-vendor copy links are a secondary fallback inside. */}
+          <SrBidLinksPanel rfqId={rfqId} deadline={header.deadline} />
           <RfqVendorList
             rfqId={rfqId}
             status={header.status}
@@ -753,25 +728,8 @@ function RfqPreviewPage() {
         </div>
       )}
 
-      {activeTab === "documents" && (
-        <div className="space-y-6">
-          {storeFiles.length > 0 && (
-            <FileUploadProgress rfqId={rfqId} files={storeFiles} fileTypes={storeFileTypes} />
-          )}
-          <DocumentsList rfqId={rfqId} />
-        </div>
-      )}
-
-      {activeTab === "boq" && <SrBoqIssuePanel rfqId={rfqId} rfqReference={header.rfq_reference} />}
-
       {activeTab === "bids" && (
         <SrComparisonPanel rfqId={rfqId} rfqReference={header.rfq_reference} />
-      )}
-
-      {activeTab === "frame" && (
-        <div className="space-y-6">
-          <FrameTab rfqId={rfqId} />
-        </div>
       )}
     </div>
   );
