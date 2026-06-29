@@ -26,7 +26,7 @@ const schema = z.object({
   vendor_name: z.string().trim().min(1, "Company name is required").max(200),
   contact_person: z.string().trim().min(1, "Contact person is required").max(150),
   email: z.string().trim().email("Enter a valid email address").max(200),
-  category: z.enum(SUPPLY_CATEGORIES, { message: "Select a supply category" }),
+  category: z.enum(SUPPLY_CATEGORIES).or(z.literal("")).optional(),
   personal_message: z.string().trim().max(1000).optional().or(z.literal("")),
 });
 
@@ -78,7 +78,7 @@ function InviteVendorPage() {
           vendor_name: values.vendor_name,
           contact_person: values.contact_person,
           email: values.email,
-          category: values.category,
+          category: values.category || "",
           personal_message: values.personal_message || "",
           registration_url: `${APP_BASE_URL}/register/${token}`,
         }),
@@ -216,7 +216,7 @@ function InviteVendorPage() {
             {/* Supply Category */}
             <div className="flex flex-col gap-1.5">
               <label htmlFor="category" className="text-[14px] font-medium text-foreground">
-                Supply Category <span className="text-destructive">*</span>
+                Supply Category <span className="text-muted-foreground">(optional)</span>
               </label>
               <select
                 id="category"

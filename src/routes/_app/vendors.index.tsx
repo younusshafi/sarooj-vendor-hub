@@ -54,7 +54,7 @@ const CONFIDENCE = ["high", "medium", "low"];
 function VendorsPage() {
   const sp = Route.useSearch();
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState(sp.status ?? "");
+  const [status, setStatus] = useState(sp.status ?? "active");
   const [vtype, setVtype] = useState("");
   const [stype, setStype] = useState("");
   const [category, setCategory] = useState("");
@@ -65,7 +65,7 @@ function VendorsPage() {
   // Keep filters in sync when navigated here with new search params (e.g. clicking
   // a different dashboard tile while already on /vendors).
   useEffect(() => {
-    setStatus(sp.status ?? "");
+    setStatus(sp.status ?? "active");
     setDup(!!sp.dup);
     setPage(0);
   }, [sp.status, sp.dup]);
