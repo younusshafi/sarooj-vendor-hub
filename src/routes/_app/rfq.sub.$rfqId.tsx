@@ -692,17 +692,17 @@ function RfqPreviewPage() {
         </div>
       )}
 
-      {activeTab === "boqdocs" && (
-        <div className="space-y-6">
-          {/* The single BOQ upload + parse step (remote parser) → issue to vendors. */}
-          <SrBoqIssuePanel rfqId={rfqId} rfqReference={header.rfq_reference} />
-          {/* Scope documents library (drawings / specs). */}
-          {storeFiles.length > 0 && (
-            <FileUploadProgress rfqId={rfqId} files={storeFiles} fileTypes={storeFileTypes} />
-          )}
-          <DocumentsList rfqId={rfqId} />
-        </div>
-      )}
+      {/* Kept mounted (hidden when inactive) so a parsed-but-not-yet-issued BOQ and any cell
+          edits survive switching tabs — the parse lives in component state until "Issue BOQ". */}
+      <div className="space-y-6" hidden={activeTab !== "boqdocs"}>
+        {/* The single BOQ upload + parse step (remote parser) → issue to vendors. */}
+        <SrBoqIssuePanel rfqId={rfqId} rfqReference={header.rfq_reference} />
+        {/* Scope documents library (drawings / specs). */}
+        {storeFiles.length > 0 && (
+          <FileUploadProgress rfqId={rfqId} files={storeFiles} fileTypes={storeFileTypes} />
+        )}
+        <DocumentsList rfqId={rfqId} />
+      </div>
 
       {activeTab === "vendors" && (
         <div className="space-y-6">
