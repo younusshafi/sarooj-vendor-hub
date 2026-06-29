@@ -113,7 +113,7 @@ export function SrBidLinksPanel({ rfqId, deadline }: { rfqId: string; deadline?:
     <div className="rounded-xl border border-border bg-card p-6">
       <div className="mb-1 flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Vendor bid links
+          Invite vendors
         </h3>
         <button
           type="button"

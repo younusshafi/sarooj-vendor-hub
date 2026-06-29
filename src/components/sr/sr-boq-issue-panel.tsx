@@ -203,7 +203,7 @@ export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqRef
           .eq("rfq_id", rfqId)
           .eq("status", "draft");
         qc.invalidateQueries();
-        toast.success("BOQ issued — vendor links are ready below.");
+        toast.success("BOQ issued — invite vendors from the Vendors tab.");
         await loadVendors();
       } else {
         setError(res.error);
@@ -256,8 +256,10 @@ export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqRef
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Each invited vendor has a private quotation link. Send them their link (these expire at
-            the RFQ deadline; you can re-open a link for negotiation from the comparison later).
+            The BOQ is live and each invited vendor has a private quotation link. To email these
+            links, go to the <strong>Vendors</strong> tab — the copies below are for sending a link
+            manually (e.g. WhatsApp). Links expire at the RFQ deadline; you can re-open one for
+            negotiation from the comparison later.
           </p>
           {vendors.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -311,7 +313,7 @@ export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqRef
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-lg">Issue BOQ to vendors</CardTitle>
+          <CardTitle className="text-lg">Issue BOQ for pricing</CardTitle>
           {health && (
             <span className="flex items-center gap-1.5 text-xs">
               {health.ok ? (
@@ -328,6 +330,10 @@ export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqRef
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        <p className="text-xs text-muted-foreground">
+          Issuing locks the priced BOQ and makes each vendor&apos;s quotation link go live. It does
+          not send anything — you choose which vendors to email on the <strong>Vendors</strong> tab.
+        </p>
         {!parsed ? (
           <div
             onDragOver={(e) => {
@@ -556,7 +562,7 @@ export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqRef
                 className="gap-2 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
               >
                 {issuing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Issue BOQ to vendors
+                Issue BOQ for pricing
               </Button>
             </div>
           </>
