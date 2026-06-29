@@ -76,9 +76,11 @@ function BidPage() {
         if (!alive) return;
         setState(res);
         if (res.found) {
-          // prefill from existing revision if present
+          // prefill from existing revision if present; new bids default the quote date to today
           const eb = res.existing_bid;
           if (eb) setHeader({ ...emptyHeader, ...eb.header });
+          else
+            setHeader({ ...emptyHeader, quotation_date: new Date().toISOString().split("T")[0] });
           const init: Record<string, LineRow> = {};
           for (const it of res.items) {
             const prev = eb?.lines.find((l) => l.rfq_item_id === it.rfq_item_id);
@@ -235,6 +237,23 @@ function BidPage() {
             )}
           </div>
 
+          {/* Instructions & requirements (read-only; from the buyer) */}
+          {state.rfq.vendor_instructions?.trim() && (
+            <div className="mb-6">
+              <RfqDocSection title="Instructions & requirements">
+                <div className="space-y-2 p-4 md:p-6">
+                  <p className="-mt-1 text-[13px] text-muted-foreground">
+                    Please read these before quoting — your quotation must comply with the points
+                    below.
+                  </p>
+                  <div className="whitespace-pre-line text-[14px] leading-relaxed text-foreground">
+                    {state.rfq.vendor_instructions}
+                  </div>
+                </div>
+              </RfqDocSection>
+            </div>
+          )}
+
           {/* Line items */}
           <RfqDocSection title="1. Material list — enter your rates">
             <div className="space-y-5 p-4 md:p-6">
@@ -368,6 +387,16 @@ function BidPage() {
                     value={header.quotation_reference}
                     disabled={readOnly}
                     onChange={(e) => setH({ quotation_reference: e.target.value })}
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Quotation date" htmlFor="qdate">
+                  <input
+                    id="qdate"
+                    type="date"
+                    value={header.quotation_date}
+                    disabled={readOnly}
+                    onChange={(e) => setH({ quotation_date: e.target.value })}
                     className={inputClass}
                   />
                 </Field>

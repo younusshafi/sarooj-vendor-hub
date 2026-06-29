@@ -1,22 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- loose Supabase rows from the untyped external client (see comparison-award-panel.tsx) */
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, useCallback, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import {
-  ExternalLink,
-  Loader2,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-  Send,
-  CheckCircle,
-} from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ExternalLink, Loader2, CheckCircle2, Clock, AlertCircle, CheckCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase-external/client";
 import { formatDate } from "@/lib/format";
 import { fmtOmr } from "@/lib/omr";
 import { excludeTestBatch, splitRecipients, groupByCategory, wasSent } from "@/lib/rfq-vendors";
 import { BidLinksPanel } from "@/components/bid-links-panel";
 import { RfqEmailEditor } from "@/components/rfq-email-editor";
+import { RecipientSelectPanel } from "@/components/rfq/recipient-select-panel";
 import { StatusStepper } from "@/components/rfq/status-stepper";
 import { deriveStage } from "@/lib/rfq-stage";
 
@@ -268,10 +261,15 @@ function RFQDetailPage() {
         </div>
       )}
 
-      {/* RFQ Document tab — items + editable covering email */}
+      {/* RFQ Document tab — covering email + deadline + items */}
       {tab === "document" && (
         <div className="space-y-6">
           <RfqEmailEditor rfqId={rfqId} status={rfq.status} />
+          <RfqDeadlineEditor
+            rfqId={rfqId}
+            initial={rfq.deadline ?? ""}
+            readOnly={rfq.status !== "draft"}
+          />
           <div className="rounded-xl border border-border bg-card">
             <div className="border-b border-border px-4 py-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -437,56 +435,9 @@ function VendorsTabPanel({
   // Recipients = vendors actually sent the RFQ (sent_at set by dispatch).
   const { recipients, uncontacted } = splitRecipients(allVendors);
 
-  // Once issued, default to recipients only; a toggle reveals the full pool.
+  // Issued view: a toggle reveals the full matched pool vs. just the recipients.
   const [showAll, setShowAll] = useState(false);
-  const displayVendors = isDraft || showAll ? allVendors : recipients;
-
-  // Read saved selection from sessionStorage (set by Preview page) — draft only,
-  // used to highlight which vendors are queued for dispatch before issue.
-  const [savedSelection] = useState<Set<string>>(() => {
-    try {
-      const stored = sessionStorage.getItem(`rfq_selection_${rfqId}`);
-      if (stored) return new Set(JSON.parse(stored) as string[]);
-    } catch {
-      /* ignored */
-    }
-    return new Set<string>();
-  });
-  const hasSelection = isDraft && savedSelection.size > 0;
-  const selectedCount = allVendors.filter((v: any) => savedSelection.has(v.vendor_id)).length;
-
-  const [deadline, setDeadline] = useState<string>(rfq.deadline ?? "");
-  const [deadlineSaving, setDeadlineSaving] = useState(false);
-  const [deadlineSaved, setDeadlineSaved] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
-
-  const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  }, []);
-
-  // Save deadline
-  const handleDeadlineChange = useCallback(
-    async (value: string) => {
-      setDeadline(value);
-      setDeadlineSaving(true);
-      setDeadlineSaved(false);
-      try {
-        const { error } = await supabase
-          .from("rfqs")
-          .update({ deadline: value })
-          .eq("rfq_id", rfqId);
-        if (error) throw error;
-        setDeadlineSaved(true);
-        setTimeout(() => setDeadlineSaved(false), 2000);
-      } catch {
-        showToast("Failed to save deadline", "error");
-      } finally {
-        setDeadlineSaving(false);
-      }
-    },
-    [rfqId, showToast],
-  );
+  const displayVendors = showAll ? allVendors : recipients;
 
   // Clear the in-flight dispatch flag once the RFQ is actually issued.
   useEffect(() => {
@@ -506,11 +457,8 @@ function VendorsTabPanel({
   } catch {
     dispatchedAt = 0;
   }
-  // Just after Send, WF8 takes ~40s to flip status→issued; show a clear "sending" state
-  // instead of re-showing the full select-recipients UI. Parent polls, so this resolves itself.
+  // Just after Send, WF8 takes ~40s to flip status→issued; show a clear "sending" state.
   const dispatching = isDraft && dispatchedAt > 0 && Date.now() - dispatchedAt < 90000;
-
-  const vendorCount = allVendors.length;
 
   if (dispatching) {
     return (
@@ -534,123 +482,58 @@ function VendorsTabPanel({
     );
   }
 
+  // Draft: pick recipients + send (this replaces the old standalone Preview & Dispatch page).
+  if (isDraft) {
+    return (
+      <RecipientSelectPanel
+        rfq={rfq}
+        rfqId={rfqId}
+        vendors={vendors}
+        vendorsLoading={vendorsLoading}
+      />
+    );
+  }
+
+  // Issued: read-only recipients + per-vendor bid links.
   return (
     <div className="space-y-4">
-      {/* Toast */}
-      {toast && (
-        <div
-          className="fixed top-4 right-4 z-50 rounded-lg px-4 py-2.5 text-sm font-medium shadow-lg"
-          style={{
-            backgroundColor: toast.type === "success" ? "var(--accent)" : "#991B1B",
-            color: "#fff",
-          }}
-        >
-          {toast.message}
-        </div>
-      )}
-
       {/* Header row */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {vendorsLoading ? (
-            <span className="text-sm font-semibold" style={{ color: "#1A3A5C" }}>
-              Vendors
+          <span className="text-sm font-semibold" style={{ color: "#1A3A5C" }}>
+            Sent to {recipients.length} vendor{recipients.length !== 1 ? "s" : ""}
+          </span>
+          {rfq.sent_at && (
+            <span
+              className="rounded-full px-3 py-0.5 text-xs font-medium"
+              style={{ backgroundColor: "#E8F5EE", color: "#0D5C3A" }}
+            >
+              Sent {formatDate(rfq.sent_at)}
             </span>
-          ) : isDraft ? (
-            <>
-              <span className="text-sm font-semibold" style={{ color: "#1A3A5C" }}>
-                Vendors ({vendorCount})
-              </span>
-              {hasSelection && (
-                <span
-                  className="rounded-full px-3 py-0.5 text-xs font-medium"
-                  style={{ backgroundColor: "#E0F2EA", color: "#0D5C3A" }}
-                >
-                  {selectedCount} of {vendorCount} selected for dispatch
-                </span>
-              )}
-            </>
-          ) : (
-            <>
-              <span className="text-sm font-semibold" style={{ color: "#1A3A5C" }}>
-                Sent to {recipients.length} vendor{recipients.length !== 1 ? "s" : ""}
-              </span>
-              {rfq.sent_at && (
-                <span
-                  className="rounded-full px-3 py-0.5 text-xs font-medium"
-                  style={{ backgroundColor: "#E8F5EE", color: "#0D5C3A" }}
-                >
-                  Sent {formatDate(rfq.sent_at)}
-                </span>
-              )}
-              {uncontacted.length > 0 && (
-                <button
-                  onClick={() => setShowAll((v) => !v)}
-                  className="text-xs font-medium underline"
-                  style={{ color: "var(--accent)" }}
-                >
-                  {showAll
-                    ? "Show recipients only"
-                    : `Show all matched (${uncontacted.length} un-contacted)`}
-                </button>
-              )}
-            </>
+          )}
+          {uncontacted.length > 0 && (
+            <button
+              onClick={() => setShowAll((v) => !v)}
+              className="text-xs font-medium underline"
+              style={{ color: "var(--accent)" }}
+            >
+              {showAll
+                ? "Show recipients only"
+                : `Show all matched (${uncontacted.length} un-contacted)`}
+            </button>
           )}
         </div>
-        {isDraft ? (
-          <Link
-            to="/rfq/preview"
-            search={{ rfq_ids: [rfqId] }}
-            className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold"
-            style={{ backgroundColor: "var(--accent)", color: "#fff" }}
-          >
-            <Send className="h-4 w-4" />
-            Preview & Select Recipients
-          </Link>
-        ) : (
-          <span
-            className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
-            style={{ backgroundColor: "#E8F5EE", color: "#0D5C3A" }}
-          >
-            <CheckCircle className="h-3.5 w-3.5" />
-            RFQ Issued
-          </span>
-        )}
-      </div>
-
-      {/* Deadline */}
-      <div className="flex items-center gap-4 rounded-xl border border-border bg-card px-4 py-3">
         <span
-          className="w-36 shrink-0 text-xs font-semibold uppercase tracking-wider"
-          style={{ color: "var(--muted-foreground)" }}
+          className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
+          style={{ backgroundColor: "#E8F5EE", color: "#0D5C3A" }}
         >
-          Response Deadline
+          <CheckCircle className="h-3.5 w-3.5" />
+          RFQ Issued
         </span>
-        {isDraft ? (
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={deadline}
-              onChange={(e) => handleDeadlineChange(e.target.value)}
-              className="rounded-lg border border-border px-3 py-1.5 text-sm outline-none"
-              style={{ color: "var(--foreground)" }}
-            />
-            {deadlineSaving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-            {deadlineSaved && !deadlineSaving && (
-              <span className="text-xs font-medium" style={{ color: "var(--accent)" }}>
-                Saved
-              </span>
-            )}
-          </div>
-        ) : (
-          <span className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
-            {rfq.deadline || "—"}
-          </span>
-        )}
       </div>
 
-      {/* Vendor bid links (issued) — manual send until n8n dispatch email is automated */}
-      {!isDraft && <BidLinksPanel rfqId={rfqId} rfqReference={rfq.rfq_reference} />}
+      {/* Per-vendor bid links */}
+      <BidLinksPanel rfqId={rfqId} rfqReference={rfq.rfq_reference} />
 
       {/* Vendor list — grouped by category */}
       {vendorsLoading && (
@@ -660,7 +543,7 @@ function VendorsTabPanel({
       )}
       {!vendorsLoading && displayVendors.length === 0 && (
         <div className="rounded-xl border border-border bg-card px-4 py-8 text-center text-muted-foreground">
-          {isDraft ? "No vendors assigned" : "No vendors have been sent this RFQ yet"}
+          No vendors have been sent this RFQ yet
         </div>
       )}
       {!vendorsLoading &&
@@ -697,11 +580,7 @@ function VendorsTabPanel({
                   </thead>
                   <tbody>
                     {grouped[categoryName].map((v: any) => {
-                      // Draft: dim vendors not queued for dispatch. Issued (when
-                      // showing the full pool): dim the un-contacted vendors.
-                      const dimmed = isDraft
-                        ? hasSelection && !savedSelection.has(v.vendor_id)
-                        : showAll && !wasSent(v);
+                      const dimmed = showAll && !wasSent(v);
                       return (
                         <tr
                           key={v.id}
@@ -712,15 +591,7 @@ function VendorsTabPanel({
                             className="px-4 py-3 font-medium"
                             style={{ color: "var(--foreground)" }}
                           >
-                            <span className="flex items-center gap-2">
-                              {v.vendors?.company_name || "—"}
-                              {hasSelection && !dimmed && (
-                                <CheckCircle
-                                  className="h-3.5 w-3.5 flex-shrink-0"
-                                  style={{ color: "var(--accent)" }}
-                                />
-                              )}
-                            </span>
+                            {v.vendors?.company_name || "—"}
                           </td>
                           <td className="px-4 py-3 text-xs text-muted-foreground">
                             {v.contact_person || "—"}
@@ -759,17 +630,105 @@ function VendorsTabPanel({
             </div>
           ));
         })()}
-
-      {/* Covering email now lives on the RFQ Document tab */}
-
-      {/* Vendor management has moved to Preview & Select Recipients */}
-
-      {/* Send flow has moved to Preview & Select Recipients */}
     </div>
   );
 }
 
 // ─── Shared helper components ─────────────────────────────────────────────────
+
+// Response deadline editor — lives on the RFQ Document tab (it's a term of the RFQ:
+// shown to vendors as "Last date for submission" in the email and on the bid portal).
+function RfqDeadlineEditor({
+  rfqId,
+  initial,
+  readOnly,
+}: {
+  rfqId: string;
+  initial: string;
+  readOnly: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [deadline, setDeadline] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const defaultedRef = useRef(false);
+
+  // Configurable default window (system_settings.rfq_default_deadline_days, default 30).
+  const { data: defaultDays } = useQuery({
+    queryKey: ["setting-default-deadline-days"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("system_settings")
+        .select("setting_value")
+        .eq("setting_key", "rfq_default_deadline_days")
+        .maybeSingle();
+      const n = parseInt((data as any)?.setting_value ?? "30", 10);
+      return Number.isFinite(n) ? n : 30;
+    },
+  });
+
+  const save = async (value: string) => {
+    setDeadline(value);
+    setSaving(true);
+    setSaved(false);
+    try {
+      const { error } = await supabase
+        .from("rfqs")
+        .update({ deadline: value || null }) // empty → null for the date column
+        .eq("rfq_id", rfqId);
+      if (error) throw error;
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      queryClient.invalidateQueries({ queryKey: ["rfq-detail", rfqId] });
+    } catch {
+      /* non-fatal */
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Fresh draft with no deadline yet → pre-fill (and persist) today + default days.
+  useEffect(() => {
+    if (defaultedRef.current || readOnly || initial || defaultDays == null) return;
+    defaultedRef.current = true;
+    const d = new Date();
+    d.setDate(d.getDate() + defaultDays);
+    save(d.toISOString().split("T")[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultDays, initial, readOnly]);
+
+  return (
+    <div className="rounded-xl border border-border bg-card px-6 py-4">
+      <div className="flex items-center gap-4">
+        <span className="w-40 shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Response Deadline
+        </span>
+        {readOnly ? (
+          <span className="text-sm font-medium">{initial || "—"}</span>
+        ) : (
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={deadline}
+              onChange={(e) => save(e.target.value)}
+              className="rounded-lg border border-border px-3 py-1.5 text-sm outline-none"
+            />
+            {saving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            {saved && !saving && (
+              <span className="text-xs font-medium" style={{ color: "var(--accent)" }}>
+                Saved
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Shown to vendors as the “Last date for submission” in the covering email and on their bid
+        portal.
+      </p>
+    </div>
+  );
+}
 
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (

@@ -9,10 +9,10 @@ export const Route = createFileRoute("/_app/outreach")({
   component: OutreachPage,
 });
 
-// Gated TEST campaign — the n8n workflow self-selects recipients and only emails
-// vendors tagged category 'OUTREACH_TEST'; it cannot reach real vendors.
-// Hardcoded full URL to match this repo's webhook convention (rfq.new.tsx /
-// rfq.preview.tsx / invite.tsx) — this repo does not use a VITE_N8N_BASE_URL.
+// Live campaign — the n8n workflow emails ALL ACTIVE vendors (status listed/registered).
+// While the vendor table is in test isolation, "active" = the SCC team test inboxes, so no
+// real vendors are reached; at go-live (full DB restored) this becomes a real all-vendor
+// campaign. Hardcoded full URL per this repo's webhook convention.
 const N8N_OUTREACH_CAMPAIGN = "https://n8n.zavia-ai.com/webhook/scc-outreach-campaign";
 
 function OutreachPage() {
@@ -59,7 +59,7 @@ function OutreachPage() {
 
   const handleStartCampaign = async () => {
     const confirmed = window.confirm(
-      "This sends re-confirmation outreach to OUTREACH_TEST vendors only (test scope). Continue?",
+      "This emails ALL ACTIVE vendors. While the vendor list is in test isolation, active = the SCC team test inboxes (no real vendors). Continue?",
     );
     if (!confirmed) return;
     setStarting(true);
@@ -70,7 +70,7 @@ function OutreachPage() {
         body: JSON.stringify({}),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      toast.success("Test outreach campaign started — OUTREACH_TEST vendors only.");
+      toast.success("Outreach campaign started — emailed your active vendors.");
       // Refresh the tiles and the history table so new sends appear.
       await Promise.all([stats.refetch(), history.refetch()]);
     } catch {
@@ -102,19 +102,25 @@ function OutreachPage() {
 
       <div className="rounded-xl border border-border bg-card p-6">
         <p className="text-sm text-foreground">
-          Gated test campaign: this sends re-confirmation outreach only to vendors tagged with the{" "}
-          <span className="font-semibold">OUTREACH_TEST</span> category. Real vendors are never
-          contacted.
+          Sends a vendor re-confirmation email to{" "}
+          <span className="font-semibold">all active vendors</span> (status listed / registered).
+          While the vendor list is in test isolation, that is only the SCC team test inboxes — no
+          real vendors are contacted. At go-live (full vendor DB restored) this becomes a real
+          all-vendor campaign.
+        </p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Note: this is send-only today — the email has no vendor reply link, so responses aren’t
+          captured back into the vendor module automatically yet.
         </p>
         <div className="mt-4">
           <button
             onClick={handleStartCampaign}
             disabled={starting}
-            title="Sends a gated TEST outreach campaign — only vendors tagged category 'OUTREACH_TEST' are emailed. Real vendors are never contacted."
+            title="Emails all active vendors. While in test isolation, active = the SCC team test inboxes; no real vendors are contacted."
             className="rounded-md px-4 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-50"
             style={{ backgroundColor: "var(--accent)" }}
           >
-            {starting ? "Starting…" : "Start Test Campaign"}
+            {starting ? "Starting…" : "Start Outreach Campaign"}
           </button>
         </div>
       </div>

@@ -39,8 +39,6 @@ function RFQSummaryPage() {
     }
   });
 
-  const rfqIds = createdRfqs.map((r) => r.rfq_id);
-
   if (!createdRfqs.length) {
     return (
       <div className="py-12 text-center text-muted-foreground">
@@ -151,18 +149,11 @@ function RFQSummaryPage() {
           <ExternalLink className="h-4 w-4" />
         </Link>
         <Link
-          to="/rfq/preview"
-          search={{ rfq_ids: rfqIds }}
-          className="inline-flex items-center gap-2 rounded-md border border-border px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-secondary"
-        >
-          Continue to RFQ Preview & Dispatch
-          <ArrowRight className="h-4 w-4" />
-        </Link>
-        <Link
           to="/rfq"
           className="inline-flex items-center gap-2 rounded-md border border-border px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-secondary"
         >
-          RFQ Tracker
+          Go to RFQ Tracker
+          <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
     </div>

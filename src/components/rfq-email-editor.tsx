@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase-external/client";
 import { toast } from "sonner";
 import { Loader2, Mail, Save } from "lucide-react";
+import { toLinkOnlyPreview } from "@/lib/email-preview";
 
 export function RfqEmailEditor({ rfqId, status = "draft" }: { rfqId: string; status?: string }) {
   const readOnly = status !== "draft";
@@ -108,8 +109,11 @@ export function RfqEmailEditor({ rfqId, status = "draft" }: { rfqId: string; sta
             <strong>Auto-filled at send:</strong>{" "}
             <code className="rounded bg-muted px-1 py-0.5 text-xs">[Contact Person]</code>,{" "}
             <code className="rounded bg-muted px-1 py-0.5 text-xs">[SENDER_NAME]</code>,{" "}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">[DEADLINE]</code> are replaced
-            per vendor when the RFQ is issued. Keep these placeholders intact.
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">[To be confirmed]</code>{" "}
+            (deadline), and{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">[SUBMIT_LINK]</code> (the
+            vendor’s unique submission link) are replaced per vendor when the RFQ is issued. Keep
+            these placeholders intact.
           </p>
         </div>
 
@@ -149,10 +153,18 @@ export function RfqEmailEditor({ rfqId, status = "draft" }: { rfqId: string; sta
             ) : (
               <div className="rounded-md border border-border bg-card p-4">
                 {body.trim() ? (
-                  <div
-                    className="prose prose-sm max-w-none text-sm"
-                    dangerouslySetInnerHTML={{ __html: body }}
-                  />
+                  <>
+                    <p className="mb-3 text-xs text-muted-foreground">
+                      Preview of the <strong>link-only</strong> email each vendor receives. The item
+                      schedule and requirements live in the vendor’s online quotation form — not the
+                      email — and a unique submission link is inserted per vendor at send. (Use
+                      “Edit HTML” to change the underlying text.)
+                    </p>
+                    <div
+                      className="prose prose-sm max-w-none text-sm"
+                      dangerouslySetInnerHTML={{ __html: toLinkOnlyPreview(body) }}
+                    />
+                  </>
                 ) : (
                   <p className="text-sm text-muted-foreground">No email body yet.</p>
                 )}

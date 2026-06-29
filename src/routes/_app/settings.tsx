@@ -186,6 +186,104 @@ function SettingNumberField({
   );
 }
 
+// Active vendors = the people available to play demo roles (the SCC team while in Test Mode).
+function useTeamOptions() {
+  return useQuery({
+    queryKey: ["settings-team-options"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("vendors")
+        .select("vendor_id,company_name,contacts,status")
+        .in("status", ["listed", "registered"])
+        .order("company_name");
+      return ((data as any[]) ?? [])
+        .map((v) => {
+          const contacts = Array.isArray(v.contacts) ? v.contacts : [];
+          const email = contacts.find((c: any) => c.email)?.email ?? "";
+          const name = (v.company_name ?? "").replace(/^SCC TEST — /, "");
+          return { name, email };
+        })
+        .filter((x) => x.email);
+    },
+  });
+}
+
+// A role picker backed by a system_settings key. Auto-saves on change so switching a
+// participant is a single dropdown action. Stores a plain email, or a 1-element JSON array
+// when `asJsonArray` (matches how officer_emails is read elsewhere).
+function SettingTeamSelect({
+  label,
+  description,
+  settingKey,
+  userEmail,
+  asJsonArray = false,
+}: {
+  label: string;
+  description?: string;
+  settingKey: string;
+  userEmail: string;
+  asJsonArray?: boolean;
+}) {
+  const qc = useQueryClient();
+  const { data: team = [] } = useTeamOptions();
+  const { data: initial } = useSetting(settingKey);
+  const [value, setValue] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (initial === undefined) return;
+    let v = initial as string;
+    try {
+      const arr = JSON.parse(initial as string);
+      if (Array.isArray(arr)) v = arr[0] ?? "";
+    } catch {
+      /* plain string */
+    }
+    setValue(v);
+  }, [initial]);
+
+  const onChange = async (email: string) => {
+    setValue(email);
+    const toStore = asJsonArray ? JSON.stringify(email ? [email] : []) : email;
+    try {
+      await saveSetting(settingKey, toStore, userEmail);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      qc.invalidateQueries({ queryKey: ["system-setting", settingKey] });
+      toast.success(`${label} updated`);
+    } catch (e: any) {
+      toast.error(e.message || "Failed to save");
+    }
+  };
+
+  const inList = team.some((t) => t.email === value);
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <div className="text-sm font-semibold text-foreground">{label}</div>
+        {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+      </div>
+      <div className="flex items-center gap-2">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full max-w-md rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-ring"
+        >
+          <option value="">— none —</option>
+          {!inList && value && <option value={value}>{value} (current)</option>}
+          {team.map((t) => (
+            <option key={t.email} value={t.email}>
+              {t.name} — {t.email}
+            </option>
+          ))}
+        </select>
+        {saved && <Check className="h-4 w-4" style={{ color: "var(--accent)" }} />}
+      </div>
+    </div>
+  );
+}
+
 function TestModePanel({ userEmail }: { userEmail: string }) {
   const qc = useQueryClient();
   const { data: mode, isLoading } = useSetting("dispatch_test_mode");
@@ -280,6 +378,45 @@ function SettingsPage() {
       </div>
 
       <TestModePanel userEmail={userEmail} />
+
+      {/* Demo / Testing roles */}
+      <div className="rounded-xl border border-border bg-card p-6">
+        <div className="mb-2 flex items-center gap-3">
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "#F59E0B" }} />
+          <h2 className="text-base font-semibold" style={{ color: "#1A3A5C" }}>
+            Demo / Testing roles
+          </h2>
+        </div>
+        <p className="mb-5 text-xs leading-relaxed text-muted-foreground">
+          Assign who plays each role during a demo or test. Changes save the moment you pick —
+          switching a participant is just a dropdown change. The options below are your{" "}
+          <strong>active vendors</strong> (the SCC team while Dispatch Test Mode is ON). Use this
+          together with the <strong>Dispatch Test Mode</strong> switch above: when it&apos;s ON,
+          vendor RFQ emails are delivered only to these test inboxes and never to real vendors.
+        </p>
+        <div className="space-y-6 divide-y divide-border">
+          <SettingTeamSelect
+            label="Approver"
+            description="Receives the approval-request email and approves comparisons (the secure review link is sent here). Point this at a demo participant so the real approver is never emailed."
+            settingKey="approver_email"
+            userEmail={userEmail}
+          />
+          <div className="pt-6">
+            <SettingTeamSelect
+              label="Officer (notifications)"
+              description="Receives 'new quotation submitted' and 'comparison decision' notification emails as vendors respond."
+              settingKey="officer_emails"
+              userEmail={userEmail}
+              asJsonArray
+            />
+          </div>
+        </div>
+        <p className="mt-5 rounded-md bg-secondary/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+          <strong>Vendor Outreach</strong> emails your active vendors directly (the SCC team while
+          in test). It currently only sends and logs the outreach — there is no vendor reply link
+          yet, so vendors can&apos;t self-update from the email.
+        </p>
+      </div>
 
       <div className="rounded-xl border border-border bg-card p-6">
         <div className="mb-6 flex items-center gap-3">

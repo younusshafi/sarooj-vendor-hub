@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { PendingVendorUpdates } from "@/components/vendor-form/PendingVendorUpdates";
 
 const PAGE_SIZE = 50;
 
@@ -163,6 +164,7 @@ function VendorsPage() {
 
   return (
     <div className="space-y-6">
+      <PendingVendorUpdates />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-[28px] text-foreground">Vendor Master</h1>
         <div className="flex gap-2">

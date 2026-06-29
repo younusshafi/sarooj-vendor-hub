@@ -75,16 +75,12 @@ function ComparisonViewPage() {
   const queryClient = useQueryClient();
   const [showReasoning, setShowReasoning] = useState(false);
   const [generatingAI, setGeneratingAI] = useState(false);
-  const [savingDecision, setSavingDecision] = useState(false);
   const [submittingApproval, setSubmittingApproval] = useState(false);
   const [poNumber, setPoNumber] = useState("");
   const [issuingPo, setIssuingPo] = useState(false);
 
-  // Decision form state
-  const [approvedColumn, setApprovedColumn] = useState("");
-  const [selectionType, setSelectionType] = useState<"lowest" | "selected_not_lowest">("lowest");
+  // Officer's justification notes, captured with the approval submission.
   const [decisionNotes, setDecisionNotes] = useState("");
-  const [approvedBy, setApprovedBy] = useState("Rabia Vahabudeen");
 
   const { data: rfq } = useQuery({
     queryKey: ["rfq-comparison-header", rfqId],
@@ -174,14 +170,9 @@ function ComparisonViewPage() {
     retry: false,
   });
 
-  // Populate decision form from saved comparison
+  // Restore the officer's saved notes.
   useEffect(() => {
-    if (comparison) {
-      setApprovedColumn(comparison.approved_vendor_column || "");
-      setSelectionType(comparison.selection_type || "lowest");
-      setDecisionNotes(comparison.decision_notes || "");
-      setApprovedBy(comparison.approved_by || "Rabia Vahabudeen");
-    }
+    if (comparison) setDecisionNotes(comparison.decision_notes || "");
   }, [comparison]);
 
   const generateAIRecommendation = async () => {
@@ -210,38 +201,6 @@ function ComparisonViewPage() {
     }
   };
 
-  const handleMarkFinal = async () => {
-    if (!comparison?.comparison_id) return;
-    if (selectionType === "selected_not_lowest" && !decisionNotes.trim()) {
-      toast.error("Comments are required when not selecting lowest bid");
-      return;
-    }
-    setSavingDecision(true);
-    try {
-      // Records the decision fields for the comparison sheet / Excel export. Deliberately
-      // does NOT write comparison.status — the Approval flow (Submit → approve → PO) is the
-      // single owner of status, so this no longer clashes with it.
-      const { error } = await supabase
-        .from("comparisons")
-        .update({
-          approved_vendor_column: approvedColumn ? parseInt(approvedColumn) : null,
-          selection_type: selectionType,
-          decision_notes: decisionNotes,
-          prepared_by: user?.email ?? "",
-          approved_by: approvedBy,
-          approved_at: new Date().toISOString(),
-        })
-        .eq("comparison_id", comparison.comparison_id);
-      if (error) throw error;
-      toast.success("Decision saved");
-      refetchComparison();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save decision");
-    } finally {
-      setSavingDecision(false);
-    }
-  };
-
   const handleSubmitForApproval = async () => {
     if (!comparison?.comparison_id) return;
     const itemCount = rfqItems?.length ?? 0;
@@ -254,6 +213,11 @@ function ComparisonViewPage() {
     }
     setSubmittingApproval(true);
     try {
+      // Save the officer's justification notes alongside the submission.
+      await supabase
+        .from("comparisons")
+        .update({ decision_notes: decisionNotes || null, prepared_by: user?.email ?? "" })
+        .eq("comparison_id", comparison.comparison_id);
       const res = await submitForApproval(comparison.comparison_id, user?.email ?? "");
       if (!res.ok) throw new Error(res.error || "Submit failed");
       if (res.review_token) {
@@ -844,7 +808,19 @@ function ComparisonViewPage() {
               />
             </div>
           ) : (
-            <div className="mt-3">
+            <div className="mt-3 space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Decision notes / justification (optional)
+                </label>
+                <textarea
+                  value={decisionNotes}
+                  onChange={(e) => setDecisionNotes(e.target.value)}
+                  rows={3}
+                  placeholder="e.g. why the awarded vendor was chosen, or the reason for not selecting the lowest bid…"
+                  className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none"
+                />
+              </div>
               <button
                 onClick={handleSubmitForApproval}
                 disabled={submittingApproval}
@@ -853,120 +829,14 @@ function ComparisonViewPage() {
               >
                 {submittingApproval ? "Submitting…" : "Submit for approval"}
               </button>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Award every line and Save the evaluation above first.
+              <p className="text-xs text-muted-foreground">
+                Award every line in the evaluation above first; these notes are sent to the
+                approver.
               </p>
             </div>
           )}
         </div>
       )}
-
-      {/* Decision capture card */}
-      <div className="rounded-xl border border-border bg-card p-6">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Decision
-        </h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">
-              Approved Supplier (Column No.)
-            </label>
-            <select
-              value={approvedColumn}
-              onChange={(e) => setApprovedColumn(e.target.value)}
-              className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none"
-            >
-              <option value="">Select…</option>
-              {confirmedBids.map((b, i) => (
-                <option key={b.bid_id} value={String(i + 1)}>
-                  {i + 1} — {b.vendors?.company_name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">Selection Type</label>
-            <div className="flex gap-2">
-              {(
-                [
-                  { value: "lowest", label: "LOWEST" },
-                  { value: "selected_not_lowest", label: "SELECTED — not lowest" },
-                ] as const
-              ).map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setSelectionType(opt.value)}
-                  className="flex-1 rounded-md border px-3 py-2 text-xs font-semibold transition-colors"
-                  style={
-                    selectionType === opt.value
-                      ? { backgroundColor: "#1A3A5C", color: "white", borderColor: "#1A3A5C" }
-                      : { borderColor: "var(--border)" }
-                  }
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {selectionType === "selected_not_lowest" && (
-            <div className="space-y-2 sm:col-span-2">
-              <label className="text-xs font-medium text-muted-foreground">
-                Comments (required)
-              </label>
-              <textarea
-                value={decisionNotes}
-                onChange={(e) => setDecisionNotes(e.target.value)}
-                rows={3}
-                className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none"
-                placeholder="Reason for not selecting the lowest bid…"
-              />
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">Prepared By</label>
-            <div className="rounded-md border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground">
-              {user?.email || "—"}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">Approved By</label>
-            <input
-              type="text"
-              value={approvedBy}
-              onChange={(e) => setApprovedBy(e.target.value)}
-              className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none"
-            />
-          </div>
-        </div>
-
-        <div className="mt-4 flex justify-end">
-          <button
-            onClick={handleMarkFinal}
-            disabled={savingDecision || !approvedColumn || confirmedCount === 0}
-            className="flex items-center gap-2 rounded-md px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-            style={{ backgroundColor: "var(--accent)" }}
-          >
-            {savingDecision && <Loader2 className="h-4 w-4 animate-spin" />}
-            {comparison?.approved_at ? "Update Decision" : "Save Decision"}
-          </button>
-        </div>
-
-        {comparison?.approved_at && (
-          <div
-            className="mt-3 rounded-md p-3 text-sm font-medium"
-            style={{
-              backgroundColor: "var(--toast-success-bg)",
-              color: "var(--toast-success-fg)",
-            }}
-          >
-            ✓ Decision recorded on {new Date(comparison.approved_at).toLocaleDateString("en-GB")}
-          </div>
-        )}
-      </div>
     </div>
   );
 }

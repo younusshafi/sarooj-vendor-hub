@@ -242,9 +242,6 @@ function NewRFQPage() {
       sessionStorage.setItem("rfq_summary_rfqs", JSON.stringify(rfqs));
       sessionStorage.setItem("rfq_summary_prs", JSON.stringify(prNumbers));
       sessionStorage.setItem("rfq_summary_filename", file?.name || "upload.xlsx");
-      // Keep preview IDs for the dispatch page
-      const rfqIds = rfqs.map((r) => r.rfq_id);
-      sessionStorage.setItem("rfq_preview_ids", JSON.stringify(rfqIds));
       navigate({ to: "/rfq/summary" });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to generate RFQs";

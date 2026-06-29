@@ -1,0 +1,23 @@
+-- Applied 2026-06-29 via Supabase MCP apply_migration (additive).
+-- Tokenized vendor capture link (onboarding + re-confirmation) with a pending-approval queue.
+--
+-- Objects:
+--   alter vendor_outreach add response_token text (+ index)   -- re-confirm tokens ride the outreach row
+--   table vendor_links(token pk, vendor_id, kind, email, company_name, contact_person,
+--                      category, created_at, expires_at, used_at)  -- invite/onboard tokens
+--   table vendor_update_requests(request_id pk, vendor_id, token, kind, payload jsonb,
+--                      status pending|approved|rejected, submitted_at, reviewed_by, reviewed_at, decision_notes)
+--
+-- RPCs (SECURITY DEFINER, granted to anon+authenticated):
+--   vendor_link_get(token)                         -> {found,kind,vendor_id,prefill,documents_on_file}
+--                                                     resolves token from vendor_links OR vendor_outreach.response_token
+--   vendor_link_submit(token, payload jsonb)       -> inserts a pending vendor_update_requests row;
+--                                                     marks the link used / the outreach responded
+--   vendor_link_create(vendor_id,kind,email,company,contact,category) -> {token}  (officer mint)
+--   vendor_update_apply(request_id, reviewer)      -> applies payload to vendors (update or insert) +
+--                                                     vendor_documents; marks request approved
+--   vendor_update_reject(request_id, reviewer, notes)
+--
+-- Full definitions: select pg_get_functiondef('scc_procurement.vendor_link_get(text)'::regprocedure); etc.
+-- Files are uploaded to Storage bucket 'vendor-documents' by the client; payload.uploaded_documents
+-- carries [{document_type, storage_path, filename}]; apply writes those into vendor_documents.drive_file_url.

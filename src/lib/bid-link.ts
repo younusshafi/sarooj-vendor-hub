@@ -13,6 +13,7 @@ export interface BidRfq {
   deadline: string | null;
   rfq_type: string;
   project_name: string | null;
+  vendor_instructions: string | null;
 }
 
 export interface BidVendor {

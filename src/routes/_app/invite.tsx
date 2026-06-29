@@ -4,9 +4,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Loader2, AlertCircle, CheckCircle2, Send } from "lucide-react";
+import { vendorLinkCreate } from "@/lib/vendor-link";
 
 const WEBHOOK_URL = "https://n8n.zavia-ai.com/webhook/vendor-invite";
-const REGISTRATION_URL = "https://sarooj-vendor-hub.vercel.app/register";
+const APP_BASE_URL = "https://sarooj-vendor-hub-code.vercel.app";
 
 const SUPPLY_CATEGORIES = [
   "Cement",
@@ -61,6 +62,15 @@ function InviteVendorPage() {
   const onSubmit = async (values: FormValues) => {
     setStatus("idle");
     try {
+      // Mint a per-invite token so the vendor gets a pre-fillable capture link (same form as
+      // re-confirmation); submissions land in the pending-approval queue.
+      const { token } = await vendorLinkCreate({
+        kind: "onboard",
+        email: values.email,
+        company: values.vendor_name,
+        contact: values.contact_person,
+        category: values.category,
+      });
       const res = await fetch(WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -70,7 +80,7 @@ function InviteVendorPage() {
           email: values.email,
           category: values.category,
           personal_message: values.personal_message || "",
-          registration_url: REGISTRATION_URL,
+          registration_url: `${APP_BASE_URL}/register/${token}`,
         }),
       });
       const data = await res.json().catch(() => ({}));

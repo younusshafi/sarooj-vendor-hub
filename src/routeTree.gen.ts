@@ -16,6 +16,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as SrComparisonReviewTokenRouteImport } from './routes/sr-comparison-review.$token'
 import { Route as SrBidTokenRouteImport } from './routes/sr-bid.$token'
+import { Route as RegisterTokenRouteImport } from './routes/register.$token'
 import { Route as ComparisonReviewTokenRouteImport } from './routes/comparison-review.$token'
 import { Route as BidTokenRouteImport } from './routes/bid.$token'
 import { Route as AppVendorsRouteImport } from './routes/_app/vendors'
@@ -76,6 +77,11 @@ const SrBidTokenRoute = SrBidTokenRouteImport.update({
   id: '/sr-bid/$token',
   path: '/sr-bid/$token',
   getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterTokenRoute = RegisterTokenRouteImport.update({
+  id: '/$token',
+  path: '/$token',
+  getParentRoute: () => RegisterRoute,
 } as any)
 const ComparisonReviewTokenRoute = ComparisonReviewTokenRouteImport.update({
   id: '/comparison-review/$token',
@@ -212,7 +218,7 @@ const AppRfqRfqIdBidsBidIdReviewRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
-  '/register': typeof RegisterRoute
+  '/register': typeof RegisterRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/boq-tester': typeof AppBoqTesterRoute
   '/categories': typeof AppCategoriesRoute
@@ -225,6 +231,7 @@ export interface FileRoutesByFullPath {
   '/vendors': typeof AppVendorsRouteWithChildren
   '/bid/$token': typeof BidTokenRoute
   '/comparison-review/$token': typeof ComparisonReviewTokenRoute
+  '/register/$token': typeof RegisterTokenRoute
   '/sr-bid/$token': typeof SrBidTokenRoute
   '/sr-comparison-review/$token': typeof SrComparisonReviewTokenRoute
   '/prs/$prNumber': typeof AppPrsPrNumberRoute
@@ -245,7 +252,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
-  '/register': typeof RegisterRoute
+  '/register': typeof RegisterRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/boq-tester': typeof AppBoqTesterRoute
   '/categories': typeof AppCategoriesRoute
@@ -255,6 +262,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AppSettingsRoute
   '/bid/$token': typeof BidTokenRoute
   '/comparison-review/$token': typeof ComparisonReviewTokenRoute
+  '/register/$token': typeof RegisterTokenRoute
   '/sr-bid/$token': typeof SrBidTokenRoute
   '/sr-comparison-review/$token': typeof SrComparisonReviewTokenRoute
   '/': typeof AppIndexRoute
@@ -277,7 +285,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
-  '/register': typeof RegisterRoute
+  '/register': typeof RegisterRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/_app/boq-tester': typeof AppBoqTesterRoute
   '/_app/categories': typeof AppCategoriesRoute
@@ -290,6 +298,7 @@ export interface FileRoutesById {
   '/_app/vendors': typeof AppVendorsRouteWithChildren
   '/bid/$token': typeof BidTokenRoute
   '/comparison-review/$token': typeof ComparisonReviewTokenRoute
+  '/register/$token': typeof RegisterTokenRoute
   '/sr-bid/$token': typeof SrBidTokenRoute
   '/sr-comparison-review/$token': typeof SrComparisonReviewTokenRoute
   '/_app/': typeof AppIndexRoute
@@ -327,6 +336,7 @@ export interface FileRouteTypes {
     | '/vendors'
     | '/bid/$token'
     | '/comparison-review/$token'
+    | '/register/$token'
     | '/sr-bid/$token'
     | '/sr-comparison-review/$token'
     | '/prs/$prNumber'
@@ -357,6 +367,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/bid/$token'
     | '/comparison-review/$token'
+    | '/register/$token'
     | '/sr-bid/$token'
     | '/sr-comparison-review/$token'
     | '/'
@@ -391,6 +402,7 @@ export interface FileRouteTypes {
     | '/_app/vendors'
     | '/bid/$token'
     | '/comparison-review/$token'
+    | '/register/$token'
     | '/sr-bid/$token'
     | '/sr-comparison-review/$token'
     | '/_app/'
@@ -414,7 +426,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
-  RegisterRoute: typeof RegisterRoute
+  RegisterRoute: typeof RegisterRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
   BidTokenRoute: typeof BidTokenRoute
   ComparisonReviewTokenRoute: typeof ComparisonReviewTokenRoute
@@ -472,6 +484,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/sr-bid/$token'
       preLoaderRoute: typeof SrBidTokenRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/register/$token': {
+      id: '/register/$token'
+      path: '/$token'
+      fullPath: '/register/$token'
+      preLoaderRoute: typeof RegisterTokenRouteImport
+      parentRoute: typeof RegisterRoute
     }
     '/comparison-review/$token': {
       id: '/comparison-review/$token'
@@ -754,10 +773,22 @@ const AppRouteChildren: AppRouteChildren = {
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
+interface RegisterRouteChildren {
+  RegisterTokenRoute: typeof RegisterTokenRoute
+}
+
+const RegisterRouteChildren: RegisterRouteChildren = {
+  RegisterTokenRoute: RegisterTokenRoute,
+}
+
+const RegisterRouteWithChildren = RegisterRoute._addFileChildren(
+  RegisterRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
-  RegisterRoute: RegisterRoute,
+  RegisterRoute: RegisterRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
   BidTokenRoute: BidTokenRoute,
   ComparisonReviewTokenRoute: ComparisonReviewTokenRoute,

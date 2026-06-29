@@ -2,7 +2,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase-external/client";
 import { useAuth } from "@/integrations/supabase-external/auth";
 import { toast } from "sonner";
@@ -14,7 +14,9 @@ export const Route = createFileRoute("/_app/rfq/$rfqId/bids/$bidId/review")({
 
 const CURRENCY_OPTIONS = ["OMR", "USD", "AED", "SAR"];
 const VAT_OPTIONS = ["inclusive", "exclusive", "not_stated"];
+// Leading "" = not stated by the vendor (officer leaves it blank rather than defaulting to TBD).
 const PAYMENT_OPTIONS = [
+  "",
   "advance_full",
   "advance_partial",
   "on_delivery",
@@ -22,7 +24,7 @@ const PAYMENT_OPTIONS = [
   "pdc",
   "tbd",
 ];
-const PAYMENT_METHOD_OPTIONS = ["bank_transfer", "cheque", "pdc", "cash", "tbd"];
+const PAYMENT_METHOD_OPTIONS = ["", "bank_transfer", "cheque", "pdc", "cash", "tbd"];
 
 function confidenceStyle(confidence: string | null) {
   if (confidence === "high") return "border-accent bg-accent-soft";
@@ -43,11 +45,11 @@ function BidReviewPage() {
     quotation_date: "",
     currency: "OMR",
     vat_treatment: "not_stated",
-    payment_structure: "tbd",
+    payment_structure: "",
     credit_days: "",
     pdc_days: "",
     advance_percentage: "",
-    payment_method: "tbd",
+    payment_method: "",
     delivery_lead_time_days: "",
     validity_days: "",
     manufacturer_brand: "",
@@ -100,11 +102,11 @@ function BidReviewPage() {
         quotation_date: bid.quotation_date ?? "",
         currency: bid.currency ?? "OMR",
         vat_treatment: bid.vat_treatment ?? "not_stated",
-        payment_structure: bid.payment_structure ?? "tbd",
+        payment_structure: bid.payment_structure ?? "",
         credit_days: bid.credit_days ?? "",
         pdc_days: bid.pdc_days ?? "",
         advance_percentage: bid.advance_percentage ?? "",
-        payment_method: bid.payment_method ?? "tbd",
+        payment_method: bid.payment_method ?? "",
         delivery_lead_time_days: bid.delivery_lead_time_days ?? "",
         validity_days: bid.validity_days ?? "",
         manufacturer_brand: bid.manufacturer_brand ?? "",
@@ -151,6 +153,8 @@ function BidReviewPage() {
       const updateData: any = {
         ...fields,
         quotation_date: fields.quotation_date || null,
+        payment_structure: fields.payment_structure || null,
+        payment_method: fields.payment_method || null,
         credit_days: fields.credit_days ? parseInt(String(fields.credit_days)) : null,
         pdc_days: fields.pdc_days ? parseInt(String(fields.pdc_days)) : null,
         advance_percentage: fields.advance_percentage
@@ -239,6 +243,10 @@ function BidReviewPage() {
     );
   }
 
+  // Legacy AI-extraction bids carry the vendor's reply email; portal-submitted bids don't.
+  // Only those show the Original Email panel + the AI-confidence framing.
+  const isAiBid = !!bid.original_email_body;
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -264,62 +272,60 @@ function BidReviewPage() {
         </div>
       </div>
 
-      {/* Confidence legend */}
-      <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-card px-4 py-2 text-xs">
-        <span className="font-semibold text-muted-foreground">Confidence:</span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded border-2 border-accent bg-accent-soft" />
-          High — AI certain
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded border-2 border-amber-400 bg-amber-50" />
-          Medium — please verify
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded border-2 border-red-400 bg-red-50" />
-          Not extracted — enter manually
-        </span>
-      </div>
+      {/* Confidence legend — only for legacy AI-extracted bids */}
+      {isAiBid && (
+        <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-card px-4 py-2 text-xs">
+          <span className="font-semibold text-muted-foreground">Confidence:</span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-3 w-3 rounded border-2 border-accent bg-accent-soft" />
+            High — AI certain
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-3 w-3 rounded border-2 border-amber-400 bg-amber-50" />
+            Medium — please verify
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-3 w-3 rounded border-2 border-red-400 bg-red-50" />
+            Not extracted — enter manually
+          </span>
+        </div>
+      )}
 
-      {/* Two panel layout */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* LEFT — Original email */}
-        <div
-          className="rounded-xl border-l-4 bg-white p-5"
-          style={{ borderLeftColor: "var(--border)" }}
-        >
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Original Email
-          </h2>
-          {bid.original_email_id && (
-            <div className="mb-3 space-y-1 text-xs text-muted-foreground">
-              <div>
-                <span className="font-medium">Email ID:</span> {bid.original_email_id}
+      {/* Two-panel (with Original Email) for legacy AI-extracted bids; single full-width
+          panel for portal-submitted bids. */}
+      <div className={isAiBid ? "grid grid-cols-1 gap-4 lg:grid-cols-2" : ""}>
+        {/* LEFT — Original email (legacy AI bids only) */}
+        {isAiBid && (
+          <div
+            className="rounded-xl border-l-4 bg-white p-5"
+            style={{ borderLeftColor: "var(--border)" }}
+          >
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Original Email
+            </h2>
+            {bid.original_email_id && (
+              <div className="mb-3 space-y-1 text-xs text-muted-foreground">
+                <div>
+                  <span className="font-medium">Email ID:</span> {bid.original_email_id}
+                </div>
               </div>
-            </div>
-          )}
-          <div className="max-h-[600px] overflow-y-auto rounded-md border border-border p-3 text-sm">
-            {bid.original_email_body ? (
+            )}
+            <div className="max-h-[600px] overflow-y-auto rounded-md border border-border p-3 text-sm">
               <div
                 className="prose prose-sm max-w-none"
                 dangerouslySetInnerHTML={{ __html: bid.original_email_body }}
               />
-            ) : (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <AlertCircle className="h-4 w-4" />
-                No original email body stored
-              </div>
-            )}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* RIGHT — AI Extracted Data */}
+        {/* Bid details (officer review / edit) */}
         <div className="rounded-xl p-5 space-y-5" style={{ backgroundColor: "#FDF3E0" }}>
           <h2
             className="text-sm font-semibold uppercase tracking-wider"
             style={{ color: "#7A5200" }}
           >
-            AI Extracted Data
+            {isAiBid ? "AI Extracted Data" : "Bid details"}
           </h2>
 
           {/* Vendor */}
@@ -445,9 +451,11 @@ function BidReviewPage() {
                             step="0.001"
                             value={item.rate === "" ? "" : item.rate}
                             onChange={(e) => updateItemRate(idx, e.target.value)}
-                            className={`w-24 rounded border-2 px-2 py-1 text-right text-xs outline-none ${confidenceStyle(
-                              item.ai_confidence,
-                            )}`}
+                            className={`w-24 rounded border-2 px-2 py-1 text-right text-xs outline-none ${
+                              isAiBid
+                                ? confidenceStyle(item.ai_confidence)
+                                : "border-border bg-white"
+                            }`}
                           />
                         </td>
                         <td className="px-3 py-2 text-right text-xs font-mono">
@@ -611,7 +619,7 @@ function FormSelect({
       >
         {options.map((o) => (
           <option key={o} value={o}>
-            {o.replace(/_/g, " ")}
+            {o === "" ? "— not stated —" : o.replace(/_/g, " ")}
           </option>
         ))}
       </select>
