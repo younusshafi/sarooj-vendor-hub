@@ -2,7 +2,7 @@
 // re-confirmation (/register/$token). The caller supplies prefill values, the list of documents
 // already on file, button/success text, and an onSubmit that decides where the payload goes
 // (n8n webhook for generic onboarding; the vendor_link_submit RPC for tokenized capture).
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -156,16 +156,8 @@ export function VendorRegistrationForm({
     [],
   );
 
-  const {
-    register,
-    handleSubmit,
-    control,
-    watch,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema) as never,
-    mode: "onBlur",
-    defaultValues: {
+  const defaults = useMemo(
+    () => ({
       company_name: s(prefill?.company_name),
       cr_number: s(prefill?.cr_number),
       location: "",
@@ -183,8 +175,29 @@ export function VendorRegistrationForm({
       email: s(prefill?.email),
       signatory_name: "",
       signatory_position: "",
-    },
+    }),
+    [prefill],
+  );
+
+  const {
+    register,
+    handleSubmit,
+    control,
+    watch,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema) as never,
+    mode: "onBlur",
+    defaultValues: defaults,
   });
+
+  // The token lookup is async, so prefill can arrive after the form first mounts —
+  // sync it into the fields when it does (without clobbering enum selections).
+  useEffect(() => {
+    reset(defaults, { keepDefaultValues: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaults]);
 
   const supplierType = watch("supplier_type");
   const setDoc = (name: string, file: File | null) =>
