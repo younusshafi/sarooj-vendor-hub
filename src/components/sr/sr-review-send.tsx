@@ -14,6 +14,7 @@ import {
   buildInviteText,
   DEFAULT_INVITE_MESSAGE,
   DEFAULT_INVITE_SUBJECT,
+  type InviteDetails,
 } from "@/lib/sr-email";
 
 interface Recipient {
@@ -37,6 +38,7 @@ export function SrReviewSend({
   onSent: () => void;
 }) {
   const [allRows, setAllRows] = useState<Recipient[]>([]);
+  const [details, setDetails] = useState<InviteDetails | null>(null);
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -47,7 +49,9 @@ export function SrReviewSend({
     const [{ data: rfq }, { data: rv }] = await Promise.all([
       supabase
         .from("rfqs")
-        .select("covering_email_subject, covering_email_message")
+        .select(
+          "covering_email_subject, covering_email_message, drive_folder_url, fat_by, equipment_by, materials_by, sme_required, payment_terms, subcontract_period",
+        )
         .eq("rfq_id", rfqId)
         .single(),
       supabase
@@ -57,6 +61,16 @@ export function SrReviewSend({
     ]);
     setSubject((rfq?.covering_email_subject as string) || DEFAULT_INVITE_SUBJECT);
     setMessage((rfq?.covering_email_message as string) || DEFAULT_INVITE_MESSAGE);
+    setDetails({
+      driveUrl: (rfq?.drive_folder_url as string | null) ?? null,
+      tcUrl: null, // pending the agreed T&C URL
+      fatBy: (rfq?.fat_by as string | null) ?? null,
+      equipmentBy: (rfq?.equipment_by as string | null) ?? null,
+      materialsBy: (rfq?.materials_by as string | null) ?? null,
+      smeRequired: (rfq?.sme_required as boolean | null) ?? null,
+      paymentTerms: (rfq?.payment_terms as string | null) ?? null,
+      subcontractPeriod: (rfq?.subcontract_period as string | null) ?? null,
+    });
     setAllRows(((rv ?? []) as unknown as Recipient[]).filter((r) => r.bid_token));
     setLoading(false);
   }, [rfqId]);
@@ -105,7 +119,7 @@ export function SrReviewSend({
         if (!to) continue;
         const company = r.vendors?.company_name ?? "Vendor";
         const link = `${origin}/sr-bid/${r.bid_token}`;
-        const args = { company, link, deadline, message };
+        const args = { company, link, deadline, message, details: details ?? undefined };
         await sendEmail(
           to,
           testMode ? `[TEST] ${subject} — ${company}` : subject,
@@ -146,6 +160,7 @@ export function SrReviewSend({
     link: `${window.location.origin}/sr-bid/...`,
     deadline,
     message,
+    details: details ?? undefined,
   });
 
   return (

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/integrations/supabase-external/auth";
 import { postWebhook } from "@/lib/subcontract-webhook";
 import { setDraft } from "@/lib/subcontract-draft";
+import { supabase } from "@/integrations/supabase-external/client";
 import type { GenerateResponse } from "@/lib/subcontract-types";
 import { toast } from "sonner";
 import { X, Upload, FileText, Loader2 } from "lucide-react";
@@ -244,6 +245,21 @@ function NewRfqPage() {
 
     console.log("Generate response:", result.data);
     const { rfq_id } = result.data;
+
+    // Persist the responsibility selections (the agent doesn't store these) so the
+    // invite email can show them. Best-effort — never block the flow.
+    try {
+      await supabase
+        .from("rfqs")
+        .update({
+          fat_by: form.fat_by,
+          equipment_by: form.equipment_by,
+          materials_by: form.materials_by,
+        })
+        .eq("rfq_id", rfq_id);
+    } catch {
+      /* non-fatal */
+    }
 
     // Store response + File objects + file types for Stage 4
     setDraft(
