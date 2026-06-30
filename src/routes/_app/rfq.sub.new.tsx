@@ -429,10 +429,10 @@ function NewRfqPage() {
           {generating ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Generating...
+              Creating...
             </>
           ) : (
-            "Generate RFQ"
+            "Create RFQ Draft"
           )}
         </Button>
       </div>
