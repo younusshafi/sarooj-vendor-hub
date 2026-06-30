@@ -120,6 +120,14 @@ export function SrBoqIssuePanel({
         if (PRICE_HINT.test(c)) hc.add(i);
       });
       setHiddenCols(hc);
+      // Guard: the uploaded file must actually be a BOQ. If no line items were found,
+      // block locking and tell the officer — don't let the flow move forward.
+      const items = data.rows.filter((r) => r.role === "ITEM").length;
+      if (items === 0) {
+        setError(
+          "This file doesn't look like a BOQ — no priced line items were found. Upload a valid BOQ to continue.",
+        );
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Parse failed");
     } finally {

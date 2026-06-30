@@ -434,7 +434,6 @@ function RfqWizardPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [boqLocked, setBoqLocked] = useState(false);
-  const [vendorCount, setVendorCount] = useState(0);
   const [step, setStep] = useState<StepKey>("boq");
   const stepInit = useRef(false);
   const [selectedVendors, setSelectedVendors] = useState<SelectedVendor[]>([]);
@@ -491,20 +490,16 @@ function RfqWizardPage() {
     })();
   }, [draft, rfqId]);
 
-  // Load wizard state: BOQ locked? how many vendors?
+  // Load wizard state: is the BOQ locked yet?
   const loadState = useCallback(async () => {
-    const [{ data: boq }, { count }] = await Promise.all([
-      supabase
-        .from("sr_boq")
-        .select("boq_id")
-        .eq("rfq_id", rfqId)
-        .eq("status", "issued")
-        .limit(1)
-        .maybeSingle(),
-      supabase.from("rfq_vendors").select("id", { count: "exact", head: true }).eq("rfq_id", rfqId),
-    ]);
+    const { data: boq } = await supabase
+      .from("sr_boq")
+      .select("boq_id")
+      .eq("rfq_id", rfqId)
+      .eq("status", "issued")
+      .limit(1)
+      .maybeSingle();
     setBoqLocked(!!boq?.boq_id);
-    setVendorCount(count ?? 0);
   }, [rfqId]);
 
   useEffect(() => {
@@ -519,8 +514,10 @@ function RfqWizardPage() {
       return; // management view
     }
     stepInit.current = true;
-    setStep(!boqLocked ? "boq" : vendorCount === 0 ? "vendors" : "review");
-  }, [header, boqLocked, vendorCount]);
+    // After the BOQ is locked, always resume on "vendors" so the recipient list
+    // (default-all-selected) gets seeded before the review/send step.
+    setStep(!boqLocked ? "boq" : "vendors");
+  }, [header, boqLocked]);
 
   // Lifecycle stepper for the issued/management view.
   useEffect(() => {
@@ -610,11 +607,16 @@ function RfqWizardPage() {
   // ── Draft → wizard ──
   const steps: { key: StepKey; label: string; enabled: boolean; done: boolean }[] = [
     { key: "boq", label: "Prepare BOQ", enabled: true, done: boqLocked },
-    { key: "vendors", label: "Choose vendors", enabled: boqLocked, done: vendorCount > 0 },
+    {
+      key: "vendors",
+      label: "Choose vendors",
+      enabled: boqLocked,
+      done: selectedVendors.length > 0,
+    },
     {
       key: "review",
       label: "Review & send",
-      enabled: boqLocked && vendorCount > 0,
+      enabled: boqLocked && selectedVendors.length > 0,
       done: false,
     },
   ];
@@ -684,15 +686,15 @@ function RfqWizardPage() {
       {step === "vendors" && (
         <div className="space-y-6">
           <p className="text-sm text-muted-foreground">
-            These are the vendors this RFQ will be sent to. Add or remove to curate the list.
+            Every matched vendor is selected by default — untick any you don&apos;t want to invite.
+            You can also search to add more. The invitation goes to the ticked vendors.
           </p>
           <RfqVendorList
             rfqId={rfqId}
             status={header.status}
             selected={selectedVendors}
             onSelectionChange={setSelectedVendors}
-            onCountChange={setVendorCount}
-            membershipMode
+            defaultSelectAll
           />
         </div>
       )}
@@ -709,6 +711,7 @@ function RfqWizardPage() {
           <SrReviewSend
             rfqId={rfqId}
             deadline={header.deadline}
+            selectedVendorIds={selectedVendors.map((v) => v.vendor_id)}
             onSent={() => setHeader((h) => (h ? { ...h, status: "issued" } : h))}
           />
         </div>
@@ -738,8 +741,8 @@ function RfqWizardPage() {
           >
             {step === "boq" && !boqLocked
               ? "Lock the BOQ to continue"
-              : step === "vendors" && vendorCount === 0
-                ? "Add a vendor to continue"
+              : step === "vendors" && selectedVendors.length === 0
+                ? "Select at least one vendor"
                 : "Next"}
             <ChevronRight className="h-4 w-4" />
           </Button>

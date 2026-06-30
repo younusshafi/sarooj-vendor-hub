@@ -215,6 +215,11 @@ function NewRfqPage() {
   const handleGenerate = async () => {
     setAttempted(true);
     if (!isValid) return;
+    // A subcontract RFQ is BOQ-driven — require a file marked as the BOQ.
+    if (!attachments.some((a) => a.file_type === "boq")) {
+      toast.error('Attach the BOQ and set its file type to "BOQ" before creating the RFQ.');
+      return;
+    }
 
     setGenerating(true);
     const payload = buildPayload();
@@ -362,7 +367,13 @@ function NewRfqPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Scope Documents</CardTitle>
+          <CardTitle className="text-lg">
+            Scope Documents <span className="text-destructive">*</span>
+          </CardTitle>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Attach the BOQ (PDF or Excel) and set its type to <strong>BOQ</strong> — it&apos;s
+            required and will be parsed in the next step. Add drawings/specs as needed.
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <input

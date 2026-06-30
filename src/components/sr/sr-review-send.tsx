@@ -4,7 +4,7 @@
 // send is the "issue" moment: it emails each vendor their unique /sr-bid link and
 // flips the RFQ to issued. Honors Dispatch Test Mode (routes to the officer).
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Mail, Save, Send } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase-external/client";
@@ -18,6 +18,7 @@ import {
 
 interface Recipient {
   id: string;
+  vendor_id: string;
   email_to: string | null;
   bid_token: string | null;
   vendors: { company_name: string | null } | null;
@@ -26,13 +27,16 @@ interface Recipient {
 export function SrReviewSend({
   rfqId,
   deadline,
+  selectedVendorIds,
   onSent,
 }: {
   rfqId: string;
   deadline?: string | null;
+  /** Only these vendors (chosen in Step 2) are emailed. */
+  selectedVendorIds: string[];
   onSent: () => void;
 }) {
-  const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [allRows, setAllRows] = useState<Recipient[]>([]);
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -48,18 +52,25 @@ export function SrReviewSend({
         .single(),
       supabase
         .from("rfq_vendors")
-        .select("id, email_to, bid_token, vendors(company_name)")
+        .select("id, vendor_id, email_to, bid_token, vendors(company_name)")
         .eq("rfq_id", rfqId),
     ]);
     setSubject((rfq?.covering_email_subject as string) || DEFAULT_INVITE_SUBJECT);
     setMessage((rfq?.covering_email_message as string) || DEFAULT_INVITE_MESSAGE);
-    setRecipients(((rv ?? []) as unknown as Recipient[]).filter((r) => r.bid_token));
+    setAllRows(((rv ?? []) as unknown as Recipient[]).filter((r) => r.bid_token));
     setLoading(false);
   }, [rfqId]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Recipients = the vendors picked in Step 2 that have a live link.
+  const selSet = useMemo(() => new Set(selectedVendorIds), [selectedVendorIds]);
+  const recipients = useMemo(
+    () => allRows.filter((r) => selSet.has(r.vendor_id)),
+    [allRows, selSet],
+  );
 
   const saveDraft = async () => {
     setSaving(true);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase-external/client";
 import { toast } from "sonner";
 import { Loader2, Search, X } from "lucide-react";
@@ -58,7 +58,7 @@ export function RfqVendorList({
   selected,
   onSelectionChange,
   onCountChange,
-  membershipMode = false,
+  defaultSelectAll = false,
 }: {
   rfqId: string;
   /** RFQ status — drives recipients-only view + read-only gating once issued. */
@@ -66,9 +66,9 @@ export function RfqVendorList({
   selected: SelectedVendor[];
   onSelectionChange: (next: SelectedVendor[]) => void;
   onCountChange?: (count: number) => void;
-  /** Membership mode: this list IS the recipient list — no per-vendor "select"
-   *  checkboxes, just add/remove. Used by the SR wizard's Choose-vendors step. */
-  membershipMode?: boolean;
+  /** When true, every matched vendor starts SELECTED (a recipient by default); the
+   *  officer just unticks the few they don't want. Used by the SR wizard. */
+  defaultSelectAll?: boolean;
 }) {
   const isDraft = status === "draft";
   const [vendorList, setVendorList] = useState<RfqVendor[]>([]);
@@ -150,6 +150,19 @@ export function RfqVendorList({
 
   const selectedCount = selected.length;
   const allSelected = displayVendors.length > 0 && selectedCount === displayVendors.length;
+
+  // Default every matched vendor to SELECTED (SR wizard). Runs once after load and
+  // only if no selection exists yet — so it survives step navigation (the parent
+  // keeps the selection) and never clobbers the officer's unticks.
+  const didDefault = useRef(false);
+  useEffect(() => {
+    if (!defaultSelectAll || didDefault.current || loading || !isDraft) return;
+    didDefault.current = true;
+    if (selected.length === 0 && allVendors.length > 0) {
+      onSelectionChange(allVendors.map((v) => ({ vendor_id: v.vendor_id, name: nameOf(v) })));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultSelectAll, loading, isDraft, allVendors.length]);
 
   // ── Search ──
 
@@ -240,6 +253,9 @@ export function RfqVendorList({
     };
     setVendorList((prev) => [...prev, newRow]);
     onCountChange?.(vendorList.length + 1);
+    if (defaultSelectAll) {
+      onSelectionChange([...selected, { vendor_id: v.vendor_id, name: v.company_name }]);
+    }
     setVendorSearch("");
     setVendorResults([]);
     toast.success(`${v.company_name} added`);
@@ -289,15 +305,13 @@ export function RfqVendorList({
       {/* Header */}
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold" style={{ color: "#1A3A5C" }}>
-          {!isDraft
-            ? `Sent to ${recipients.length} vendor${recipients.length !== 1 ? "s" : ""}`
-            : membershipMode
-              ? `Vendors (${allVendors.length})`
-              : `Vendors (${allVendors.length}) — ${selectedCount} selected`}
+          {isDraft
+            ? `Vendors (${allVendors.length}) — ${selectedCount} selected`
+            : `Sent to ${recipients.length} vendor${recipients.length !== 1 ? "s" : ""}`}
         </span>
         <div className="flex items-center gap-3">
-          {/* Selection controls — draft only, and not in membership mode */}
-          {isDraft && !membershipMode && allVendors.length > 0 && (
+          {/* Selection controls — draft only (issued RFQs are read-only) */}
+          {isDraft && allVendors.length > 0 && (
             <>
               <button
                 onClick={allSelected ? deselectAll : selectAll}
@@ -351,7 +365,7 @@ export function RfqVendorList({
               style={{ backgroundColor: "#E8EFF7" }}
             >
               <label className="flex items-center gap-2 cursor-pointer">
-                {isDraft && !membershipMode && (
+                {isDraft && (
                   <input
                     type="checkbox"
                     checked={allChecked}
@@ -385,18 +399,16 @@ export function RfqVendorList({
                   key={v.id}
                   className="flex items-start gap-3 rounded-lg border border-border p-3"
                   style={{
-                    opacity: membershipMode
-                      ? 1
-                      : isDraft
-                        ? selectedIds.has(v.vendor_id)
-                          ? 1
-                          : 0.5
-                        : showAll && !wasSent(v)
-                          ? 0.5
-                          : 1,
+                    opacity: isDraft
+                      ? selectedIds.has(v.vendor_id)
+                        ? 1
+                        : 0.5
+                      : showAll && !wasSent(v)
+                        ? 0.5
+                        : 1,
                   }}
                 >
-                  {isDraft && !membershipMode && (
+                  {isDraft && (
                     <input
                       type="checkbox"
                       checked={selectedIds.has(v.vendor_id)}
