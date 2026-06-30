@@ -1,28 +1,28 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
-import * as XLSX from "xlsx";
 import { UploadCloud, ChevronDown, ChevronUp, Loader2, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/integrations/supabase-external/auth";
 import { supabase } from "@/integrations/supabase-external/client";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import {
+  readWorkbook,
+  buildRows,
+  isPoCreated,
+  REQUIRED_FIELDS,
+  ALL_FIELDS,
+  FIELD_LABELS,
+  type SAPRow,
+  type ParsedSheet,
+  type ColumnMapping,
+  type SapField,
+} from "@/lib/sapParser";
 
 export const Route = createFileRoute("/_app/rfq/new")({
   component: NewRFQPage,
 });
 
 const N8N_WF7 = "https://n8n.zavia-ai.com/webhook/scc-rfq-generate";
-
-interface SAPRow {
-  pr_number: string;
-  item_number: number;
-  material_id: string;
-  item_details: string;
-  quantity: number;
-  unit: string;
-  processing_status: string;
-  delivery_date: string | null;
-}
 
 interface OverlappingPr {
   pr_number: string;
@@ -45,52 +45,6 @@ interface Wf7Response {
     pr_numbers: string[];
   }[];
   pr_numbers: string[];
-}
-
-function decodeExcelDate(serial: number): string {
-  const date = new Date((serial - 25569) * 86400 * 1000);
-  return date.toISOString().split("T")[0];
-}
-
-function parseSAPExcel(file: File): Promise<SAPRow[]> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const wb = XLSX.read(e.target?.result, { type: "array" });
-        const ws = wb.Sheets["SAPUI5 Export"];
-        if (!ws) {
-          reject(new Error('Sheet "SAPUI5 Export" not found in this file.'));
-          return;
-        }
-        const raw = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown[][];
-        const rows = raw
-          .slice(1)
-          .filter((r) => r[0])
-          .map((r) => ({
-            pr_number: String(r[0] || ""),
-            item_number: Number(r[1] || 0),
-            material_id: String(r[2] || ""),
-            item_details: String(r[3] || ""),
-            quantity: Number(r[4] || 0),
-            unit: "",
-            processing_status: String(r[5] || ""),
-            delivery_date:
-              r[6] && typeof r[6] === "number"
-                ? decodeExcelDate(Number(r[6]))
-                : typeof r[6] === "string"
-                  ? (r[6] as string)
-                  : null,
-          }));
-        resolve(rows);
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Failed to parse Excel file";
-        reject(new Error(msg));
-      }
-    };
-    reader.onerror = () => reject(new Error("Failed to read file"));
-    reader.readAsArrayBuffer(file);
-  });
 }
 
 function NewRFQPage() {
@@ -116,6 +70,13 @@ function NewRFQPage() {
   const [duplicateCheckDone, setDuplicateCheckDone] = useState(false);
   const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
 
+  // Column-mapping state: the auto-resolved sheet plus the (possibly user-edited) mapping.
+  // `needsMapping` blocks generation until required columns are assigned.
+  const [sheet, setSheet] = useState<ParsedSheet | null>(null);
+  const [mapping, setMapping] = useState<ColumnMapping | null>(null);
+  const [needsMapping, setNeedsMapping] = useState(false);
+  const [showMapping, setShowMapping] = useState(false);
+
   const clearFile = useCallback(() => {
     setFile(null);
     setRows([]);
@@ -123,15 +84,17 @@ function NewRFQPage() {
     setOverlappingPrs([]);
     setDuplicateCheckDone(false);
     setDuplicateAcknowledged(false);
+    setSheet(null);
+    setMapping(null);
+    setNeedsMapping(false);
+    setShowMapping(false);
   }, []);
 
-  const activePRs = new Set(
-    rows.filter((r) => !["po", "PO"].includes(r.processing_status)).map((r) => r.pr_number),
-  );
-  const alreadyPO = rows.filter((r) => ["po", "PO", "BSART"].includes(r.processing_status)).length;
-  const activeItems = rows.filter(
-    (r) => !["po", "PO", "BSART"].includes(r.processing_status),
-  ).length;
+  // PO-already-created items are excluded from RFQ generation (status code "B").
+  const activeRows = rows.filter((r) => !isPoCreated(r.processing_status));
+  const activePRs = new Set(activeRows.map((r) => r.pr_number));
+  const alreadyPO = rows.length - activeRows.length;
+  const activeItems = activeRows.length;
 
   // Check for duplicate PRs after parsing
   useEffect(() => {
@@ -165,7 +128,7 @@ function NewRFQPage() {
   }, [rows]);
 
   const hasDuplicateWarning = duplicateCheckDone && overlappingPrs.length > 0;
-  const generateBlocked = hasDuplicateWarning && !duplicateAcknowledged;
+  const generateBlocked = needsMapping || (hasDuplicateWarning && !duplicateAcknowledged);
 
   const processFile = useCallback(async (f: File) => {
     if (!f.name.endsWith(".xlsx") && !f.name.endsWith(".xls")) {
@@ -175,17 +138,46 @@ function NewRFQPage() {
     setParsing(true);
     setParseError(null);
     setFile(f);
+    setShowMapping(false);
     try {
-      const parsed = await parseSAPExcel(f);
-      setRows(parsed);
+      const parsed = await readWorkbook(f);
+      setSheet(parsed);
+      setMapping(parsed.mapping);
+      if (parsed.missing.length === 0) {
+        // Every required column was found — parse immediately.
+        setRows(buildRows(parsed, parsed.mapping));
+        setNeedsMapping(false);
+      } else {
+        // Layout drifted: hold off and let the user map the missing columns.
+        setRows([]);
+        setNeedsMapping(true);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Parse error";
       setParseError(msg);
       setRows([]);
+      setSheet(null);
+      setMapping(null);
+      setNeedsMapping(false);
     } finally {
       setParsing(false);
     }
   }, []);
+
+  // Apply the current (user-edited) mapping to the already-read sheet.
+  const applyMapping = useCallback(() => {
+    if (!sheet || !mapping) return;
+    if (REQUIRED_FIELDS.some((fld) => mapping[fld] == null)) return;
+    setRows(buildRows(sheet, mapping));
+    setNeedsMapping(false);
+    setShowMapping(false);
+  }, [sheet, mapping]);
+
+  const setFieldColumn = useCallback((field: SapField, col: number | null) => {
+    setMapping((prev) => (prev ? { ...prev, [field]: col } : prev));
+  }, []);
+
+  const mappingComplete = !!mapping && REQUIRED_FIELDS.every((fld) => mapping[fld] != null);
 
   const onDrop = useCallback(
     (e: React.DragEvent) => {
@@ -303,7 +295,7 @@ function NewRFQPage() {
                 Drag & drop your Excel file here
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                .xlsx only — must contain &quot;SAPUI5 Export&quot; sheet
+                .xlsx / .xls — columns are detected automatically, in any order
               </p>
               <label className="mt-4 cursor-pointer">
                 <span
@@ -329,6 +321,20 @@ function NewRFQPage() {
           </div>
         )}
       </div>
+
+      {/* Column mapping — forced when auto-detection can't find required columns,
+          or opened from the summary to review/adjust an auto-detected mapping. */}
+      {sheet && mapping && (needsMapping || showMapping) && (
+        <ColumnMapper
+          sheet={sheet}
+          mapping={mapping}
+          needsMapping={needsMapping}
+          complete={mappingComplete}
+          onChange={setFieldColumn}
+          onApply={applyMapping}
+          onCancel={needsMapping ? clearFile : () => setShowMapping(false)}
+        />
+      )}
 
       {/* Summary */}
       {rows.length > 0 && (
@@ -372,6 +378,18 @@ function NewRFQPage() {
           {alreadyPO > 0 && (
             <p className="mt-3 text-xs text-muted-foreground">
               {alreadyPO} item(s) with existing POs will be excluded from RFQ generation.
+            </p>
+          )}
+          {sheet && !showMapping && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Columns auto-detected from sheet &quot;{sheet.sheetName}&quot;.{" "}
+              <button
+                onClick={() => setShowMapping(true)}
+                className="underline"
+                style={{ color: "var(--accent)" }}
+              >
+                Review column mapping
+              </button>
             </p>
           )}
         </div>
@@ -499,5 +517,111 @@ function Field({
         className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-ring"
       />
     </label>
+  );
+}
+
+/** Manual column-mapping panel. Shown when auto-detection misses a required column, or
+ *  opened from the summary to review the auto-detected mapping. Each field picks a column
+ *  from the file's actual headers, with a live preview of the first data row's value. */
+function ColumnMapper({
+  sheet,
+  mapping,
+  needsMapping,
+  complete,
+  onChange,
+  onApply,
+  onCancel,
+}: {
+  sheet: ParsedSheet;
+  mapping: ColumnMapping;
+  needsMapping: boolean;
+  complete: boolean;
+  onChange: (field: SapField, col: number | null) => void;
+  onApply: () => void;
+  onCancel: () => void;
+}) {
+  const firstRow = sheet.dataRows[0] ?? [];
+  const accent = needsMapping ? "#7A5200" : "#1A3A5C";
+  const bg = needsMapping ? "#FDF3E0" : "#E8EFF7";
+  const border = needsMapping ? "#F59E0B" : "var(--border)";
+
+  const preview = (col: number | null) => {
+    if (col == null) return "";
+    const v = firstRow[col];
+    return v == null ? "" : String(v);
+  };
+
+  return (
+    <div className="rounded-xl border p-5" style={{ borderColor: border, backgroundColor: bg }}>
+      <div className="flex items-start gap-3">
+        {needsMapping && (
+          <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0" style={{ color: accent }} />
+        )}
+        <div className="flex-1">
+          <p className="text-sm font-semibold" style={{ color: accent }}>
+            {needsMapping ? "We couldn't match every column automatically" : "Column mapping"}
+          </p>
+          <p className="mt-1 text-xs" style={{ color: accent }}>
+            {needsMapping
+              ? "This SAP export uses a layout we don't recognise. Tell us which column is which, then continue."
+              : `Detected from sheet "${sheet.sheetName}". Adjust any column if it was matched incorrectly.`}
+          </p>
+
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {ALL_FIELDS.map((field) => {
+              const required = REQUIRED_FIELDS.includes(field);
+              const col = mapping[field];
+              const unset = required && col == null;
+              return (
+                <label key={field} className="space-y-1">
+                  <span className="text-xs font-medium" style={{ color: accent }}>
+                    {FIELD_LABELS[field]}
+                    {required && <span className="ml-0.5 text-red-600">*</span>}
+                  </span>
+                  <select
+                    value={col == null ? "" : String(col)}
+                    onChange={(e) =>
+                      onChange(field, e.target.value === "" ? null : Number(e.target.value))
+                    }
+                    className="w-full rounded-md border bg-white px-3 py-2 text-sm outline-none focus:border-ring"
+                    style={{ borderColor: unset ? "#DC2626" : "var(--border)" }}
+                  >
+                    <option value="">{required ? "— select column —" : "— none —"}</option>
+                    {sheet.headers.map((h, i) => (
+                      <option key={i} value={i}>
+                        {h || `Column ${i + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                  {preview(col) && (
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      e.g. {preview(col)}
+                    </span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              onClick={onApply}
+              disabled={!complete}
+              className="rounded-md px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+              style={{ backgroundColor: "var(--accent)" }}
+            >
+              {needsMapping ? "Use these columns" : "Apply mapping"}
+            </button>
+            <button
+              onClick={onCancel}
+              className="rounded-md border px-4 py-1.5 text-xs font-semibold"
+              style={{ borderColor: accent, color: accent }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
