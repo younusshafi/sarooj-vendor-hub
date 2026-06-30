@@ -58,6 +58,7 @@ export function RfqVendorList({
   selected,
   onSelectionChange,
   onCountChange,
+  membershipMode = false,
 }: {
   rfqId: string;
   /** RFQ status — drives recipients-only view + read-only gating once issued. */
@@ -65,6 +66,9 @@ export function RfqVendorList({
   selected: SelectedVendor[];
   onSelectionChange: (next: SelectedVendor[]) => void;
   onCountChange?: (count: number) => void;
+  /** Membership mode: this list IS the recipient list — no per-vendor "select"
+   *  checkboxes, just add/remove. Used by the SR wizard's Choose-vendors step. */
+  membershipMode?: boolean;
 }) {
   const isDraft = status === "draft";
   const [vendorList, setVendorList] = useState<RfqVendor[]>([]);
@@ -285,13 +289,15 @@ export function RfqVendorList({
       {/* Header */}
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold" style={{ color: "#1A3A5C" }}>
-          {isDraft
-            ? `Vendors (${allVendors.length}) — ${selectedCount} selected`
-            : `Sent to ${recipients.length} vendor${recipients.length !== 1 ? "s" : ""}`}
+          {!isDraft
+            ? `Sent to ${recipients.length} vendor${recipients.length !== 1 ? "s" : ""}`
+            : membershipMode
+              ? `Vendors (${allVendors.length})`
+              : `Vendors (${allVendors.length}) — ${selectedCount} selected`}
         </span>
         <div className="flex items-center gap-3">
-          {/* Selection controls — draft only (issued RFQs are read-only) */}
-          {isDraft && allVendors.length > 0 && (
+          {/* Selection controls — draft only, and not in membership mode */}
+          {isDraft && !membershipMode && allVendors.length > 0 && (
             <>
               <button
                 onClick={allSelected ? deselectAll : selectAll}
@@ -345,7 +351,7 @@ export function RfqVendorList({
               style={{ backgroundColor: "#E8EFF7" }}
             >
               <label className="flex items-center gap-2 cursor-pointer">
-                {isDraft && (
+                {isDraft && !membershipMode && (
                   <input
                     type="checkbox"
                     checked={allChecked}
@@ -379,16 +385,18 @@ export function RfqVendorList({
                   key={v.id}
                   className="flex items-start gap-3 rounded-lg border border-border p-3"
                   style={{
-                    opacity: isDraft
-                      ? selectedIds.has(v.vendor_id)
-                        ? 1
-                        : 0.5
-                      : showAll && !wasSent(v)
-                        ? 0.5
-                        : 1,
+                    opacity: membershipMode
+                      ? 1
+                      : isDraft
+                        ? selectedIds.has(v.vendor_id)
+                          ? 1
+                          : 0.5
+                        : showAll && !wasSent(v)
+                          ? 0.5
+                          : 1,
                   }}
                 >
-                  {isDraft && (
+                  {isDraft && !membershipMode && (
                     <input
                       type="checkbox"
                       checked={selectedIds.has(v.vendor_id)}

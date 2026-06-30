@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,12 +17,14 @@ import {
   RotateCcw,
   Eye,
   Upload,
+  Check,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { RfqEditableFields } from "@/components/rfq-editable-fields";
 import { RfqVendorList, type SelectedVendor } from "@/components/rfq-vendor-list";
-import { RfqEmailEditor } from "@/components/rfq-email-editor";
-import { SrBidLinksPanel } from "@/components/sr/sr-bid-links-panel";
 import { SrBoqIssuePanel } from "@/components/sr/sr-boq-issue-panel";
+import { SrReviewSend } from "@/components/sr/sr-review-send";
 import { SrComparisonPanel } from "@/components/sr/sr-comparison-panel";
 import { StatusStepper } from "@/components/rfq/status-stepper";
 import { deriveSrStage, type RfqStage } from "@/lib/rfq-stage";
@@ -31,20 +33,20 @@ const ACCEPTED_EXTENSIONS = ".pdf,.xlsx,.xls,.doc,.docx,.png,.jpg";
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
 export const Route = createFileRoute("/_app/rfq/sub/$rfqId")({
-  component: RfqPreviewPage,
+  component: RfqWizardPage,
 });
 
 interface RfqHeader {
   rfq_reference: string;
   subject_works: string;
-  scope_summary: string | null; // from generate response (in-memory) or ai_notes (DB)
+  scope_summary: string | null;
   vendor_count: number;
   drive_folder_url: string | null;
   status: string;
   deadline: string | null;
-  covering_email_subject: string | null;
-  covering_email_body: string | null;
 }
+
+// ── Supporting-document upload (auto-runs once for files carried from create) ───
 
 type UploadStatus = "pending" | "uploading" | "done" | "error";
 
@@ -67,11 +69,7 @@ function FileUploadProgress({
 }) {
   const uploadedRef = useRef(false);
   const [items, setItems] = useState<FileUploadItem[]>(() =>
-    files.map((file, i) => ({
-      file,
-      fileType: fileTypes[i] || "other",
-      status: "pending",
-    })),
+    files.map((file, i) => ({ file, fileType: fileTypes[i] || "other", status: "pending" })),
   );
   const [uploading, setUploading] = useState(false);
 
@@ -85,13 +83,10 @@ function FileUploadProgress({
     let allSucceeded = true;
     for (let i = 0; i < items.length; i++) {
       if (items[i].status === "done") continue;
-
       updateItem(i, { status: "uploading", error: undefined });
-
       try {
         const base64 = await fileToBase64(items[i].file);
         const result = await uploadDocument(rfqId, items[i].file, items[i].fileType, base64);
-
         if (result.ok && result.data.success) {
           updateItem(i, { status: "done", driveUrl: result.data.drive_file_url });
         } else {
@@ -114,36 +109,6 @@ function FileUploadProgress({
     }
   }, [items, rfqId]);
 
-  const retryFile = async (index: number) => {
-    updateItem(index, { status: "uploading", error: undefined });
-    try {
-      const item = items[index];
-      const base64 = await fileToBase64(item.file);
-      const result = await uploadDocument(rfqId, item.file, item.fileType, base64);
-
-      if (result.ok && result.data.success) {
-        updateItem(index, { status: "done", driveUrl: result.data.drive_file_url });
-        // Check if all items are now done
-        const updatedItems = items.map((it, i) =>
-          i === index ? { ...it, status: "done" as const } : it,
-        );
-        if (updatedItems.every((it) => it.status === "done")) {
-          uploadedRef.current = true;
-          clearFiles(rfqId);
-        }
-      } else {
-        const errMsg = result.ok ? "Upload returned an error" : result.error;
-        updateItem(index, { status: "error", error: errMsg });
-      }
-    } catch (err) {
-      updateItem(index, {
-        status: "error",
-        error: err instanceof Error ? err.message : "Retry failed",
-      });
-    }
-  };
-
-  // Auto-start upload on mount — once only
   useEffect(() => {
     if (!uploadedRef.current && items.some((i) => i.status === "pending")) {
       uploadAll();
@@ -157,11 +122,9 @@ function FileUploadProgress({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">
-          Document Upload
-          {allDone && (
-            <span className="ml-2 text-sm font-normal text-[var(--accent)]">Complete</span>
-          )}
+        <CardTitle className="text-base">
+          Uploading supporting documents
+          {allDone && <span className="ml-2 text-sm font-normal text-[var(--accent)]">Done</span>}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
@@ -173,7 +136,6 @@ function FileUploadProgress({
             <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="flex-1 truncate text-sm">{item.file.name}</span>
             <span className="text-xs text-muted-foreground">{item.fileType}</span>
-
             {item.status === "pending" && (
               <span className="text-xs text-muted-foreground">Waiting...</span>
             )}
@@ -182,20 +144,17 @@ function FileUploadProgress({
             )}
             {item.status === "done" && <CheckCircle2 className="h-4 w-4 text-[var(--accent)]" />}
             {item.status === "error" && (
-              <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => uploadAll()}
+                className="flex items-center gap-1 text-xs text-[var(--accent)] hover:underline"
+              >
                 <AlertCircle className="h-4 w-4 text-destructive" />
-                <button
-                  type="button"
-                  onClick={() => retryFile(index)}
-                  className="text-xs text-[var(--accent)] hover:underline"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                </button>
-              </div>
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
             )}
           </div>
         ))}
-
         {hasErrors && !uploading && (
           <Button type="button" variant="outline" size="sm" onClick={uploadAll} className="mt-2">
             Retry Failed
@@ -205,6 +164,8 @@ function FileUploadProgress({
     </Card>
   );
 }
+
+// ── Documents library (in Drive) ───────────────────────────────────────────────
 
 interface Attachment {
   attachment_id: string;
@@ -237,20 +198,16 @@ function DocumentsList({ rfqId }: { rfqId: string }) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (addFileRef.current) addFileRef.current.value = "";
-
     if (file.size > MAX_FILE_SIZE) {
-      toast.error(
-        "File too large. For files over 100 MB, please upload directly to the RFQ Drive folder and inform procurement.",
-      );
+      toast.error("File too large. For files over 100 MB, upload to the Drive folder directly.");
       return;
     }
-
     setAddingFile(true);
     try {
       const base64 = await fileToBase64(file);
       const result = await uploadDocument(rfqId, file, "other", base64);
       if (result.ok && result.data.success) {
-        toast.success(`${file.name} uploaded successfully`);
+        toast.success(`${file.name} uploaded`);
         fetchDocs();
       } else {
         toast.error(`Upload failed: ${result.ok ? "Backend error" : result.error}`);
@@ -261,24 +218,13 @@ function DocumentsList({ rfqId }: { rfqId: string }) {
     setAddingFile(false);
   };
 
-  if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Documents</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">Loading documents...</p>
-        </CardContent>
-      </Card>
-    );
-  }
+  if (loading) return null;
 
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Documents</CardTitle>
+          <CardTitle className="text-base">Supporting documents</CardTitle>
           <div>
             <input
               ref={addFileRef}
@@ -300,7 +246,7 @@ function DocumentsList({ rfqId }: { rfqId: string }) {
               ) : (
                 <Upload className="h-3.5 w-3.5" />
               )}
-              Add File
+              Add file
             </Button>
           </div>
         </div>
@@ -338,20 +284,18 @@ function DocumentsList({ rfqId }: { rfqId: string }) {
   );
 }
 
-// ── Response deadline editor ─────────────────────────────────────────────────
-// Mirrors the materials RfqDeadlineEditor (rfq.$rfqId.index.tsx): a fresh draft with
-// no deadline is pre-filled to today + system_settings.rfq_default_deadline_days (30),
-// editable while draft, read-only once issued. Empty string is coerced to null on write
-// (deadline is a date column).
+// ── Response deadline ──────────────────────────────────────────────────────────
 
 function SrDeadlineEditor({
   rfqId,
   initial,
   readOnly,
+  onChange,
 }: {
   rfqId: string;
   initial: string;
   readOnly: boolean;
+  onChange?: (v: string) => void;
 }) {
   const [deadline, setDeadline] = useState(initial);
   const [defaultDays, setDefaultDays] = useState<number | null>(null);
@@ -359,7 +303,6 @@ function SrDeadlineEditor({
   const [saved, setSaved] = useState(false);
   const defaultedRef = useRef(false);
 
-  // Configurable default window (system_settings.rfq_default_deadline_days, default 30).
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -379,12 +322,13 @@ function SrDeadlineEditor({
   const save = useCallback(
     async (value: string) => {
       setDeadline(value);
+      onChange?.(value);
       setSaving(true);
       setSaved(false);
       try {
         const { error } = await supabase
           .from("rfqs")
-          .update({ deadline: value || null }) // empty → null for the date column
+          .update({ deadline: value || null })
           .eq("rfq_id", rfqId);
         if (error) throw error;
         setSaved(true);
@@ -395,10 +339,9 @@ function SrDeadlineEditor({
         setSaving(false);
       }
     },
-    [rfqId],
+    [rfqId, onChange],
   );
 
-  // Fresh draft with no deadline yet → pre-fill (and persist) today + default days.
   useEffect(() => {
     if (defaultedRef.current || readOnly || initial || defaultDays == null) return;
     defaultedRef.current = true;
@@ -410,7 +353,7 @@ function SrDeadlineEditor({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Response Deadline</CardTitle>
+        <CardTitle className="text-base">Response deadline</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="flex items-center gap-3">
@@ -434,7 +377,7 @@ function SrDeadlineEditor({
           )}
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          Shown to vendors as the last date for submission in the invite email and on their bid
+          Shown to vendors as the last date for submission, in the invite email and on their bid
           portal.
         </p>
       </CardContent>
@@ -442,21 +385,69 @@ function SrDeadlineEditor({
   );
 }
 
-function RfqPreviewPage() {
+// ── RFQ info strip (rides along on every step) ─────────────────────────────────
+
+function RfqInfoStrip({ header }: { header: RfqHeader }) {
+  return (
+    <Card>
+      <CardContent className="space-y-3 py-4">
+        {header.scope_summary && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">Scope summary</p>
+            <p className="mt-0.5 text-sm">{header.scope_summary}</p>
+          </div>
+        )}
+        <div className="flex flex-wrap gap-6">
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">Vendors matched</p>
+            <p className="mt-0.5 text-sm font-semibold">{header.vendor_count}</p>
+          </div>
+          {header.drive_folder_url && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Drive folder</p>
+              <a
+                href={header.drive_folder_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-0.5 inline-flex items-center gap-1 text-sm font-medium text-[var(--accent)] hover:underline"
+              >
+                Open in Drive
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Wizard ─────────────────────────────────────────────────────────────────────
+
+type StepKey = "boq" | "vendors" | "review";
+
+function RfqWizardPage() {
   const { rfqId } = Route.useParams();
   const draft = getDraft(rfqId);
   const [header, setHeader] = useState<RfqHeader | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview" | "boqdocs" | "vendors" | "bids">(
-    "overview",
-  );
-  // Vendor selection lives here (not in RfqVendorList) so it persists across
-  // Overview/Vendors tab switches and is available to the dispatch panel.
+
+  const [boqLocked, setBoqLocked] = useState(false);
+  const [vendorCount, setVendorCount] = useState(0);
+  const [step, setStep] = useState<StepKey>("boq");
+  const stepInit = useRef(false);
   const [selectedVendors, setSelectedVendors] = useState<SelectedVendor[]>([]);
   const [srStage, setSrStage] = useState<RfqStage>("draft");
 
-  // If store has data, use it directly
+  // The BOQ uploaded at creation — auto-fed to the Prepare-BOQ step (no re-upload).
+  const draftBoqFile = useMemo(() => {
+    if (!draft) return null;
+    const i = draft.fileTypes.findIndex((t) => t === "boq");
+    return i >= 0 ? draft.files[i] : null;
+  }, [draft]);
+
+  // Load header (from the in-memory draft, or fetch on hard refresh).
   useEffect(() => {
     if (draft) {
       const r = draft.response;
@@ -468,34 +459,25 @@ function RfqPreviewPage() {
         drive_folder_url: r.drive_folder_url,
         status: "draft",
         deadline: null,
-        covering_email_subject: r.covering_email_subject,
-        covering_email_body: r.covering_email_body,
       });
       return;
     }
-
-    // Fallback: fetch from Supabase on hard refresh
     setLoading(true);
     (async () => {
       const { data: rfq, error: rfqErr } = await supabase
         .from("rfqs")
-        .select(
-          "rfq_reference, subject_works, ai_notes, drive_folder_url, status, deadline, covering_email_subject, covering_email_body",
-        )
+        .select("rfq_reference, subject_works, ai_notes, drive_folder_url, status, deadline")
         .eq("rfq_id", rfqId)
         .single();
-
       if (rfqErr || !rfq) {
         setError(rfqErr?.message ?? "RFQ not found");
         setLoading(false);
         return;
       }
-
       const { count } = await supabase
         .from("rfq_vendors")
         .select("id", { count: "exact", head: true })
         .eq("rfq_id", rfqId);
-
       setHeader({
         rfq_reference: rfq.rfq_reference,
         subject_works: rfq.subject_works,
@@ -504,16 +486,45 @@ function RfqPreviewPage() {
         drive_folder_url: rfq.drive_folder_url,
         status: rfq.status,
         deadline: rfq.deadline,
-        covering_email_subject: rfq.covering_email_subject,
-        covering_email_body: rfq.covering_email_body,
       });
       setLoading(false);
     })();
   }, [draft, rfqId]);
 
-  // Lifecycle stage for the stepper — derived from the sr_* tables (no persisted stage).
-  // SR has no approval→PO flow yet, so it tops out at "evaluation"; later steps render greyed.
+  // Load wizard state: BOQ locked? how many vendors?
+  const loadState = useCallback(async () => {
+    const [{ data: boq }, { count }] = await Promise.all([
+      supabase
+        .from("sr_boq")
+        .select("boq_id")
+        .eq("rfq_id", rfqId)
+        .eq("status", "issued")
+        .limit(1)
+        .maybeSingle(),
+      supabase.from("rfq_vendors").select("id", { count: "exact", head: true }).eq("rfq_id", rfqId),
+    ]);
+    setBoqLocked(!!boq?.boq_id);
+    setVendorCount(count ?? 0);
+  }, [rfqId]);
+
   useEffect(() => {
+    loadState();
+  }, [loadState]);
+
+  // Resume at the right step once state is known (only once, so user nav wins after).
+  useEffect(() => {
+    if (stepInit.current || !header) return;
+    if (header.status === "issued") {
+      stepInit.current = true;
+      return; // management view
+    }
+    stepInit.current = true;
+    setStep(!boqLocked ? "boq" : vendorCount === 0 ? "vendors" : "review");
+  }, [header, boqLocked, vendorCount]);
+
+  // Lifecycle stepper for the issued/management view.
+  useEffect(() => {
+    if (!header || header.status !== "issued") return;
     let alive = true;
     (async () => {
       const { data: boq } = await supabase
@@ -547,7 +558,7 @@ function RfqPreviewPage() {
       if (!alive) return;
       setSrStage(
         deriveSrStage({
-          rfqStatus: header?.status ?? null,
+          rfqStatus: header.status,
           boqIssued: !!boq?.boq_id,
           bidCount,
           awardCount,
@@ -558,42 +569,56 @@ function RfqPreviewPage() {
     return () => {
       alive = false;
     };
-  }, [rfqId, header?.status]);
+  }, [rfqId, header]);
 
-  if (loading) {
-    return (
-      <div className="p-6">
-        <p className="text-sm text-muted-foreground">Loading RFQ...</p>
-      </div>
-    );
-  }
+  if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading RFQ...</div>;
+  if (error) return <div className="p-6 text-sm text-destructive">Error: {error}</div>;
+  if (!header) return <div className="p-6 text-sm text-muted-foreground">Loading...</div>;
 
-  if (error) {
-    return (
-      <div className="p-6">
-        <p className="text-sm text-destructive">Error: {error}</p>
-      </div>
-    );
-  }
-
-  if (!header) {
-    return (
-      <div className="p-6">
-        <p className="text-sm text-muted-foreground">Loading...</p>
-      </div>
-    );
-  }
-
-  // Determine file types from the store (attachments selected in the form)
+  const issued = header.status === "issued";
   const storeFiles = draft?.files ?? [];
   const storeFileTypes = draft?.fileTypes ?? [];
 
-  const tabs = [
-    { key: "overview" as const, label: "Overview" },
-    { key: "boqdocs" as const, label: "BOQ & Documents" },
-    { key: "vendors" as const, label: "Vendors" },
-    { key: "bids" as const, label: "Bids & Award" },
+  // ── Issued → management view ──
+  if (issued) {
+    return (
+      <div className="mx-auto max-w-4xl space-y-6 p-6">
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="font-display text-2xl text-foreground">{header.rfq_reference}</h1>
+            <p className="mt-1 text-lg text-foreground">{header.subject_works}</p>
+          </div>
+          <Badge variant="default" className="text-xs uppercase">
+            Issued
+          </Badge>
+        </div>
+        <div className="rounded-xl border border-border bg-card px-6 py-5">
+          <StatusStepper current={srStage} />
+        </div>
+        <RfqInfoStrip header={header} />
+        <RfqVendorList
+          rfqId={rfqId}
+          status={header.status}
+          selected={selectedVendors}
+          onSelectionChange={setSelectedVendors}
+        />
+        <SrComparisonPanel rfqId={rfqId} rfqReference={header.rfq_reference} />
+      </div>
+    );
+  }
+
+  // ── Draft → wizard ──
+  const steps: { key: StepKey; label: string; enabled: boolean; done: boolean }[] = [
+    { key: "boq", label: "Prepare BOQ", enabled: true, done: boqLocked },
+    { key: "vendors", label: "Choose vendors", enabled: boqLocked, done: vendorCount > 0 },
+    {
+      key: "review",
+      label: "Review & send",
+      enabled: boqLocked && vendorCount > 0,
+      done: false,
+    },
   ];
+  const idx = steps.findIndex((s) => s.key === step);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6">
@@ -602,134 +627,136 @@ function RfqPreviewPage() {
           <h1 className="font-display text-2xl text-foreground">{header.rfq_reference}</h1>
           <p className="mt-1 text-lg text-foreground">{header.subject_works}</p>
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <Badge
-            variant={header.status === "issued" ? "default" : "secondary"}
-            className="text-xs uppercase"
-          >
-            {header.status}
-          </Badge>
-          {header.status !== "draft" && (
+        <Badge variant="secondary" className="text-xs uppercase">
+          Draft
+        </Badge>
+      </div>
+
+      <RfqInfoStrip header={header} />
+
+      {/* Wizard step nav */}
+      <div className="flex flex-wrap gap-2">
+        {steps.map((s, i) => {
+          const active = s.key === step;
+          return (
             <button
+              key={s.key}
               type="button"
-              onClick={() => setActiveTab("bids")}
-              className="text-sm font-medium"
-              style={{ color: "var(--accent)" }}
+              disabled={!s.enabled}
+              onClick={() => s.enabled && setStep(s.key)}
+              className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                active
+                  ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                  : s.enabled
+                    ? "border-border bg-card text-foreground hover:bg-secondary"
+                    : "border-border bg-card text-muted-foreground opacity-50"
+              }`}
             >
-              Compare &amp; Award bids →
+              <span
+                className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${
+                  active ? "bg-white/20" : "bg-secondary"
+                }`}
+              >
+                {s.done ? <Check className="h-3 w-3" /> : i + 1}
+              </span>
+              {s.label}
             </button>
-          )}
-        </div>
+          );
+        })}
       </div>
 
-      <div className="rounded-xl border border-border bg-card px-6 py-5">
-        <StatusStepper current={srStage} />
-      </div>
-
-      <div className="flex gap-1 border-b border-border">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === tab.key
-                ? "border-b-2 border-[var(--accent)] text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {activeTab === "overview" && (
+      {/* Step body */}
+      {step === "boq" && (
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Overview</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {header.scope_summary && (
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">Scope Summary</p>
-                  <p className="mt-0.5 text-sm">{header.scope_summary}</p>
-                </div>
-              )}
-
-              <div className="flex gap-6">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">Vendors</p>
-                  <p className="mt-0.5 text-sm font-semibold">{header.vendor_count}</p>
-                </div>
-                {header.drive_folder_url && (
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground">Drive Folder</p>
-                    <a
-                      href={header.drive_folder_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-0.5 inline-flex items-center gap-1 text-sm font-medium text-[var(--accent)] hover:underline"
-                    >
-                      Open in Drive
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <RfqEditableFields rfqId={rfqId} status={header.status} />
-
-          <RfqEmailEditor rfqId={rfqId} status={header.status} />
-
-          <SrDeadlineEditor
+          <SrBoqIssuePanel
             rfqId={rfqId}
-            initial={header.deadline ?? ""}
-            readOnly={header.status !== "draft"}
+            rfqReference={header.rfq_reference}
+            initialFile={draftBoqFile}
+            onLockedChange={setBoqLocked}
           />
+          {storeFiles.length > 0 && (
+            <FileUploadProgress rfqId={rfqId} files={storeFiles} fileTypes={storeFileTypes} />
+          )}
+          <DocumentsList rfqId={rfqId} />
         </div>
       )}
 
-      {/* Kept mounted (hidden when inactive) so a parsed-but-not-yet-issued BOQ and any cell
-          edits survive switching tabs — the parse lives in component state until "Issue BOQ". */}
-      <div className="space-y-6" hidden={activeTab !== "boqdocs"}>
-        {/* The single BOQ upload + parse step (remote parser) → issue to vendors. */}
-        <SrBoqIssuePanel rfqId={rfqId} rfqReference={header.rfq_reference} />
-        {/* Scope documents library (drawings / specs). */}
-        {storeFiles.length > 0 && (
-          <FileUploadProgress rfqId={rfqId} files={storeFiles} fileTypes={storeFileTypes} />
-        )}
-        <DocumentsList rfqId={rfqId} />
-      </div>
-
-      {activeTab === "vendors" && (
+      {step === "vendors" && (
         <div className="space-y-6">
-          {/* Response deadline (read-only here; edit it on the Overview tab). */}
-          <div className="flex items-center gap-4 rounded-xl border border-border bg-card px-4 py-3">
-            <span className="w-36 shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Response Deadline
-            </span>
-            <span className="text-sm font-medium">{header.deadline || "Not set"}</span>
-            {!header.deadline && (
-              <span className="text-xs text-muted-foreground">— set it on the Overview tab</span>
-            )}
-          </div>
-          {/* Primary select + send action: emails each invited vendor their link (honors
-              Dispatch Test Mode). Per-vendor copy links are a secondary fallback inside. */}
-          <SrBidLinksPanel rfqId={rfqId} deadline={header.deadline} />
+          <p className="text-sm text-muted-foreground">
+            These are the vendors this RFQ will be sent to. Add or remove to curate the list.
+          </p>
           <RfqVendorList
             rfqId={rfqId}
             status={header.status}
             selected={selectedVendors}
             onSelectionChange={setSelectedVendors}
+            onCountChange={setVendorCount}
+            membershipMode
           />
         </div>
       )}
 
-      {activeTab === "bids" && (
-        <SrComparisonPanel rfqId={rfqId} rfqReference={header.rfq_reference} />
+      {step === "review" && (
+        <div className="space-y-6">
+          <SrDeadlineEditor
+            rfqId={rfqId}
+            initial={header.deadline ?? ""}
+            readOnly={false}
+            onChange={(v) => setHeader((h) => (h ? { ...h, deadline: v } : h))}
+          />
+          <RfqEditableFields rfqId={rfqId} status={header.status} />
+          <SrReviewSend
+            rfqId={rfqId}
+            deadline={header.deadline}
+            onSent={() => setHeader((h) => (h ? { ...h, status: "issued" } : h))}
+          />
+        </div>
+      )}
+
+      {/* Footer nav */}
+      {step !== "review" && (
+        <div className="flex items-center justify-between border-t border-border pt-4">
+          {idx > 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setStep(steps[idx - 1].key)}
+              className="gap-1.5"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Back
+            </Button>
+          ) : (
+            <span />
+          )}
+          <Button
+            type="button"
+            disabled={!steps[idx + 1]?.enabled}
+            onClick={() => steps[idx + 1] && setStep(steps[idx + 1].key)}
+            className="gap-1.5 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]"
+          >
+            {step === "boq" && !boqLocked
+              ? "Lock the BOQ to continue"
+              : step === "vendors" && vendorCount === 0
+                ? "Add a vendor to continue"
+                : "Next"}
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+      {step === "review" && idx > 0 && (
+        <div className="flex border-t border-border pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setStep("vendors")}
+            className="gap-1.5"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Back
+          </Button>
+        </div>
       )}
     </div>
   );

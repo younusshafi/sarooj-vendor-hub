@@ -45,7 +45,19 @@ function detectRole(name: string, hidden: boolean): SrBoqColumn["role"] {
  * per-vendor /sr-bid/<token> links live). Vendors are emailed their link from the Vendors
  * tab. Additive — uses the sr_* flow, doesn't touch the existing frame/rfq_items path.
  */
-export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqReference: string }) {
+export function SrBoqIssuePanel({
+  rfqId,
+  rfqReference,
+  initialFile,
+  onLockedChange,
+}: {
+  rfqId: string;
+  rfqReference: string;
+  /** BOQ file carried from the create step, auto-parsed so it isn't uploaded twice. */
+  initialFile?: File | null;
+  /** Reports whether the BOQ is locked, so the wizard can gate the next step. */
+  onLockedChange?: (locked: boolean) => void;
+}) {
   const { user } = useAuth();
   const [loadingExisting, setLoadingExisting] = useState(true);
   const qc = useQueryClient();
@@ -116,6 +128,21 @@ export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqRef
     }
   };
 
+  // Surface lock state to the wizard so it can gate the next step.
+  useEffect(() => {
+    onLockedChange?.(!!issuedBoqId);
+  }, [issuedBoqId, onLockedChange]);
+
+  // Reuse the BOQ uploaded at creation: auto-parse it once so the officer doesn't
+  // upload the BOQ a second time. Falls back to manual upload if no file was carried.
+  const autoTried = useRef(false);
+  useEffect(() => {
+    if (loadingExisting || issuedBoqId || parsed || parsing || !initialFile) return;
+    if (autoTried.current) return;
+    autoTried.current = true;
+    void processFile(initialFile);
+  }, [loadingExisting, issuedBoqId, parsed, parsing, initialFile]);
+
   const updateCell = (rowIdx: number, colIdx: number, value: string) => {
     setRows((prev) =>
       prev.map((r, i) => {
@@ -167,16 +194,10 @@ export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqRef
       });
       if (res.ok) {
         setIssuedBoqId(res.boq_id);
-        // Issuing the BOQ is the RFQ's go-live moment (vendor links work now). Mark the RFQ
-        // 'issued' so the header badge + gating match the stepper (which already advances on
-        // boqIssued), then refresh the detail page's queries.
-        await supabase
-          .from("rfqs")
-          .update({ status: "issued" })
-          .eq("rfq_id", rfqId)
-          .eq("status", "draft");
+        // Locking makes the vendor links resolve, but does NOT issue the RFQ — that
+        // happens when invitations are sent (the Review & send step). Refresh queries.
         qc.invalidateQueries();
-        toast.success("BOQ locked — invite vendors from the Vendors tab.");
+        toast.success("BOQ locked — next: choose vendors.");
       } else {
         setError(res.error);
       }
@@ -223,8 +244,8 @@ export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqRef
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            The BOQ is finalised and each invited vendor&apos;s quotation link is live. Go to the{" "}
-            <strong>Vendors</strong> tab to email vendors their invitation. Links expire at the RFQ
+            The BOQ is finalised and each vendor&apos;s quotation link is live. Continue to{" "}
+            <strong>Choose vendors</strong>, then send invitations. Links expire at the RFQ
             deadline; you can re-open one for negotiation from the comparison later.
           </p>
         </CardContent>
@@ -255,8 +276,9 @@ export function SrBoqIssuePanel({ rfqId, rfqReference }: { rfqId: string; rfqRef
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-xs text-muted-foreground">
-          Locking finalises the BOQ and makes each vendor&apos;s quotation link go live. It does not
-          send anything — you email vendors their link from the <strong>Vendors</strong> tab.
+          This is the BOQ you uploaded when creating the RFQ. Review it, hide any internal price
+          columns, then <strong>Lock BOQ</strong> to finalise it and make the vendor quotation links
+          live. Locking doesn&apos;t send anything — you send invitations in the next steps.
         </p>
         {!parsed ? (
           <div
