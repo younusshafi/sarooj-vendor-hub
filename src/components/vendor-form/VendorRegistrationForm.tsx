@@ -57,7 +57,6 @@ export const REQUIRED_DOCS = [
   "Company Profile",
   "Commercial Registration Certificate",
   "Tax Certificate",
-  "Product Catalogues",
   "Authorised Signatory + ID",
 ] as const;
 
@@ -65,6 +64,7 @@ export const OPTIONAL_DOCS = [
   "Chamber of Commerce Certificate",
   "JSRS Registration",
   "Riyada Card",
+  "Product Catalogues",
   "Product Certificates",
   "Vehicle Registration",
   "VAT Certificate",
