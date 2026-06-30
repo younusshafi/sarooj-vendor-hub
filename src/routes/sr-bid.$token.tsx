@@ -14,6 +14,7 @@ import { RfqDocShell, RfqDocSection } from "@/components/rfq-document";
 import { uploadDocument } from "@/lib/subcontract-webhook";
 import { fileToBase64 } from "@/lib/file-utils";
 import { notifyBidSubmitted } from "@/lib/notify";
+import { supabase } from "@/integrations/supabase-external/client";
 
 export const Route = createFileRoute("/sr-bid/$token")({
   head: () => ({ meta: [{ title: "Submit your quotation — Sarooj Construction Company" }] }),
@@ -149,6 +150,22 @@ function SrBidPage() {
     const res = await srBidSubmitByToken(token, { terms, lines: payloadLines });
     setSubmitting(false);
     if (res.ok) {
+      // Link uploaded attachments to this submission so the officer sees them
+      // per-vendor in the comparison (they were uploaded to the RFQ Drive folder).
+      const doneAtt = attachments.filter((a) => a.status === "done" && a.url);
+      if (doneAtt.length) {
+        try {
+          await supabase.from("sr_bid_attachment").insert(
+            doneAtt.map((a) => ({
+              bid_id: res.bid_id,
+              filename: a.name,
+              storage_ref: a.url,
+            })),
+          );
+        } catch {
+          /* non-fatal */
+        }
+      }
       setDone(true);
       if (found) {
         notifyBidSubmitted({

@@ -44,6 +44,8 @@ export interface SrCmpVendor {
   reopened_until: string | null;
   /** line_id -> rate cell */
   rates: Record<string, SrCmpRate>;
+  /** vendor's uploaded attachments (filename + link) */
+  attachments: { filename: string; url: string | null }[];
 }
 
 export interface SrCmpEqualization {
@@ -173,6 +175,24 @@ export async function srLoadComparison(rfqId: string): Promise<SrComparison | nu
     bidLineRows = (blData ?? []) as BidLineRow[];
   }
 
+  // Vendor attachments (linked to the bid at submit time; storage_ref holds the link).
+  const attByBid = new Map<string, { filename: string; url: string | null }[]>();
+  if (bidIds.length) {
+    const { data: attData } = await supabase
+      .from("sr_bid_attachment")
+      .select("bid_id,filename,storage_ref")
+      .in("bid_id", bidIds);
+    for (const a of (attData ?? []) as {
+      bid_id: string;
+      filename: string;
+      storage_ref: string | null;
+    }[]) {
+      const list = attByBid.get(a.bid_id) ?? [];
+      list.push({ filename: a.filename, url: a.storage_ref });
+      attByBid.set(a.bid_id, list);
+    }
+  }
+
   const ratesByBid = new Map<string, Record<string, SrCmpRate>>();
   for (const bl of bidLineRows) {
     let m = ratesByBid.get(bl.bid_id);
@@ -207,6 +227,7 @@ export async function srLoadComparison(rfqId: string): Promise<SrComparison | nu
       total_omr: num(b.total_omr),
       reopened_until: b.reopened_until,
       rates: ratesByBid.get(b.bid_id) ?? {},
+      attachments: attByBid.get(b.bid_id) ?? [],
     }))
     .sort((a, b) => (a.total_omr ?? Infinity) - (b.total_omr ?? Infinity));
 

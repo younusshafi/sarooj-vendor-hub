@@ -335,6 +335,7 @@ export function SrComparisonPanel({
                     get: (v: SrCmpVendor) => v.subcontract_period || "—",
                   },
                   { label: "Exclusions", get: (v: SrCmpVendor) => v.exclusions || "—" },
+                  { label: "Notes / comments", get: (v: SrCmpVendor) => v.notes || "—" },
                 ] as { label: string; get: (v: SrCmpVendor) => string }[]
               ).map((r) => (
                 <tr key={r.label} className="border-t border-border align-top">
@@ -346,6 +347,42 @@ export function SrComparisonPanel({
                   ))}
                 </tr>
               ))}
+              <tr className="border-t border-border align-top">
+                <td className="px-2 py-2 text-xs font-medium text-muted-foreground">Attachments</td>
+                {data.vendors.map((v) => (
+                  <td key={v.rfq_vendor_id} className="px-2 py-2 text-xs">
+                    {v.attachments.length === 0 ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <div className="space-y-1">
+                        {v.attachments.map((a, i) =>
+                          a.url ? (
+                            <a
+                              key={i}
+                              href={a.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block max-w-[180px] truncate font-medium hover:underline"
+                              style={{ color: "var(--accent)" }}
+                              title={a.filename}
+                            >
+                              {a.filename}
+                            </a>
+                          ) : (
+                            <span
+                              key={i}
+                              className="block max-w-[180px] truncate"
+                              title={a.filename}
+                            >
+                              {a.filename}
+                            </span>
+                          ),
+                        )}
+                      </div>
+                    )}
+                  </td>
+                ))}
+              </tr>
               <tr className="border-t border-border">
                 <td className="px-2 py-2 text-xs font-medium text-muted-foreground">Negotiation</td>
                 {data.vendors.map((v) => (
