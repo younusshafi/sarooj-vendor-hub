@@ -446,21 +446,12 @@ function RfqWizardPage() {
     return i >= 0 ? draft.files[i] : null;
   }, [draft]);
 
-  // Load header (from the in-memory draft, or fetch on hard refresh).
+  // Always read the authoritative status/fields from the DB. The in-memory draft is
+  // only used to carry the uploaded File objects (BOQ auto-parse + doc upload) — it
+  // must NOT drive status, or the page would stay on the wizard after the RFQ is
+  // issued (the draft hard-coded status="draft"). This is what makes the page flip to
+  // the post-issue management view once invitations are sent, even in the same session.
   useEffect(() => {
-    if (draft) {
-      const r = draft.response;
-      setHeader({
-        rfq_reference: r.rfq_reference,
-        subject_works: r.subject_works,
-        scope_summary: r.scope_summary,
-        vendor_count: r.vendor_count,
-        drive_folder_url: r.drive_folder_url,
-        status: "draft",
-        deadline: null,
-      });
-      return;
-    }
     setLoading(true);
     (async () => {
       const { data: rfq, error: rfqErr } = await supabase
@@ -480,9 +471,9 @@ function RfqWizardPage() {
       setHeader({
         rfq_reference: rfq.rfq_reference,
         subject_works: rfq.subject_works,
-        scope_summary: rfq.ai_notes,
+        scope_summary: rfq.ai_notes ?? draft?.response.scope_summary ?? null,
         vendor_count: count ?? 0,
-        drive_folder_url: rfq.drive_folder_url,
+        drive_folder_url: rfq.drive_folder_url ?? draft?.response.drive_folder_url ?? null,
         status: rfq.status,
         deadline: rfq.deadline,
       });
