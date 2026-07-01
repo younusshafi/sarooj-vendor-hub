@@ -1,0 +1,14 @@
+-- Applied 2026-07-01 to scc_procurement (reference copy — FINAL applied state).
+-- Phase 5 (enrich-on-approve). vendor_update_apply now also, on approval, copies the
+-- stored document-verification into the vendor master (best-effort; never breaks approval):
+--   * two vendor_validations rows in the ALLOWED vocab (check_type manual_review + cr_status;
+--     result pass|fail|unknown) — NOT the raw per-field ledger (which lives on the request).
+--   * vendors.cr_status (mapped from extracted), cr_last_checked=now(), data_confidence.
+--   * flips vendor_documents.verified for docs the AI could read (match on document_type+filename).
+--   * new p_override_note param stored on the request (override justification on a mismatch approve).
+-- Additive column:
+alter table scc_procurement.vendor_update_requests add column if not exists override_note text;
+-- Function body: see the vendor_update_apply_enrich_fix_vocab migration in the Supabase
+-- migration history (create or replace of vendor_update_apply(uuid,text,text)).
+-- Prereq: the document_type CHECK on vendor_documents was already dropped
+-- (drop_vendor_documents_document_type_check.sql).

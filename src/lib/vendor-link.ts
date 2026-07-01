@@ -67,25 +67,84 @@ export interface PendingUpdate {
   kind: string;
   payload: Record<string, unknown>;
   submitted_at: string;
+  verification_status?: string | null;
 }
 
 export async function listPendingUpdates(): Promise<PendingUpdate[]> {
   const { data } = await supabase
     .from("vendor_update_requests")
-    .select("request_id,vendor_id,kind,payload,submitted_at")
+    .select("request_id,vendor_id,kind,payload,submitted_at,verification_status")
     .eq("status", "pending")
     .order("submitted_at", { ascending: false });
   return (data ?? []) as unknown as PendingUpdate[];
 }
 
-export async function vendorUpdateApply(requestId: string, reviewer: string): Promise<void> {
+export async function vendorUpdateApply(
+  requestId: string,
+  reviewer: string,
+  overrideNote?: string,
+): Promise<void> {
   const { data, error } = await supabase.rpc("vendor_update_apply", {
     p_request_id: requestId,
     p_reviewer: reviewer,
+    p_override_note: overrideNote ?? null,
   });
   if (error) throw error;
   const res = data as { ok?: boolean; error?: string };
   if (!res?.ok) throw new Error(res?.error || "Failed to apply update");
+}
+
+// ── Document verification (n8n scc-vendor-verify) ────────────────────────────
+const VERIFY_WEBHOOK = "https://n8n.zavia-ai.com/webhook/scc-vendor-verify";
+
+/** Fire the document-verification workflow for a pending request (fire-and-forget). */
+export async function verifyRequest(requestId: string): Promise<void> {
+  try {
+    await fetch(VERIFY_WEBHOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ request_id: requestId }),
+    });
+  } catch {
+    /* fire-and-forget */
+  }
+}
+
+export interface VerificationLedgerItem {
+  field: string;
+  typed: string | null;
+  document: string | null;
+  result: "match" | "mismatch" | "unverifiable" | "info" | "advisory";
+  note: string;
+}
+export interface RequestVerification {
+  status: string | null;
+  ran_at: string | null;
+  confidence?: string;
+  extracted?: Record<string, unknown>;
+  per_document?: { document_type: string; filename: string; ok: boolean; error: string | null }[];
+  ledger?: VerificationLedgerItem[];
+}
+
+/** Read the stored verification result for a pending request. */
+export async function getRequestVerification(
+  requestId: string,
+): Promise<RequestVerification | null> {
+  const { data } = await supabase
+    .from("vendor_update_requests")
+    .select("verification, verification_status, verification_ran_at")
+    .eq("request_id", requestId)
+    .maybeSingle();
+  if (!data) return null;
+  const v = (data.verification as Record<string, unknown> | null) || {};
+  return {
+    status: (data.verification_status as string | null) ?? (v.status as string) ?? null,
+    ran_at: (data.verification_ran_at as string | null) ?? (v.ran_at as string) ?? null,
+    confidence: v.confidence as string | undefined,
+    extracted: v.extracted as Record<string, unknown> | undefined,
+    per_document: v.per_document as RequestVerification["per_document"],
+    ledger: v.ledger as RequestVerification["ledger"],
+  };
 }
 
 export async function vendorUpdateReject(

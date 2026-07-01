@@ -4,7 +4,17 @@
 // with openable documents, and Approve/Reject live inside that review — no blind accept.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Loader2, CheckCircle2, X, FileText, ExternalLink } from "lucide-react";
+import {
+  Loader2,
+  CheckCircle2,
+  X,
+  FileText,
+  ExternalLink,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldQuestion,
+  RefreshCw,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase-external/client";
 import { useAuth } from "@/integrations/supabase-external/auth";
@@ -13,8 +23,39 @@ import {
   listPendingUpdates,
   vendorUpdateApply,
   vendorUpdateReject,
+  verifyRequest,
+  getRequestVerification,
   type PendingUpdate,
+  type RequestVerification,
 } from "@/lib/vendor-link";
+
+// Verification result → colour token (matches the ledger result values).
+const RESULT_STYLE: Record<string, { bg: string; fg: string; label: string }> = {
+  match: { bg: "#E0F2EA", fg: "#0D5C3A", label: "Match" },
+  mismatch: { bg: "#FEE2E2", fg: "#991B1B", label: "Mismatch" },
+  unverifiable: { bg: "#EBEAEA", fg: "#6B696E", label: "Unverifiable" },
+  info: { bg: "#E8EFF7", fg: "#1A3A5C", label: "Info" },
+  advisory: { bg: "#FDF3E0", fg: "#7A5200", label: "Advisory" },
+};
+
+function VerifBadge({ status }: { status?: string | null }) {
+  if (!status) return null;
+  const map: Record<string, { bg: string; fg: string; Icon: typeof ShieldCheck; label: string }> = {
+    pass: { bg: "#E0F2EA", fg: "#0D5C3A", Icon: ShieldCheck, label: "Verified" },
+    mismatch: { bg: "#FEE2E2", fg: "#991B1B", Icon: ShieldAlert, label: "Mismatch" },
+    unverifiable: { bg: "#EBEAEA", fg: "#6B696E", Icon: ShieldQuestion, label: "Unverifiable" },
+    pending: { bg: "#FDF3E0", fg: "#7A5200", Icon: Loader2, label: "Verifying…" },
+  };
+  const s = map[status] ?? map.unverifiable;
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+      style={{ backgroundColor: s.bg, color: s.fg }}
+    >
+      <s.Icon className="h-3 w-3" /> {s.label}
+    </span>
+  );
+}
 
 // Fields shown in the review, mapped to the current vendor column (for the diff).
 const FIELD_ROWS: { key: string; label: string; current?: (v: any) => string }[] = [
@@ -55,10 +96,10 @@ export function PendingVendorUpdates() {
     qc.invalidateQueries({ queryKey: ["vendors"] });
   };
 
-  const approve = async (id: string) => {
+  const approve = async (id: string, overrideNote?: string) => {
     setBusy(id);
     try {
-      await vendorUpdateApply(id, reviewer);
+      await vendorUpdateApply(id, reviewer, overrideNote);
       toast.success("Update applied to the vendor record.");
       setReviewing(null);
       refresh();
@@ -119,6 +160,7 @@ export function PendingVendorUpdates() {
                     >
                       {p.kind === "reconfirm" ? "Update to existing vendor" : "New vendor"}
                     </span>
+                    <VerifBadge status={p.verification_status} />
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
                     {pl.contact_person || "—"}
@@ -147,7 +189,7 @@ export function PendingVendorUpdates() {
           request={reviewing}
           busy={busy === reviewing.request_id}
           onClose={() => setReviewing(null)}
-          onApprove={() => approve(reviewing.request_id)}
+          onApprove={(note) => approve(reviewing.request_id, note)}
           onReject={() => reject(reviewing.request_id)}
         />
       )}
@@ -165,7 +207,7 @@ function ReviewModal({
   request: PendingUpdate;
   busy: boolean;
   onClose: () => void;
-  onApprove: () => void;
+  onApprove: (overrideNote?: string) => void;
   onReject: () => void;
 }) {
   const pl = request.payload as any;
@@ -185,6 +227,33 @@ function ReviewModal({
       return data as any;
     },
   });
+
+  // Document verification (from the scc-vendor-verify workflow).
+  const {
+    data: verification,
+    refetch: refetchVerif,
+    isFetching: verifFetching,
+  } = useQuery<RequestVerification | null>({
+    queryKey: ["vendor-verification", request.request_id],
+    queryFn: () => getRequestVerification(request.request_id),
+  });
+  const [rerunning, setRerunning] = useState(false);
+  const [overrideNote, setOverrideNote] = useState("");
+
+  const rerun = async () => {
+    setRerunning(true);
+    const before = verification?.ran_at ?? null;
+    await verifyRequest(request.request_id);
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const res = await refetchVerif();
+      if (res.data?.ran_at && res.data.ran_at !== before) break;
+    }
+    setRerunning(false);
+  };
+  const vStatus = verification?.status ?? null;
+  const needsOverride = vStatus === "mismatch";
+  const canApprove = !busy && (!needsOverride || overrideNote.trim().length > 0);
 
   // Signed URLs so the officer can actually open each uploaded document.
   const [docUrls, setDocUrls] = useState<Record<string, string>>({});
@@ -230,6 +299,67 @@ function ReviewModal({
         </div>
 
         <div className="overflow-y-auto p-5">
+          {/* Document verification — AI-extracted values compared to entered details, in code */}
+          <div className="mb-6 rounded-xl border border-border p-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Document verification <VerifBadge status={vStatus} />
+              </span>
+              <button
+                type="button"
+                onClick={rerun}
+                disabled={rerunning || verifFetching}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium disabled:opacity-50"
+              >
+                {rerunning ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                {rerunning ? "Verifying…" : "Re-run"}
+              </button>
+            </div>
+            {!verification || !verification.ran_at ? (
+              <p className="text-sm text-muted-foreground">
+                Not verified yet. Click <strong>Re-run</strong> to check the uploaded documents
+                against the entered details.
+              </p>
+            ) : (
+              <>
+                <p className="mb-2 text-xs text-muted-foreground">
+                  Ran {formatDate(verification.ran_at)}
+                  {verification.confidence ? ` · confidence ${verification.confidence}` : ""}.
+                  Values are AI-extracted; every flag is computed in code, not asserted by the AI.
+                </p>
+                <ul className="space-y-1.5">
+                  {(verification.ledger ?? []).map((l, i) => {
+                    const st = RESULT_STYLE[l.result] ?? RESULT_STYLE.info;
+                    return (
+                      <li key={i} className="flex items-start gap-2 text-sm">
+                        <span
+                          className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase"
+                          style={{ backgroundColor: st.bg, color: st.fg }}
+                        >
+                          {st.label}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="font-medium">{l.field}</span>
+                          <span className="text-muted-foreground"> — {l.note}</span>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {(verification.per_document ?? []).some((d) => !d.ok) && (
+                  <p className="mt-2 text-xs" style={{ color: "#991B1B" }}>
+                    {verification.per_document!.filter((d) => !d.ok).length} document(s) could not
+                    be read.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+
           {/* Field-by-field; for updates, current vs submitted with change highlight */}
           <table className="w-full text-sm">
             <thead>
@@ -301,27 +431,43 @@ function ReviewModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 border-t border-border p-4">
-          <button
-            onClick={onReject}
-            disabled={busy}
-            className="rounded-md border border-border px-4 py-2 text-sm font-medium disabled:opacity-50"
-          >
-            Reject
-          </button>
-          <button
-            onClick={onApprove}
-            disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            style={{ backgroundColor: "var(--accent)" }}
-          >
-            {busy ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <CheckCircle2 className="h-4 w-4" />
-            )}
-            Approve &amp; apply
-          </button>
+        <div className="border-t border-border p-4">
+          {needsOverride && (
+            <div className="mb-3">
+              <label className="text-xs font-medium" style={{ color: "#991B1B" }}>
+                Verification flagged mismatches — enter a justification to approve anyway:
+              </label>
+              <textarea
+                value={overrideNote}
+                onChange={(e) => setOverrideNote(e.target.value)}
+                rows={2}
+                placeholder="Why is it acceptable to approve despite the flags?"
+                className="mt-1 w-full rounded-md border border-border px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+              />
+            </div>
+          )}
+          <div className="flex items-center justify-end gap-3">
+            <button
+              onClick={onReject}
+              disabled={busy}
+              className="rounded-md border border-border px-4 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              Reject
+            </button>
+            <button
+              onClick={() => onApprove(needsOverride ? overrideNote.trim() : undefined)}
+              disabled={!canApprove}
+              className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              style={{ backgroundColor: "var(--accent)" }}
+            >
+              {busy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4" />
+              )}
+              Approve &amp; apply
+            </button>
+          </div>
         </div>
       </div>
     </div>

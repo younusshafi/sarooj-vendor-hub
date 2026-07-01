@@ -4,7 +4,12 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { Header } from "@/components/vendor-form/Header";
 import { Footer } from "@/components/vendor-form/Footer";
 import { VendorRegistrationForm } from "@/components/vendor-form/VendorRegistrationForm";
-import { vendorLinkGet, vendorLinkSubmit, type VendorLinkResult } from "@/lib/vendor-link";
+import {
+  vendorLinkGet,
+  vendorLinkSubmit,
+  verifyRequest,
+  type VendorLinkResult,
+} from "@/lib/vendor-link";
 
 // Tokenized capture link — the SAME onboarding form, pre-filled for an existing vendor
 // (re-confirmation) or a freshly invited new vendor. Submissions go to the pending-approval
@@ -36,6 +41,9 @@ function TokenRegistrationPage() {
   const onSubmit = async (payload: Record<string, unknown>) => {
     const res = await vendorLinkSubmit(token, payload);
     if (!res.ok) throw new Error(res.error || "Submission failed");
+    // Kick off document verification in the background so the officer's review ledger
+    // is ready by the time they open it. Non-blocking — never affects the submission.
+    if (res.request_id) void verifyRequest(res.request_id);
   };
 
   return (
