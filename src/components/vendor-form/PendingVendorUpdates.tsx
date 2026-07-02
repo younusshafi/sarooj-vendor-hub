@@ -14,15 +14,20 @@ import {
   ShieldAlert,
   ShieldQuestion,
   RefreshCw,
+  Mail,
+  AlertTriangle,
+  Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase-external/client";
 import { useAuth } from "@/integrations/supabase-external/auth";
 import { formatDate } from "@/lib/format";
+import { sendEmail } from "@/lib/notify";
 import {
   listPendingUpdates,
   vendorUpdateApply,
   vendorUpdateReject,
+  vendorRequestReturn,
   verifyRequest,
   getRequestVerification,
   type PendingUpdate,
@@ -166,6 +171,48 @@ export function PendingVendorUpdates() {
     }
   };
 
+  const requestCorrections = async (
+    id: string,
+    message: string,
+    items: string[],
+    vendorEmail: string,
+    companyName: string,
+  ) => {
+    setBusy(id);
+    try {
+      const { token } = await vendorRequestReturn(id, reviewer, message, items);
+      const link = `${window.location.origin}/register/${token}`;
+      const subject = `Action needed on your Sarooj vendor registration${
+        companyName ? ` — ${companyName}` : ""
+      }`;
+      const body = [
+        "Dear Vendor,",
+        "",
+        "Thank you for your submission. Before we can complete your registration, please correct the following:",
+        "",
+        ...items.map((i) => `• ${i}`),
+        ...(message ? ["", message] : []),
+        "",
+        "Please update your details here (your earlier answers are pre-filled):",
+        link,
+        "",
+        "Sarooj Construction — Procurement",
+      ].join("\n");
+      if (vendorEmail) {
+        await sendEmail(vendorEmail, subject, body);
+        toast.success("Correction request emailed to the vendor.");
+      } else {
+        toast.success(`Correction link created (no email on file). Share: ${link}`);
+      }
+      setReviewing(null);
+      refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to send correction request");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div>
       <p className="mb-4 text-sm text-muted-foreground">
@@ -187,10 +234,12 @@ export function PendingVendorUpdates() {
           {pending.map((p) => {
             const pl = p.payload as any;
             const docs: any[] = Array.isArray(pl.uploaded_documents) ? pl.uploaded_documents : [];
+            const returned = p.status === "returned";
             return (
               <div
                 key={p.request_id}
                 className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-card p-4"
+                style={returned ? { opacity: 0.85 } : undefined}
               >
                 <div className="min-w-0 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
@@ -201,7 +250,16 @@ export function PendingVendorUpdates() {
                     >
                       {p.kind === "reconfirm" ? "Update to existing vendor" : "New vendor"}
                     </span>
-                    <VerifBadge status={p.verification_status} />
+                    {returned ? (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+                        style={{ backgroundColor: "#FDF3E0", color: "#7A5200" }}
+                      >
+                        <Clock className="h-3 w-3" /> Returned — awaiting resubmission
+                      </span>
+                    ) : (
+                      <VerifBadge status={p.verification_status} />
+                    )}
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
                     {pl.contact_person || "—"}
@@ -210,15 +268,22 @@ export function PendingVendorUpdates() {
                   <div className="mt-0.5 text-xs text-muted-foreground">
                     {docs.length} document{docs.length !== 1 ? "s" : ""} · submitted{" "}
                     {formatDate(p.submitted_at)}
+                    {returned && p.reviewed_at ? ` · returned ${formatDate(p.reviewed_at)}` : ""}
                   </div>
                 </div>
-                <button
-                  onClick={() => setReviewing(p)}
-                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-white"
-                  style={{ backgroundColor: "#1A3A5C" }}
-                >
-                  Review submission
-                </button>
+                {returned ? (
+                  <span className="self-center text-xs italic text-muted-foreground">
+                    Waiting for the vendor to resubmit
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setReviewing(p)}
+                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold text-white"
+                    style={{ backgroundColor: "#1A3A5C" }}
+                  >
+                    Review submission
+                  </button>
+                )}
               </div>
             );
           })}
@@ -232,6 +297,15 @@ export function PendingVendorUpdates() {
           onClose={() => setReviewing(null)}
           onApprove={(note, overrides) => approve(reviewing.request_id, note, overrides)}
           onReject={() => reject(reviewing.request_id)}
+          onRequestCorrections={(message, items) =>
+            requestCorrections(
+              reviewing.request_id,
+              message,
+              items,
+              (reviewing.payload as any).email ?? "",
+              (reviewing.payload as any).company_name ?? "",
+            )
+          }
         />
       )}
     </div>
@@ -244,12 +318,14 @@ function ReviewModal({
   onClose,
   onApprove,
   onReject,
+  onRequestCorrections,
 }: {
   request: PendingUpdate;
   busy: boolean;
   onClose: () => void;
   onApprove: (overrideNote?: string, fieldOverrides?: Record<string, string>) => void;
   onReject: () => void;
+  onRequestCorrections: (message: string, items: string[]) => void;
 }) {
   const pl = request.payload as any;
   const docs: any[] = Array.isArray(pl.uploaded_documents) ? pl.uploaded_documents : [];
@@ -284,6 +360,9 @@ function ReviewModal({
   const [overrideNote, setOverrideNote] = useState("");
   // Which AI-extracted values the officer has ticked to write into the vendor record.
   const [accepted, setAccepted] = useState<Record<string, boolean>>({});
+  // Request-corrections compose state.
+  const [correcting, setCorrecting] = useState(false);
+  const [correctionMsg, setCorrectionMsg] = useState("");
 
   const rerun = async () => {
     setRerunning(true);
@@ -298,7 +377,38 @@ function ReviewModal({
   };
   const vStatus = verification?.status ?? null;
   const needsOverride = vStatus === "mismatch";
-  const canApprove = !busy && (!needsOverride || overrideNote.trim().length > 0);
+
+  // Ledger-derived flags. Expired statutory documents are a HARD block — they cannot be
+  // approved (override doesn't help); the officer must Request corrections or Reject.
+  const ledger = verification?.ledger ?? [];
+  const expiredItems = ledger
+    .filter(
+      (l) =>
+        /expired/i.test(l.note) ||
+        (/(expiry|valid until)/i.test(l.field) && l.result === "mismatch"),
+    )
+    .map((l) => `${l.field}: ${l.document ?? ""} — ${l.note}`);
+  const hardBlock = expiredItems.length > 0;
+
+  // Discrepancies to send back to the vendor (mismatches + unreadable documents).
+  const discrepancyItems = Array.from(
+    new Set([
+      ...ledger
+        .filter((l) => l.result === "mismatch")
+        .map(
+          (l) =>
+            `${l.field}: you entered "${l.typed ?? "—"}", the document shows "${l.document ?? "—"}" (${l.note})`,
+        ),
+      ...(verification?.per_document ?? [])
+        .filter((d) => !d.ok)
+        .map(
+          (d) =>
+            `${d.document_type} (${d.filename}) could not be read — please re-upload a clear copy`,
+        ),
+    ]),
+  );
+
+  const canApprove = !busy && !hardBlock && (!needsOverride || overrideNote.trim().length > 0);
 
   // Signed URLs so the officer can actually open each uploaded document.
   const [docUrls, setDocUrls] = useState<Record<string, string>>({});
@@ -437,82 +547,6 @@ function ReviewModal({
             )}
           </div>
 
-          {/* Apply AI-extracted values — line-by-line accept into the vendor record */}
-          {verification?.ran_at && enrichRows.length > 0 && (
-            <div className="mb-6 rounded-xl border border-border p-4">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Apply AI-extracted values
-              </div>
-              <p className="mb-3 text-xs text-muted-foreground">
-                Tick a value to write it into the vendor record on approve. Blanks the documents can
-                fill are pre-ticked; values that differ from what the vendor entered are left for
-                you to confirm.
-              </p>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    <th className="py-1.5 pr-3">Field</th>
-                    <th className="py-1.5 pr-3">Entered</th>
-                    <th className="py-1.5 pr-3">Found in documents</th>
-                    <th className="py-1.5 text-right">Accept</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {enrichRows.map((r) => {
-                    const stKey =
-                      r.state === "fill" ? "info" : r.state === "differs" ? "mismatch" : "match";
-                    const st = RESULT_STYLE[stKey];
-                    const canAccept = r.state !== "match" && !!r.aiValue;
-                    return (
-                      <tr key={r.col} className="border-t border-border align-top">
-                        <td className="py-2 pr-3 text-muted-foreground">{r.label}</td>
-                        <td className="py-2 pr-3">
-                          {r.typed || <span className="text-muted-foreground">—</span>}
-                        </td>
-                        <td className="py-2 pr-3">
-                          <span className="flex flex-wrap items-center gap-1.5">
-                            <span
-                              className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase"
-                              style={{ backgroundColor: st.bg, color: st.fg }}
-                            >
-                              {r.state === "fill"
-                                ? "Fill"
-                                : r.state === "differs"
-                                  ? "Differs"
-                                  : "Match"}
-                            </span>
-                            <span className="min-w-0 break-words">{r.aiDisplay}</span>
-                          </span>
-                        </td>
-                        <td className="py-2 text-right">
-                          {canAccept ? (
-                            <input
-                              type="checkbox"
-                              checked={!!accepted[r.col]}
-                              onChange={(e) =>
-                                setAccepted((p) => ({ ...p, [r.col]: e.target.checked }))
-                              }
-                              className="h-4 w-4 accent-[var(--accent)]"
-                              aria-label={`Accept ${r.label}`}
-                            />
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {acceptCount > 0 && (
-                <p className="mt-3 text-xs" style={{ color: "var(--accent)" }}>
-                  {acceptCount} value{acceptCount === 1 ? "" : "s"} will be written to the vendor
-                  record on approve.
-                </p>
-              )}
-            </div>
-          )}
-
           {/* Field-by-field; for updates, current vs submitted with change highlight */}
           <table className="w-full text-sm">
             <thead>
@@ -582,10 +616,115 @@ function ReviewModal({
               </ul>
             )}
           </div>
+
+          {/* Apply AI-extracted values — line-by-line accept, positioned just before the decision */}
+          {verification?.ran_at && enrichRows.length > 0 && (
+            <div className="mt-6 overflow-hidden rounded-xl border border-border">
+              <div className="flex items-center justify-between gap-2 border-b border-border bg-[#F4F8F6] px-4 py-3">
+                <div>
+                  <div className="text-sm font-semibold" style={{ color: "#0D3D2E" }}>
+                    Apply AI-extracted values
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Tick a value to write it into the vendor record on approve. Blanks the documents
+                    can fill are pre-ticked; differing values need your confirmation.
+                  </div>
+                </div>
+                {acceptCount > 0 && (
+                  <span
+                    className="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold"
+                    style={{ backgroundColor: "#E0F2EA", color: "#0D5C3A" }}
+                  >
+                    {acceptCount} selected
+                  </span>
+                )}
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-[#FAFBFB] text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <th className="px-4 py-2">Field</th>
+                    <th className="px-4 py-2">Entered</th>
+                    <th className="px-4 py-2">Found in documents</th>
+                    <th className="px-4 py-2 text-center">Accept</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {enrichRows.map((r, idx) => {
+                    const stKey =
+                      r.state === "fill" ? "info" : r.state === "differs" ? "mismatch" : "match";
+                    const st = RESULT_STYLE[stKey];
+                    const canAccept = r.state !== "match" && !!r.aiValue;
+                    const on = !!accepted[r.col];
+                    return (
+                      <tr
+                        key={r.col}
+                        className="border-t border-border align-middle"
+                        style={{
+                          backgroundColor: on ? "#F1F9F5" : idx % 2 ? "#FCFDFD" : "#FFFFFF",
+                        }}
+                      >
+                        <td className="px-4 py-2.5 font-medium text-foreground">{r.label}</td>
+                        <td className="px-4 py-2.5 text-muted-foreground">
+                          {r.typed || <span className="italic">blank</span>}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                              style={{ backgroundColor: st.bg, color: st.fg }}
+                            >
+                              {r.state === "fill"
+                                ? "Fill blank"
+                                : r.state === "differs"
+                                  ? "Differs"
+                                  : "Match"}
+                            </span>
+                            <span className="min-w-0 break-words font-medium text-foreground">
+                              {r.aiDisplay}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          {canAccept ? (
+                            <input
+                              type="checkbox"
+                              checked={on}
+                              onChange={(e) =>
+                                setAccepted((p) => ({ ...p, [r.col]: e.target.checked }))
+                              }
+                              className="h-4 w-4 cursor-pointer accent-[#0D7A5A]"
+                              aria-label={`Accept ${r.label}`}
+                            />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         <div className="border-t border-border p-4">
-          {needsOverride && (
+          {hardBlock && (
+            <div
+              className="mb-3 flex items-start gap-2 rounded-md p-3 text-sm"
+              style={{ backgroundColor: "#FEE2E2", color: "#991B1B" }}
+            >
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                <strong>Cannot approve — expired statutory document.</strong> The vendor must supply
+                a current copy. Use <strong>Request corrections</strong>, or Reject to disqualify.
+                {expiredItems.length > 0 && (
+                  <span className="mt-1 block text-xs opacity-90">{expiredItems.join(" · ")}</span>
+                )}
+              </span>
+            </div>
+          )}
+          {needsOverride && !hardBlock && (
             <div className="mb-3">
               <label className="text-xs font-medium" style={{ color: "#991B1B" }}>
                 Verification flagged mismatches — enter a justification to approve anyway:
@@ -599,30 +738,92 @@ function ReviewModal({
               />
             </div>
           )}
-          <div className="flex items-center justify-end gap-3">
-            <button
-              onClick={onReject}
-              disabled={busy}
-              className="rounded-md border border-border px-4 py-2 text-sm font-medium disabled:opacity-50"
-            >
-              Reject
-            </button>
-            <button
-              onClick={() =>
-                onApprove(needsOverride ? overrideNote.trim() : undefined, fieldOverrides)
-              }
-              disabled={!canApprove}
-              className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              style={{ backgroundColor: "var(--accent)" }}
-            >
-              {busy ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+
+          {correcting ? (
+            <div className="rounded-lg border border-border bg-[#FDFBF7] p-3">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Request corrections from the vendor
+              </div>
+              {discrepancyItems.length > 0 ? (
+                <ul className="mb-2 list-disc space-y-1 pl-5 text-sm text-foreground">
+                  {discrepancyItems.map((it, i) => (
+                    <li key={i}>{it}</li>
+                  ))}
+                </ul>
               ) : (
-                <CheckCircle2 className="h-4 w-4" />
+                <p className="mb-2 text-sm text-muted-foreground">
+                  No specific discrepancies detected — add a note below telling the vendor what to
+                  fix.
+                </p>
               )}
-              Approve &amp; apply{acceptCount > 0 ? ` (+${acceptCount})` : ""}
-            </button>
-          </div>
+              <textarea
+                value={correctionMsg}
+                onChange={(e) => setCorrectionMsg(e.target.value)}
+                rows={2}
+                placeholder="Optional message to the vendor (added to the list above)…"
+                className="w-full rounded-md border border-border px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Sends {pl.email ? pl.email : "the vendor"} an email with these items and a fresh
+                link (their answers pre-filled). The request moves to “Returned”.
+              </p>
+              <div className="mt-2 flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setCorrecting(false)}
+                  disabled={busy}
+                  className="rounded-md border border-border px-4 py-2 text-sm font-medium disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => onRequestCorrections(correctionMsg.trim(), discrepancyItems)}
+                  disabled={busy || (discrepancyItems.length === 0 && !correctionMsg.trim())}
+                  className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  style={{ backgroundColor: "#7A5200" }}
+                >
+                  {busy ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Mail className="h-4 w-4" />
+                  )}
+                  Send to vendor
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <button
+                onClick={onReject}
+                disabled={busy}
+                className="rounded-md border border-border px-4 py-2 text-sm font-medium disabled:opacity-50"
+              >
+                Reject
+              </button>
+              <button
+                onClick={() => setCorrecting(true)}
+                disabled={busy}
+                className="inline-flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-semibold disabled:opacity-50"
+                style={{ borderColor: "#7A5200", color: "#7A5200" }}
+              >
+                <Mail className="h-4 w-4" /> Request corrections
+              </button>
+              <button
+                onClick={() =>
+                  onApprove(needsOverride ? overrideNote.trim() : undefined, fieldOverrides)
+                }
+                disabled={!canApprove}
+                className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                style={{ backgroundColor: "var(--accent)" }}
+              >
+                {busy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                Approve &amp; apply{acceptCount > 0 ? ` (+${acceptCount})` : ""}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

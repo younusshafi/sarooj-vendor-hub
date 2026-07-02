@@ -1,0 +1,7 @@
+-- Applied 2026-07-02 to scc_procurement (reference copy).
+-- Adds vendors.document_data jsonb and, in vendor_update_apply(uuid,text,text,jsonb), writes the
+-- full verification.extracted onto the vendor on approve (document_data = coalesce(ex, document_data)),
+-- so all extracted data beyond the 6 promoted columns (signatories, civil numbers, ID expiry,
+-- license-pending, CR status, VAT link, address, etc.) is preserved and can be shown on the vendor
+-- profile. Rest of the function is unchanged from vendor_update_apply_field_overrides.
+-- Full body: see migration vendors_document_data_enrich in the Supabase migration history.

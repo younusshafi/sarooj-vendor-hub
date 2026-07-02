@@ -67,6 +67,28 @@ function TokenRegistrationPage() {
         </div>
       )}
 
+      {state?.found && state.correction_message && (
+        <div className="mx-auto mt-6 max-w-[720px] px-6">
+          <div className="rounded-xl border border-[#E4C7A0] bg-[#FDF3E0] p-4 text-[#7A5200]">
+            <div className="flex items-center gap-2 font-serif text-[17px]">
+              <AlertCircle className="h-5 w-5" /> Please update a few details
+            </div>
+            <p className="mt-2 whitespace-pre-line text-[14px]">{state.correction_message}</p>
+            {Array.isArray(state.correction_items) && state.correction_items.length > 0 && (
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-[14px]">
+                {state.correction_items.map((it, i) => (
+                  <li key={i}>{it}</li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-3 text-[13px]">
+              Your previous answers are pre-filled below — please correct the items above (re-upload
+              any expired document) and submit again.
+            </p>
+          </div>
+        </div>
+      )}
+
       {state?.found && (
         <VendorRegistrationForm
           prefill={state.prefill}

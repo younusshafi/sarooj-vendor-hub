@@ -209,73 +209,161 @@ function ProfileTab({ v }: { v: Vendor }) {
         ? "var(--confidence-low)"
         : "var(--muted-foreground)";
   return (
-    <div className="rounded-xl border border-border bg-card p-6">
-      <div className="grid grid-cols-1 gap-x-8 md:grid-cols-2">
-        <div>
-          <Field label="Vendor Type">{formatVendorType(v.vendor_type)}</Field>
-          <Field label="Supplier Type">{formatSupplierType(v.supplier_type)}</Field>
-          <Field label="Legal Structure">{v.legal_structure}</Field>
-          <Field label="CR Number">{v.cr_number}</Field>
-          <Field label="CR Status">
-            {v.cr_status ? (
-              <span className="inline-flex items-center gap-2 capitalize">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: crColor }} />
-                {v.cr_status}
-              </span>
-            ) : null}
-          </Field>
-          <Field label="CR Last Checked">{formatDate(v.cr_last_checked)}</Field>
-          <Field label="VAT Number">{v.vat_number}</Field>
-          <Field label="Website">
-            {v.website && (
-              <a href={v.website} target="_blank" rel="noreferrer" className="underline">
-                {v.website}
-              </a>
-            )}
-          </Field>
+    <div className="space-y-6">
+      <div className="rounded-xl border border-border bg-card p-6">
+        <div className="grid grid-cols-1 gap-x-8 md:grid-cols-2">
+          <div>
+            <Field label="Vendor Type">{formatVendorType(v.vendor_type)}</Field>
+            <Field label="Supplier Type">{formatSupplierType(v.supplier_type)}</Field>
+            <Field label="Legal Structure">{v.legal_structure}</Field>
+            <Field label="CR Number">{v.cr_number}</Field>
+            <Field label="CR Status">
+              {v.cr_status ? (
+                <span className="inline-flex items-center gap-2 capitalize">
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: crColor }} />
+                  {v.cr_status}
+                </span>
+              ) : null}
+            </Field>
+            <Field label="CR Last Checked">{formatDate(v.cr_last_checked)}</Field>
+            <Field label="VAT Number">{v.vat_number}</Field>
+            <Field label="Website">
+              {v.website && (
+                <a href={v.website} target="_blank" rel="noreferrer" className="underline">
+                  {v.website}
+                </a>
+              )}
+            </Field>
+          </div>
+          <div>
+            <Field label="Contact Person">{vendorContactName(v)}</Field>
+            <Field label="Designation">{v.designation}</Field>
+            <Field label="Mobile">{vendorPhone(v)}</Field>
+            <Field label="Telephone">{v.telephone}</Field>
+            <Field label="Email">
+              {vendorEmail(v) && (
+                <a href={`mailto:${vendorEmail(v)}`} className="underline">
+                  {vendorEmail(v)}
+                </a>
+              )}
+            </Field>
+            <Field label="Location / City / Country">
+              {[v.location, v.city, v.country].filter(Boolean).join(", ")}
+            </Field>
+            <Field label="Number of Employees">{v.num_employees}</Field>
+            <Field label="Main Customers">{v.main_customers}</Field>
+          </div>
         </div>
-        <div>
-          <Field label="Contact Person">{vendorContactName(v)}</Field>
-          <Field label="Designation">{v.designation}</Field>
-          <Field label="Mobile">{vendorPhone(v)}</Field>
-          <Field label="Telephone">{v.telephone}</Field>
-          <Field label="Email">
-            {vendorEmail(v) && (
-              <a href={`mailto:${vendorEmail(v)}`} className="underline">
-                {vendorEmail(v)}
-              </a>
-            )}
-          </Field>
-          <Field label="Location / City / Country">
-            {[v.location, v.city, v.country].filter(Boolean).join(", ")}
-          </Field>
-          <Field label="Number of Employees">{v.num_employees}</Field>
-          <Field label="Main Customers">{v.main_customers}</Field>
+
+        <div className="mt-6 space-y-4">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Categories
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1">
+              {(v.categories ?? []).map((c) => (
+                <span
+                  key={c}
+                  className="rounded-md border border-border bg-secondary px-2 py-0.5 text-xs"
+                >
+                  {c}
+                </span>
+              ))}
+              {(v.categories ?? []).length === 0 && (
+                <span className="text-sm text-muted-foreground">—</span>
+              )}
+            </div>
+          </div>
+          <Field label="Offered Products / Services">{v.offered_products}</Field>
+          <Field label="Source">{v.source_sheet}</Field>
+          <Field label="Remarks">{v.remarks}</Field>
         </div>
       </div>
+      {v.document_data && Object.keys(v.document_data).length > 0 && (
+        <DocumentDataPanel data={v.document_data} />
+      )}
+    </div>
+  );
+}
 
-      <div className="mt-6 space-y-4">
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Categories
-          </div>
-          <div className="mt-2 flex flex-wrap gap-1">
-            {(v.categories ?? []).map((c) => (
-              <span
-                key={c}
-                className="rounded-md border border-border bg-secondary px-2 py-0.5 text-xs"
-              >
-                {c}
-              </span>
-            ))}
-            {(v.categories ?? []).length === 0 && (
-              <span className="text-sm text-muted-foreground">—</span>
-            )}
-          </div>
+// Everything the AI read from the vendor's documents at approval — beyond the promoted columns.
+function DocumentDataPanel({ data }: { data: Record<string, unknown> }) {
+  const str = (v: unknown) => (v == null || String(v).trim() === "" ? null : String(v).trim());
+  const rows: { label: string; value: string | null }[] = [
+    { label: "Legal entity name", value: str(data.entity_name) },
+    { label: "Legal structure", value: str(data.legal_structure) },
+    { label: "CR number", value: str(data.cr_number) },
+    { label: "CR status", value: str(data.cr_status) },
+    { label: "CR expiry", value: str(data.cr_expiry) },
+    { label: "VAT number", value: str(data.vat_number) },
+    { label: "VAT valid until", value: str(data.vat_valid_until) },
+    { label: "VAT linked CR", value: str(data.vat_linked_cr) },
+    { label: "Authorised ID civil no.", value: str(data.civil_number) },
+    { label: "ID expiry", value: str(data.id_expiry) },
+    {
+      label: "Licenses pending",
+      value: data.license_pending_count == null ? null : String(data.license_pending_count),
+    },
+  ].filter((r) => r.value !== null);
+
+  const names = Array.isArray(data.signatory_names) ? (data.signatory_names as unknown[]) : [];
+  const civils = Array.isArray(data.signatory_civil_numbers)
+    ? (data.signatory_civil_numbers as unknown[])
+    : [];
+
+  if (rows.length === 0 && names.length === 0) return null;
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="border-b border-border bg-[#F4F8F6] px-6 py-4">
+        <div className="font-display text-lg" style={{ color: "#0D3D2E" }}>
+          Company details (from documents)
         </div>
-        <Field label="Offered Products / Services">{v.offered_products}</Field>
-        <Field label="Source">{v.source_sheet}</Field>
-        <Field label="Remarks">{v.remarks}</Field>
+        <div className="text-xs text-muted-foreground">
+          Read by AI from the vendor’s uploaded documents and confirmed at approval.
+        </div>
+      </div>
+      <div className="p-6">
+        {rows.length > 0 && (
+          <div className="grid grid-cols-1 gap-x-8 md:grid-cols-2">
+            {rows.map((r) => (
+              <Field key={r.label} label={r.label}>
+                {r.value}
+              </Field>
+            ))}
+          </div>
+        )}
+        {names.length > 0 && (
+          <div className="mt-6">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Authorised signatories ({names.length})
+            </div>
+            <div className="overflow-hidden rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-[#FAFBFB] text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-2">Name</th>
+                    <th className="px-4 py-2">Civil number</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {names.map((n, i) => (
+                    <tr
+                      key={i}
+                      className="border-t border-border"
+                      style={{ backgroundColor: i % 2 ? "#FCFDFD" : "#FFFFFF" }}
+                    >
+                      <td className="px-4 py-2 text-foreground">{String(n)}</td>
+                      <td className="px-4 py-2 text-muted-foreground">
+                        {civils[i] != null ? String(civils[i]) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

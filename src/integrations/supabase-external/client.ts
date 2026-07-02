@@ -67,6 +67,8 @@ export interface Vendor {
   status: VendorStatus;
   data_confidence: DataConfidence | null;
   created_at: string;
+  // Full AI extraction captured from the vendor's documents at approval (see doc-verification).
+  document_data: Record<string, unknown> | null;
 }
 
 /** Extract first contact's email from the contacts JSONB array */

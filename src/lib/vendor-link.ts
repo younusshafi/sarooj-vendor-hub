@@ -21,6 +21,9 @@ export interface VendorLinkResult {
   vendor_id?: string | null;
   prefill?: VendorLinkPrefill;
   documents_on_file?: { document_type: string; filename: string }[];
+  // Present when the link was minted by a "Request corrections" return.
+  correction_message?: string | null;
+  correction_items?: string[] | null;
 }
 
 export async function vendorLinkGet(token: string): Promise<VendorLinkResult> {
@@ -68,15 +71,41 @@ export interface PendingUpdate {
   payload: Record<string, unknown>;
   submitted_at: string;
   verification_status?: string | null;
+  status?: string;
+  reviewed_at?: string | null;
 }
 
 export async function listPendingUpdates(): Promise<PendingUpdate[]> {
+  // Pending awaits a decision; returned is awaiting the vendor's corrected resubmission.
   const { data } = await supabase
     .from("vendor_update_requests")
-    .select("request_id,vendor_id,kind,payload,submitted_at,verification_status")
-    .eq("status", "pending")
+    .select("request_id,vendor_id,kind,payload,submitted_at,verification_status,status,reviewed_at")
+    .in("status", ["pending", "returned"])
     .order("submitted_at", { ascending: false });
   return (data ?? []) as unknown as PendingUpdate[];
+}
+
+/**
+ * Return a pending submission to the vendor for correction: mints a fresh capture link that
+ * carries their prior answers + the discrepancy list, and flags the request 'returned'.
+ * Returns the new token so the caller can email the vendor a link back to the form.
+ */
+export async function vendorRequestReturn(
+  requestId: string,
+  reviewer: string,
+  message: string,
+  items: string[],
+): Promise<{ token: string }> {
+  const { data, error } = await supabase.rpc("vendor_request_return", {
+    p_request_id: requestId,
+    p_reviewer: reviewer,
+    p_message: message,
+    p_items: items,
+  });
+  if (error) throw error;
+  const res = data as { ok?: boolean; error?: string; token?: string };
+  if (!res?.ok || !res.token) throw new Error(res?.error || "Failed to return request");
+  return { token: res.token };
 }
 
 export async function vendorUpdateApply(

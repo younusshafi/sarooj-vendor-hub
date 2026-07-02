@@ -1,0 +1,12 @@
+-- Applied 2026-07-02 to scc_procurement (reference copy).
+-- Return-to-vendor correction loop.
+--  * vendor_update_requests: + correction_message, correction_items (jsonb) — what the officer asked to fix.
+--  * vendor_links: + prefill (jsonb, prior payload), documents_on_file (jsonb), correction_message,
+--    correction_items, source_request_id — a returned link carries the vendor's prior answers + the ask.
+--  * NEW RPC vendor_request_return(uuid,text,text,jsonb): mints a fresh capture link from a pending
+--    request (prefill = prior payload, kind/vendor preserved, 21-day expiry), flags the request 'returned',
+--    returns {token}. The officer emails that link + discrepancies to the vendor (WF15 sendEmail).
+--  * vendor_link_get extended: when a link has stored prefill/documents/correction, prefer them and
+--    also return correction_message/correction_items so /register/$token can show the banner + prefill.
+-- On resubmit the token is consumed as usual -> a new pending request -> auto re-verify.
+-- Full bodies: see migration vendor_return_correction_loop in the Supabase migration history.
