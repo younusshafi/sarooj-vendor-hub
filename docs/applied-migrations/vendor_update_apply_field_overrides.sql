@@ -1,0 +1,10 @@
+-- Applied 2026-07-02 to scc_procurement (reference copy).
+-- Adds a 4-arg overload vendor_update_apply(uuid, text, text, jsonb).
+-- p_field_overrides is {vendor_column: value} of AI-extracted values the officer
+-- accepted line-by-line in the review modal. Accepted values win over the vendor's
+-- typed value; when absent they fall back to typed, then existing (no data loss on
+-- reconfirm). Dates (cr_expiry / vat_expiry) arrive ISO (YYYY-MM-DD). The enrich
+-- block (vendor_validations summary + cr_status/data_confidence + vendor_documents.verified)
+-- is unchanged from vendor_update_apply(uuid,text,text). Best-effort enrich (exception->null).
+-- The 3-arg version remains for backward compatibility; the frontend now always calls the 4-arg.
+-- Full body: see migration vendor_update_apply_field_overrides in Supabase migration history.

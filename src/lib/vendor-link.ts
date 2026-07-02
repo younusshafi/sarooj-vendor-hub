@@ -83,11 +83,13 @@ export async function vendorUpdateApply(
   requestId: string,
   reviewer: string,
   overrideNote?: string,
+  fieldOverrides?: Record<string, string>,
 ): Promise<void> {
   const { data, error } = await supabase.rpc("vendor_update_apply", {
     p_request_id: requestId,
     p_reviewer: reviewer,
     p_override_note: overrideNote ?? null,
+    p_field_overrides: fieldOverrides ?? {},
   });
   if (error) throw error;
   const res = data as { ok?: boolean; error?: string };

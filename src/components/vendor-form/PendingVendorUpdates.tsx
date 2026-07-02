@@ -80,6 +80,43 @@ const FIELD_ROWS: { key: string; label: string; current?: (v: any) => string }[]
   { key: "signatory_position", label: "Signatory position" },
 ];
 
+// AI-extracted fields the officer can write into the vendor master, line-by-line.
+// exKey = key in verification.extracted; payloadKey/currentKey = the vendor's own value
+// (for the diff); col = the vendor column sent as an override; isDate normalises DD/MM/YYYY.
+const ENRICH_FIELDS: {
+  col: string;
+  label: string;
+  exKey: string;
+  payloadKey?: string;
+  currentKey?: string;
+  isDate?: boolean;
+}[] = [
+  { col: "company_name", label: "Company name", exKey: "entity_name", payloadKey: "company_name", currentKey: "company_name" }, // prettier-ignore
+  {
+    col: "cr_number",
+    label: "CR number",
+    exKey: "cr_number",
+    payloadKey: "cr_number",
+    currentKey: "cr_number",
+  },
+  {
+    col: "vat_number",
+    label: "VAT number",
+    exKey: "vat_number",
+    payloadKey: "vat_number",
+    currentKey: "vat_number",
+  },
+  { col: "legal_structure", label: "Legal structure", exKey: "legal_structure", payloadKey: "legal_structure" }, // prettier-ignore
+  { col: "cr_expiry", label: "CR expiry", exKey: "cr_expiry", isDate: true },
+  { col: "vat_expiry", label: "VAT valid until", exKey: "vat_valid_until", isDate: true },
+];
+
+// Extracted dates are DD/MM/YYYY; vendor date columns need ISO (YYYY-MM-DD).
+function ddmmyyyyToIso(s: string): string | null {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s.trim());
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+}
+
 export function PendingVendorUpdates() {
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -96,10 +133,14 @@ export function PendingVendorUpdates() {
     qc.invalidateQueries({ queryKey: ["vendors"] });
   };
 
-  const approve = async (id: string, overrideNote?: string) => {
+  const approve = async (
+    id: string,
+    overrideNote?: string,
+    fieldOverrides?: Record<string, string>,
+  ) => {
     setBusy(id);
     try {
-      await vendorUpdateApply(id, reviewer, overrideNote);
+      await vendorUpdateApply(id, reviewer, overrideNote, fieldOverrides);
       toast.success("Update applied to the vendor record.");
       setReviewing(null);
       refresh();
@@ -189,7 +230,7 @@ export function PendingVendorUpdates() {
           request={reviewing}
           busy={busy === reviewing.request_id}
           onClose={() => setReviewing(null)}
-          onApprove={(note) => approve(reviewing.request_id, note)}
+          onApprove={(note, overrides) => approve(reviewing.request_id, note, overrides)}
           onReject={() => reject(reviewing.request_id)}
         />
       )}
@@ -207,7 +248,7 @@ function ReviewModal({
   request: PendingUpdate;
   busy: boolean;
   onClose: () => void;
-  onApprove: (overrideNote?: string) => void;
+  onApprove: (overrideNote?: string, fieldOverrides?: Record<string, string>) => void;
   onReject: () => void;
 }) {
   const pl = request.payload as any;
@@ -221,7 +262,9 @@ function ReviewModal({
     queryFn: async () => {
       const { data } = await supabase
         .from("vendors")
-        .select("company_name,cr_number,vat_number,website,country,contacts")
+        .select(
+          "company_name,cr_number,vat_number,website,country,contacts,legal_structure,cr_expiry,vat_expiry",
+        )
         .eq("vendor_id", request.vendor_id)
         .maybeSingle();
       return data as any;
@@ -239,6 +282,8 @@ function ReviewModal({
   });
   const [rerunning, setRerunning] = useState(false);
   const [overrideNote, setOverrideNote] = useState("");
+  // Which AI-extracted values the officer has ticked to write into the vendor record.
+  const [accepted, setAccepted] = useState<Record<string, boolean>>({});
 
   const rerun = async () => {
     setRerunning(true);
@@ -279,6 +324,38 @@ function ReviewModal({
     const s = v == null ? "" : String(v);
     return s.trim() === "" ? "—" : s;
   };
+
+  // AI-extracted values the officer can accept into the vendor record, line-by-line.
+  const extracted = (verification?.extracted ?? {}) as Record<string, unknown>;
+  const enrichRows = ENRICH_FIELDS.map((f) => {
+    const rawAi = extracted[f.exKey];
+    const aiDisplay = rawAi == null ? "" : String(rawAi).trim();
+    const aiValue = f.isDate ? (aiDisplay ? ddmmyyyyToIso(aiDisplay) : null) : aiDisplay || null;
+    const fromPayload = f.payloadKey ? pl[f.payloadKey] : undefined;
+    let typed = fromPayload == null ? "" : String(fromPayload).trim();
+    if (!typed && isUpdate && f.currentKey && current?.[f.currentKey] != null) {
+      typed = String(current[f.currentKey]).trim();
+    }
+    let state: "match" | "fill" | "differs";
+    if (!aiValue) state = "match";
+    else if (!typed) state = "fill";
+    else if (typed.toLowerCase() === aiDisplay.toLowerCase()) state = "match";
+    else state = "differs";
+    return { ...f, typed, aiDisplay, aiValue, state };
+  }).filter((r) => r.aiDisplay);
+
+  // Pre-tick blanks the documents can fill; leave "differs" for the officer to confirm.
+  useEffect(() => {
+    if (!verification?.ran_at) return;
+    const init: Record<string, boolean> = {};
+    for (const r of enrichRows) if (r.state === "fill" && r.aiValue) init[r.col] = true;
+    setAccepted(init);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verification?.ran_at]);
+
+  const fieldOverrides: Record<string, string> = {};
+  for (const r of enrichRows) if (accepted[r.col] && r.aiValue) fieldOverrides[r.col] = r.aiValue;
+  const acceptCount = Object.keys(fieldOverrides).length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -359,6 +436,82 @@ function ReviewModal({
               </>
             )}
           </div>
+
+          {/* Apply AI-extracted values — line-by-line accept into the vendor record */}
+          {verification?.ran_at && enrichRows.length > 0 && (
+            <div className="mb-6 rounded-xl border border-border p-4">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Apply AI-extracted values
+              </div>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Tick a value to write it into the vendor record on approve. Blanks the documents can
+                fill are pre-ticked; values that differ from what the vendor entered are left for
+                you to confirm.
+              </p>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <th className="py-1.5 pr-3">Field</th>
+                    <th className="py-1.5 pr-3">Entered</th>
+                    <th className="py-1.5 pr-3">Found in documents</th>
+                    <th className="py-1.5 text-right">Accept</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {enrichRows.map((r) => {
+                    const stKey =
+                      r.state === "fill" ? "info" : r.state === "differs" ? "mismatch" : "match";
+                    const st = RESULT_STYLE[stKey];
+                    const canAccept = r.state !== "match" && !!r.aiValue;
+                    return (
+                      <tr key={r.col} className="border-t border-border align-top">
+                        <td className="py-2 pr-3 text-muted-foreground">{r.label}</td>
+                        <td className="py-2 pr-3">
+                          {r.typed || <span className="text-muted-foreground">—</span>}
+                        </td>
+                        <td className="py-2 pr-3">
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            <span
+                              className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase"
+                              style={{ backgroundColor: st.bg, color: st.fg }}
+                            >
+                              {r.state === "fill"
+                                ? "Fill"
+                                : r.state === "differs"
+                                  ? "Differs"
+                                  : "Match"}
+                            </span>
+                            <span className="min-w-0 break-words">{r.aiDisplay}</span>
+                          </span>
+                        </td>
+                        <td className="py-2 text-right">
+                          {canAccept ? (
+                            <input
+                              type="checkbox"
+                              checked={!!accepted[r.col]}
+                              onChange={(e) =>
+                                setAccepted((p) => ({ ...p, [r.col]: e.target.checked }))
+                              }
+                              className="h-4 w-4 accent-[var(--accent)]"
+                              aria-label={`Accept ${r.label}`}
+                            />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {acceptCount > 0 && (
+                <p className="mt-3 text-xs" style={{ color: "var(--accent)" }}>
+                  {acceptCount} value{acceptCount === 1 ? "" : "s"} will be written to the vendor
+                  record on approve.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Field-by-field; for updates, current vs submitted with change highlight */}
           <table className="w-full text-sm">
@@ -455,7 +608,9 @@ function ReviewModal({
               Reject
             </button>
             <button
-              onClick={() => onApprove(needsOverride ? overrideNote.trim() : undefined)}
+              onClick={() =>
+                onApprove(needsOverride ? overrideNote.trim() : undefined, fieldOverrides)
+              }
               disabled={!canApprove}
               className="inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               style={{ backgroundColor: "var(--accent)" }}
@@ -465,7 +620,7 @@ function ReviewModal({
               ) : (
                 <CheckCircle2 className="h-4 w-4" />
               )}
-              Approve &amp; apply
+              Approve &amp; apply{acceptCount > 0 ? ` (+${acceptCount})` : ""}
             </button>
           </div>
         </div>
