@@ -5,9 +5,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Loader2, AlertCircle, CheckCircle2, Send } from "lucide-react";
 import { vendorLinkCreate } from "@/lib/vendor-link";
+import { APP_BASE_URL } from "@/lib/app-url";
 
 const WEBHOOK_URL = "https://n8n.zavia-ai.com/webhook/vendor-invite";
-const APP_BASE_URL = "https://sarooj-vendor-hub-code.vercel.app";
 
 const SUPPLY_CATEGORIES = [
   "Cement",

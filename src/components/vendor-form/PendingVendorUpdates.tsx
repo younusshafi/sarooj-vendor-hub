@@ -23,6 +23,7 @@ import { supabase } from "@/integrations/supabase-external/client";
 import { useAuth } from "@/integrations/supabase-external/auth";
 import { formatDate } from "@/lib/format";
 import { sendEmail } from "@/lib/notify";
+import { publicUrl } from "@/lib/app-url";
 import {
   listPendingUpdates,
   vendorUpdateApply,
@@ -181,7 +182,7 @@ export function PendingVendorUpdates() {
     setBusy(id);
     try {
       const { token } = await vendorRequestReturn(id, reviewer, message, items);
-      const link = `${window.location.origin}/register/${token}`;
+      const link = publicUrl(`/register/${token}`);
       const subject = `Action needed on your Sarooj vendor registration${
         companyName ? ` — ${companyName}` : ""
       }`;
