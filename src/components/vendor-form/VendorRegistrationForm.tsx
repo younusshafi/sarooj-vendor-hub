@@ -228,9 +228,16 @@ export function VendorRegistrationForm({
       storage_path: string;
       filename: string;
     }> = [];
+    // Supabase Storage rejects object keys with characters like [ ] & # % etc.
+    // Sanitise the filename used in the KEY; keep the original name for display.
+    const safeName = (name: string) =>
+      name
+        .replace(/[^A-Za-z0-9._ ()-]/g, "_")
+        .replace(/_{2,}/g, "_")
+        .trim();
     for (const docType of allUploaded) {
       const file = documents[docType]!;
-      const storagePath = `${folderPrefix}/${docType}/${file.name}`;
+      const storagePath = `${folderPrefix}/${docType}/${safeName(file.name)}`;
       try {
         await uploadDocumentToSupabase(file, storagePath);
       } catch (err) {
