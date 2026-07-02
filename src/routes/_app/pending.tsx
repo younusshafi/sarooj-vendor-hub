@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { AlertTriangle, Check, X, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, Check, X } from "lucide-react";
+import { PendingVendorUpdates } from "@/components/vendor-form/PendingVendorUpdates";
 import {
   supabase,
   type Vendor,
@@ -68,43 +69,40 @@ function PendingPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <h1 className="font-display text-[28px] text-foreground">Pending Registrations</h1>
         <p className="text-sm text-muted-foreground">
-          {pending.data
-            ? `${pending.data.length} vendor${pending.data.length === 1 ? "" : "s"} awaiting review`
-            : "Loading…"}
+          Vendor submissions from onboarding &amp; re-confirmation links (with AI document
+          verification), plus any vendors added directly and awaiting review.
         </p>
       </div>
 
+      {/* Invite-link + re-confirmation submissions (vendor_update_requests) with the AI ledger. */}
+      <PendingVendorUpdates />
+
+      {/* Legacy: vendors written straight into the master with a pending_review status. */}
       {pending.isLoading && (
         <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
+          {Array.from({ length: 2 }).map((_, i) => (
             <div key={i} className="h-40 animate-pulse rounded-xl border border-border bg-card" />
           ))}
         </div>
       )}
 
-      {!pending.isLoading && (pending.data?.length ?? 0) === 0 && (
-        <div className="rounded-xl border border-border bg-card p-12 text-center">
-          <CheckCircle2 className="mx-auto h-12 w-12" style={{ color: "var(--accent)" }} />
-          <p className="mt-4 text-foreground">
-            No pending registrations. All submissions have been reviewed.
-          </p>
+      {!pending.isLoading && (pending.data?.length ?? 0) > 0 && (
+        <div className="space-y-4">
+          <h2 className="font-display text-lg text-foreground">Directly added vendors</h2>
+          {pending.data?.map((v) => (
+            <PendingCard
+              key={v.vendor_id}
+              v={v}
+              onApprove={() => setConfirm({ vendor: v, action: "approve" })}
+              onReject={() => setConfirm({ vendor: v, action: "reject" })}
+            />
+          ))}
         </div>
       )}
-
-      <div className="space-y-4">
-        {pending.data?.map((v) => (
-          <PendingCard
-            key={v.vendor_id}
-            v={v}
-            onApprove={() => setConfirm({ vendor: v, action: "approve" })}
-            onReject={() => setConfirm({ vendor: v, action: "reject" })}
-          />
-        ))}
-      </div>
 
       <AlertDialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
         <AlertDialogContent>

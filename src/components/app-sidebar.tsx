@@ -60,11 +60,18 @@ function usePendingCount() {
   return useQuery({
     queryKey: ["pending-count"],
     queryFn: async () => {
-      const { count } = await supabase
-        .from("vendors")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "pending_review");
-      return count ?? 0;
+      // Two queues feed /pending: legacy direct vendor rows + invite-link submissions.
+      const [{ count: vendorCount }, { count: requestCount }] = await Promise.all([
+        supabase
+          .from("vendors")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "pending_review"),
+        supabase
+          .from("vendor_update_requests")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "pending"),
+      ]);
+      return (vendorCount ?? 0) + (requestCount ?? 0);
     },
     refetchInterval: 30000,
   });
